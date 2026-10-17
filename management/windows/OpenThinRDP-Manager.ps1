@@ -274,7 +274,13 @@ $script:Settings = @(
   (New-Setting 'WIFI'                'choice'     'off' @('off', 'on'))
   (New-Setting 'WIFI_SSID'           'ssid'       '')
   (New-Setting 'WIFI_COUNTRY'        'country'    '')
+  (New-Setting 'WIFI_SECURITY'       'choice'     'psk' @('psk', 'peap', 'tls'))
   (New-Setting 'WIFI_PSK'            'psk'        '')
+  (New-Setting 'DOT1X'               'choice'     'off' @('off', 'peap', 'tls'))
+  (New-Setting 'EAP_IDENTITY'        'eapid'      '')
+  (New-Setting 'EAP_ANONYMOUS'       'eapid'      '')
+  (New-Setting 'EAP_CA'              'eapca'      'system')
+  (New-Setting 'EAP_SERVER_NAME'     'dnsnames'   '')
   (Set-Section 'SectionManagement')
   (New-Setting 'MGMT_SHARE'          'share'      '')
   (New-Setting 'MGMT_USER'           'user'       '')
@@ -331,6 +337,9 @@ $script:Rx = @{
   Hex64      = '^[0-9a-fA-F]{64}$'
   Version    = '^[0-9A-Za-z._-]{1,64}$'
   WgKey      = '^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$'
+  # 802.1X: an identity (EXAMPLE\user, user@example.com, host/pc1.example.com, PC1$) and a CA file of the site folder
+  EapId      = '^[A-Za-z0-9._@\\/$ +-]{1,253}$'
+  EapCa      = '^[A-Za-z0-9][A-Za-z0-9._-]{0,99}\.crt$'
   SshKey     = '^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh\.com) [A-Za-z0-9+/=]+( .*)?$'
 }
 function Test-Ip([string]$s) {
@@ -369,6 +378,10 @@ function Test-SettingValue([string]$key, [string]$v) {
     'cidrs'      { foreach ($t in (Split-List $v)) { if (-not (Test-Cidr $t)) { return (Get-Text 'ErrCidrValue' $L $t) } } }
     'ips'        { foreach ($t in (Split-List $v)) { if (-not (Test-Ip $t)) { return (Get-Text 'ErrListValue' $L $t) } } }
     'names'      { foreach ($t in (Split-List $v)) { if (-not (Test-Ip $t) -and $t -cnotmatch $script:Rx.Name) { return (Get-Text 'ErrListValue' $L $t) } } }
+    # names only (the certificate of a RADIUS server is for a name): EAP_SERVER_NAME
+    'dnsnames'   { foreach ($t in (Split-List $v)) { if ($t -cnotmatch $script:Rx.Name) { return (Get-Text 'ErrListValue' $L $t) } } }
+    'eapid'      { if ($v.Trim() -ne '' -and $v.Trim() -cnotmatch $script:Rx.EapId) { return (Get-Text 'ErrEapId' $L) } }
+    'eapca'      { $c = $v.Trim(); if ($c -ne '' -and $c -ine 'system' -and $c -cnotmatch $script:Rx.EapCa) { return (Get-Text 'ErrEapCa' $L) } }
     'collection' { if ($v -cnotmatch $script:Rx.Collection) { return (Get-Text 'ErrCollection') } }
     'repo'       { if ($v -cnotmatch '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$') { return (Get-Text 'ErrRepo') } }
     # latest, or a version as the index files name it: v0.2.0 is the GitHub tag, and updates\versions\v0.2.0.txt never exists
@@ -410,7 +423,8 @@ function ConvertTo-Canonical([string]$key, [string]$v) {
     $l = $v.ToLower()
     if ($s.Choices -contains $l) { return $l }
     $alias = @{ NETMODE = @{ statico = 'static' }; USB_MODE = @{ dischi = 'disks' }; WEB_BUTTON = @{ portale = 'app'; portal = 'app'; chrome = 'browser'; chromium = 'browser' }
-      RDP_GATEWAY_USE = @{ rileva = 'detect'; auto = 'detect' }; VPN = @{ wg = 'wireguard'; ovpn = 'openvpn' } }
+      RDP_GATEWAY_USE = @{ rileva = 'detect'; auto = 'detect' }; VPN = @{ wg = 'wireguard'; ovpn = 'openvpn' }
+      DOT1X = @{ 'eap-tls' = 'tls' }; WIFI_SECURITY = @{ 'eap-tls' = 'tls' } }
     if ($key -in 'WIFI', 'SSH', 'REMOTE_SCREEN', 'SECURITY_UPDATES', 'TPM_SECRETS') { if ($l -in 'yes', 'true', '1', 'si') { return 'on' }; return 'off' }
     if ($alias.ContainsKey($key) -and $alias[$key].ContainsKey($l)) { return $alias[$key][$l] }
     return $s.Choices[0]
@@ -419,6 +433,8 @@ function ConvertTo-Canonical([string]$key, [string]$v) {
     'names'     { return (Split-List $v) -join ' ' }
     'urls'      { return (Split-List $v) -join ' ' }
     'cidrs'     { return (Split-List $v) -join ' ' }
+    'dnsnames'  { return (Split-List $v) -join ' ' }
+    'eapca'     { if ($v -eq '' -or $v -ieq 'system') { return 'system' }; return $v }
     'ips'       { return (Split-List $v) -join ' ' }
     'wgkey'     { return $v -replace '\s', '' }
     'cidr'      { return $v -replace '\s', '' }
@@ -1019,6 +1035,79 @@ function Send-VpnFiles($d, [string]$sshKey, [string]$profileText, [string]$user,
   }
   $null
 }
+# The 802.1X client certificate of a device as dot1x.sh client takes it: a PKCS#12 file (.pfx/.p12, as Windows and
+# AD CS export it) sent whole, or a PEM certificate with its PEM key (in the same file or in a second one), with the
+# password of the file or of the key. Checked here as far as .NET Framework can (the password of a .pfx, its key,
+# the dates, the use of the certificate); the device checks again with openssl, also that a PEM key belongs to the
+# certificate, and keeps the key decrypted as a secret. Result: Data (what goes on standard input), Subject,
+# NotAfter, Warning (a certificate not meant for client authentication), or Error.
+function Read-Dot1xClient([string]$certFile, [string]$keyFile, [string]$password) {
+  $res = [pscustomobject]@{ Data = $null; Subject = ''; NotAfter = $null; Warning = $null; Error = $null }
+  if ($password -match '[\r\n]') { $res.Error = Get-Text 'Dot1xErrPasswordLine'; return $res }
+  try { $bytes = [IO.File]::ReadAllBytes($certFile) } catch { $res.Error = $_.Exception.Message; return $res }
+  if ($bytes.Length -gt 196608) { $res.Error = Get-Text 'Dot1xErrTooBig'; return $res }
+  $text = [Text.Encoding]::ASCII.GetString($bytes)
+  if ($text -notmatch '-----BEGIN CERTIFICATE-----') {
+    # PKCS#12: opened here only to check the password, the key and the dates; the key stays in memory only
+    # (EphemeralKeySet, .NET Framework 4.7.2 and later: no copy in the key store of this account)
+    $X2 = [Security.Cryptography.X509Certificates.X509Certificate2]
+    $c = $null
+    try {
+      try { $c = $X2::new($bytes, $password, [Security.Cryptography.X509Certificates.X509KeyStorageFlags]32) }
+      catch [ArgumentException] { $c = $X2::new($bytes, $password) }    # an older .NET without EphemeralKeySet
+    } catch {
+      $e = $_.Exception; while ($e.InnerException) { $e = $e.InnerException }
+      $res.Error = Get-Text 'Dot1xErrPfx' $e.Message.Trim(); return $res
+    }
+    try {
+      if (-not $c.HasPrivateKey) { $res.Error = Get-Text 'Dot1xErrPfxNoKey'; return $res }
+      $res.Subject = $c.Subject; $res.NotAfter = $c.NotAfter
+      $res.Warning = Get-Dot1xEkuWarning $c
+    } finally { $c.Reset() }
+    $res.Data = "PASSWORD=$password`nPKCS12=$([Convert]::ToBase64String($bytes))`n"
+  } else {
+    $certs = @([regex]::Matches($text, '-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----') | ForEach-Object { $_.Value })
+    $keyText = $text
+    if ($keyFile) { try { $keyText = [IO.File]::ReadAllText($keyFile) } catch { $res.Error = $_.Exception.Message; return $res } }
+    $key = [regex]::Match($keyText, '-----BEGIN ([A-Z ]*)PRIVATE KEY-----[\s\S]+?-----END \1PRIVATE KEY-----')
+    if (-not $key.Success) { $res.Error = Get-Text 'Dot1xErrNoKey'; return $res }
+    if (($key.Value -match 'ENCRYPTED') -and -not $password) { $res.Error = Get-Text 'Dot1xErrKeyPassword'; return $res }
+    try {
+      $der = [Convert]::FromBase64String(($certs[0] -replace '-----[A-Z ]+-----', '' -replace '\s', ''))
+      $c = [Security.Cryptography.X509Certificates.X509Certificate2]::new($der)
+    } catch { $res.Error = Get-Text 'Dot1xErrNoCert'; return $res }
+    $res.Subject = $c.Subject; $res.NotAfter = $c.NotAfter; $res.Warning = Get-Dot1xEkuWarning $c; $c.Reset()
+    $res.Data = "PASSWORD=$password`n" + (($certs + @($key.Value)) -join "`n") + "`n"
+  }
+  if ($res.NotAfter -lt (Get-Date)) { $res.Error = Get-Text 'Dot1xErrExpired' $res.NotAfter; $res.Data = $null }
+  $res
+}
+# a certificate with an extended key usage that does not include client authentication (1.3.6.1.5.5.7.3.2)
+function Get-Dot1xEkuWarning($c) {
+  $eku = $c.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.37' } | Select-Object -First 1
+  if (-not $eku) { return $null }
+  $u = @(([Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]$eku).EnhancedKeyUsages | ForEach-Object { $_.Value })
+  if ($u -contains '1.3.6.1.5.5.7.3.2' -or $u -contains '2.5.29.37.0') { return $null }
+  Get-Text 'Dot1xWarnEku'
+}
+# Client certificate and/or PEAP password to one device over SSH (dot1x.sh client / password); $null = done, else why
+function Send-Dot1xFiles($d, [string]$sshKey, [string]$clientData, [string]$eapPassword) {
+  $ip = ([string]$d.S['IP']) -replace '/.*$', ''
+  if ($ip -notmatch '^\d{1,3}(\.\d{1,3}){3}$') { return (Get-Text 'ErrRemoteNoIp') }
+  if ($d.S['CFG_SSH'] -ne 'on') { return (Get-Text 'SendKeyNoSsh') }
+  $jobs = @()
+  if ($clientData) { $jobs += ,@('client', $clientData) }
+  if ($eapPassword) { $jobs += ,@('password', "$eapPassword`n") }
+  foreach ($j in $jobs) {
+    $r = Invoke-DeviceSshInput $ip "test -x /opt/openthinrdp/dot1x.sh || { echo ERROR=old; exit 1; }; sudo /opt/openthinrdp/dot1x.sh $($j[0])" $sshKey $d.Name $j[1]
+    if ($r.Text -match "(?m)^OK=$($j[0])") { continue }
+    if (Test-HostKeyChanged $r.Text) { return (Get-Text 'SendKeyHostChanged') }
+    if ($r.Text -match '(?m)^ERROR=old') { return (Get-Text 'Dot1xErrOldVersion') }
+    if ($r.Text -match '(?m)^ERROR=(.+)$') { return $Matches[1] }
+    $x = $r.Text.Trim(); if ($x) { return $x } else { return "ssh $($r.Code)" }
+  }
+  $null
+}
 # The SSH host keys of the devices are kept by device NAME (HostKeyAlias), in a file of this tool: DHCP may give a
 # device the address another device had, and a key stored by address would then belong to the wrong one.
 $script:KnownHosts = Join-Path $env:LOCALAPPDATA 'OpenThinRDP\known_hosts'
@@ -1273,6 +1362,7 @@ function Get-DeviceSavePlan($dev, $managed) {
   }
   if ($null -ne $final['NETMODE'] -or $null -ne $final['IPADDR']) { $notes += Get-Text 'NoteNetwork' }
   $notes += @(Get-UpdateToNote $final['UPDATE_TO'])
+  if (-not $err.Count) { $notes += @(Get-EapNotes $r $before $final) }
   [pscustomobject]@{ File = $f; Errors = $err; Values = $final; Changes = $changes; Notes = $notes; RenameMac = $mac }
 }
 
@@ -1324,17 +1414,34 @@ function Get-CommonSavePlan($managed, $devices) {
     $a = if ($before.Contains($k)) { $before[$k] } else { $null }
     if ($a -cne $final[$k]) { $changes += "$((Get-Setting $k).Label): $(Format-Value $k $a) -> $(Format-Value $k $final[$k])" }
   }
-  $risky = @($final.Keys | Where-Object { $_ -in 'BROKER', 'DOMAIN', 'LOAD_BALANCE_INFO', 'MGMT_SHARE', 'NETMASK', 'GATEWAY', 'DNS1', 'WIFI', 'SSH', 'SETTINGS_PIN_SHA256' } |
+  $risky = @($final.Keys | Where-Object { $_ -in 'BROKER', 'DOMAIN', 'LOAD_BALANCE_INFO', 'MGMT_SHARE', 'NETMASK', 'GATEWAY', 'DNS1', 'WIFI', 'SSH', 'SETTINGS_PIN_SHA256',
+               'DOT1X', 'WIFI_SECURITY', 'EAP_IDENTITY', 'EAP_CA', 'EAP_SERVER_NAME' } |
              Where-Object { $(if ($before.Contains($_)) { $before[$_] } else { $null }) -cne $final[$_] })
   if ($risky.Count) { $notes += Get-Text 'NoteRisky' ($risky -join ', ') }
   $notes += @(Get-UpdateToNote $final['UPDATE_TO'])
+  if (-not $err.Count) { $notes += @(Get-EapNotes $final $before $final) }
   [pscustomobject]@{ File = $script:CommonFile; Errors = $err; Warnings = $warn; Values = $final; Changes = $changes; Notes = $notes }
 }
 
-# keys in a .conf that the devices ignore: unknown, or device-only keys in common.conf. MGMT_PASSWORD is used by
-# the devices although this tool does not edit it (a password is written in the file by hand, or set on the device)
+# keys in a .conf that the devices ignore: unknown, or device-only keys in common.conf. MGMT_PASSWORD and EAP_PASSWORD
+# are used by the devices although this tool does not edit them (a password is written in the file by hand, set on the
+# device, or for 802.1X sent over SSH with 802.1X...)
 function Get-IgnoredKeys($conf, [switch]$Common) {
-  @($conf.Keys | Where-Object { (-not (Get-Setting $_) -and $_ -ne 'MGMT_PASSWORD') -or ($Common -and $script:HostOnly -contains $_) })
+  @($conf.Keys | Where-Object { (-not (Get-Setting $_) -and $_ -notin 'MGMT_PASSWORD', 'EAP_PASSWORD') -or ($Common -and $script:HostOnly -contains $_) })
+}
+# What to remember when a save changes the 802.1X settings ($r: the configuration as the device will have it, as far as
+# known): the server not checked by name, and where the password or the certificate come from
+function Get-EapNotes($r, $before, $final) {
+  $keys = 'DOT1X', 'WIFI', 'WIFI_SECURITY', 'EAP_IDENTITY', 'EAP_ANONYMOUS', 'EAP_CA', 'EAP_SERVER_NAME'
+  $changed = @($final.Keys | Where-Object { $_ -in $keys } | Where-Object { $(if ($before.Contains($_)) { $before[$_] } else { $null }) -cne $final[$_] })
+  if (-not $changed.Count) { return @() }
+  $modes = @(@($r['DOT1X']) + @($(if ($r['WIFI'] -eq 'on') { $r['WIFI_SECURITY'] })) | Where-Object { $_ -in 'peap', 'tls' } | Select-Object -Unique)
+  if (-not $modes.Count) { return @() }
+  $n = @()
+  if (-not $r['EAP_SERVER_NAME']) { $n += Get-Text 'NoteEapNoServer' }
+  if ($modes -contains 'peap') { $n += Get-Text 'NoteEapPeap' }
+  if ($modes -contains 'tls') { $n += Get-Text 'NoteEapTls' }
+  $n
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -2254,19 +2361,22 @@ $btnRemoteDev = New-ActionButton 'BtnRemoteScreen' 'Screen' 'primary'
 $btnBrandDev = New-ActionButton 'BtnBranding' 'Picture' 'secondary'
 # only on a device with VPN=openvpn: its profile does not go through the folder
 $btnVpnDev = New-ActionButton 'BtnVpnProfile' 'Vpn' 'secondary'; $btnVpnDev.Visible = $false
+# only on a device with 802.1X (cable, or Wi-Fi Enterprise): its certificate and password do not go through the folder
+$btnDot1xDev = New-ActionButton 'BtnDot1x' 'Certificate' 'secondary'; $btnDot1xDev.Visible = $false
 # which version it installs: like all devices, pilot, or one of its own
 $btnTrackDev = New-ActionButton 'BtnDeviceVersion' 'Download' 'secondary'
-foreach ($b in @($btnRemoteDev, $btnBrandDev, $btnTrackDev, $btnVpnDev)) { $b.Margin = New-Object System.Windows.Forms.Padding(8, 0, 0, 0); $devActions.Controls.Add($b) }
+foreach ($b in @($btnRemoteDev, $btnBrandDev, $btnTrackDev, $btnVpnDev, $btnDot1xDev)) { $b.Margin = New-Object System.Windows.Forms.Padding(8, 0, 0, 0); $devActions.Controls.Add($b) }
 $tips.SetToolTip($btnRemoteDev, (Get-Text 'TipRemoteScreen')); $tips.SetToolTip($btnVpnDev, (Get-Text 'TipVpnProfile')); $tips.SetToolTip($btnTrackDev, (Get-Text 'TipDeviceVersion'))
+$tips.SetToolTip($btnDot1xDev, (Get-Text 'TipDot1x'))
 $devHead.Controls.AddRange(@($lblDevName, $lblDevState, $lblDevInfo, $devActions))
 # the actions in the top right corner, over the first line only: the line under the name keeps the whole width
 # the actions keep only their icons when the name and state of the device leave too little room for their text
 $script:DevActionsCompact = $false
 function Set-DeviceActionsFit {
   $left = [Math]::Max($lblDevName.Right, $(if ($lblDevState.Visible) { $lblDevState.Right } else { 0 }))
-  $shown = @($btnRemoteDev, $btnBrandDev, $btnTrackDev, $btnVpnDev | Where-Object { $_.Visible })
+  $shown = @($btnRemoteDev, $btnBrandDev, $btnTrackDev, $btnVpnDev, $btnDot1xDev | Where-Object { $_.Visible })
   $compact = ($devHead.ClientSize.Width - 16 - $left - 24) -lt (Get-FullWidth $shown)
-  if ($compact -ne $script:DevActionsCompact) { $script:DevActionsCompact = $compact; Set-CompactButtons @($btnRemoteDev, $btnBrandDev, $btnTrackDev, $btnVpnDev) $compact }
+  if ($compact -ne $script:DevActionsCompact) { $script:DevActionsCompact = $compact; Set-CompactButtons @($btnRemoteDev, $btnBrandDev, $btnTrackDev, $btnVpnDev, $btnDot1xDev) $compact }
   $devActions.Location = New-Object System.Drawing.Point(($devHead.ClientSize.Width - $devActions.Width - 16), 14)
   # the line under the name ends with ... when it does not fit; the whole of it in the tooltip
   $lblDevInfo.AutoSize = $false; $lblDevInfo.AutoEllipsis = $true; $lblDevInfo.Height = 24
@@ -2622,7 +2732,7 @@ function Update-DeviceList {
 function Update-DeviceHeader($d) {
   if (-not $d) {
     $lblDevName.Text = Get-Text 'NoDevice'; $lblDevState.Visible = $false; $lblDevInfo.Text = ''
-    $btnRemoteDev.Enabled = $false; $btnBrandDev.Enabled = $false; $btnTrackDev.Enabled = $false; $btnVpnDev.Visible = $false; return
+    $btnRemoteDev.Enabled = $false; $btnBrandDev.Enabled = $false; $btnTrackDev.Enabled = $false; $btnVpnDev.Visible = $false; $btnDot1xDev.Visible = $false; return
   }
   $s = $d.S
   $lblDevName.Text = $d.Name
@@ -2639,6 +2749,7 @@ function Update-DeviceHeader($d) {
     if ($t.Kind -eq 'pilot') { $parts += Get-Text 'DevPilot' } elseif ($t.Kind -eq 'own') { $parts += Get-Text 'DevOwnVersion' $t.Target } }
   $lblDevInfo.Text = $parts -join $dot
   $btnRemoteDev.Enabled = $true; $btnBrandDev.Enabled = $true; $btnTrackDev.Enabled = $true; $btnVpnDev.Visible = ($s['CFG_VPN'] -eq 'openvpn')
+  $btnDot1xDev.Visible = ($s['CFG_DOT1X'] -in 'peap', 'tls') -or ($s['CFG_WIFI'] -eq 'on' -and $s['CFG_WIFI_SECURITY'] -in 'peap', 'tls')
   Set-DeviceActionsFit
 }
 # what a device installs, in words: pilot (the newest), its own version, or like all devices
@@ -2665,6 +2776,8 @@ function Update-Summary($d) {
   # the VPN (0.1.14 and later); the WireGuard key is copied as the [Peer] block the server needs for this device
   if ($s['VPN'] -and $s['VPN'] -ne 'off') { $net += , @('SumVpn', $s['VPN']) }
   if ($s['VPN_PUBLIC_KEY']) { $net += , @('SumVpnKey', $s['VPN_PUBLIC_KEY'], (Get-WgPeerBlock $d)) }
+  # 802.1X on the cable, adapter by adapter (since this version)
+  if ($s['DOT1X'] -and $s['DOT1X'] -ne 'off') { $net += , @('Sum8021x', $s['DOT1X']) }
   $lvSummary.BeginUpdate(); $lvSummary.Items.Clear(); $lvSummary.Groups.Clear()
   $groups = [ordered]@{
     SumSession = @(@('ColSession', $s['SESSION']), @('ColDefaultUser', $s['DEFAULT_USER']), @('ColTransport', $s['TRANSPORT']), @('ColWebButton', $(
@@ -3513,6 +3626,75 @@ function Show-VpnProfileDialog($d) {
   $tw.Text = ''; $st.Text = ''; $dlg.Dispose()
 }
 
+# ---------------- 802.1X ----------------
+# The client certificate (EAP-TLS) and the PEAP password of a device, over SSH with the key of the vault: secrets of
+# the device (in its TPM when it has one), never through the management folder, which every device can read.
+function Show-Dot1xDialog($d) {
+  $name = $d.Name; $title = Get-Text 'Dot1xTitle' $name
+  if (-not (Get-Command ssh.exe -ErrorAction SilentlyContinue)) { Show-Message $title (Get-Text 'ErrRemoteNoSshExe'); return }
+  if ($d.S['CFG_SSH'] -ne 'on') { Show-Message $title (Get-Text 'ErrRemoteNoSsh'); return }
+  if (-not (Request-VaultOpen)) { return }
+  $key = Get-VaultKeyFile
+  if (-not $key) { Show-Message $title (Get-Text 'ErrRemoteNoVaultKey'); Select-Page 4; return }
+  $dlg = New-Object System.Windows.Forms.Form; Set-WindowIcon $dlg
+  $dlg.Text = $title; $dlg.Font = $fontBase; $dlg.FormBorderStyle = 'FixedDialog'; $dlg.MaximizeBox = $false; $dlg.MinimizeBox = $false
+  $dlg.StartPosition = 'CenterParent'; $W = 640; $X0 = 190
+  $dash = [string][char]0x2014
+  $note = New-Object System.Windows.Forms.Label
+  $note.Text = (Get-Text 'Dot1xNote') + "`r`n" + (Get-Text 'Dot1xNow' $(if ($d.S['DOT1X']) { $d.S['DOT1X'] } else { $dash }) $(if ($d.S['CFG_WIFI_SECURITY']) { $d.S['CFG_WIFI_SECURITY'] } else { $dash }))
+  $note.MaximumSize = New-Object System.Drawing.Size(($W - 28), 0); $note.AutoSize = $true; $note.Location = New-Object System.Drawing.Point(14, 12)
+  $dlg.Controls.Add($note); $y = 12 + $note.GetPreferredSize((New-Object System.Drawing.Size(($W - 28), 0))).Height + 14
+  $HW = $W - $X0 - 14
+  $lc = New-Object System.Windows.Forms.Label; $lc.Text = Get-Text 'Dot1xCert'; $lc.AutoSize = $true; $lc.Location = New-Object System.Drawing.Point(14, ($y + 4))
+  $tc = New-Object System.Windows.Forms.TextBox; $tc.SetBounds($X0, $y, ($HW - 110), 26); $tc.ReadOnly = $true
+  $bc = New-Button 'BtnChoose' 100 27; $bc.Location = New-Object System.Drawing.Point(($W - 14 - 100), ($y - 1)); $y += 34
+  $lk = New-Object System.Windows.Forms.Label; $lk.Text = Get-Text 'Dot1xKey'; $lk.AutoSize = $true; $lk.Location = New-Object System.Drawing.Point(14, ($y + 4))
+  $tk = New-Object System.Windows.Forms.TextBox; $tk.SetBounds($X0, $y, ($HW - 110), 26); $tk.ReadOnly = $true
+  $bk = New-Button 'BtnChoose' 100 27; $bk.Location = New-Object System.Drawing.Point(($W - 14 - 100), ($y - 1)); $y += 34
+  $lw = New-Object System.Windows.Forms.Label; $lw.Text = Get-Text 'Dot1xKeyPassword'; $lw.AutoSize = $true; $lw.Location = New-Object System.Drawing.Point(14, ($y + 4))
+  $tw = New-Object System.Windows.Forms.TextBox; $tw.SetBounds($X0, $y, 240, 26); $tw.UseSystemPasswordChar = $true; $y += 30
+  $hint = New-Object System.Windows.Forms.Label; $hint.Text = Get-Text 'Dot1xCertHint'; $hint.ForeColor = $Theme.Muted
+  $hint.MaximumSize = New-Object System.Drawing.Size($HW, 0); $hint.AutoSize = $true; $hint.Location = New-Object System.Drawing.Point($X0, $y)
+  $dlg.Controls.Add($hint); $y += $hint.GetPreferredSize((New-Object System.Drawing.Size($HW, 0))).Height + 14   # measured in the font of the dialog
+  $lp = New-Object System.Windows.Forms.Label; $lp.Text = Get-Text 'Dot1xPassword'; $lp.AutoSize = $true; $lp.Location = New-Object System.Drawing.Point(14, ($y + 4))
+  $tp = New-Object System.Windows.Forms.TextBox; $tp.SetBounds($X0, $y, 240, 26); $tp.UseSystemPasswordChar = $true; $y += 30
+  $hint2 = New-Object System.Windows.Forms.Label; $hint2.Text = Get-Text 'Dot1xPasswordHint'; $hint2.ForeColor = $Theme.Muted
+  $hint2.MaximumSize = New-Object System.Drawing.Size($HW, 0); $hint2.AutoSize = $true; $hint2.Location = New-Object System.Drawing.Point($X0, $y)
+  $dlg.Controls.Add($hint2); $y += $hint2.GetPreferredSize((New-Object System.Drawing.Size($HW, 0))).Height + 16
+  $dlg.Controls.AddRange(@($lc, $tc, $bc, $lk, $tk, $bk, $lw, $tw, $lp, $tp))
+  $ok = New-Button 'BtnDot1xSend' 120 28; $ok.Location = New-Object System.Drawing.Point(($W - 14 - 120 - 8 - 100), $y)
+  $cancel = New-Button 'BtnCancel' 100 28; $cancel.Location = New-Object System.Drawing.Point(($W - 14 - 100), $y); $cancel.DialogResult = 'Cancel'
+  $dlg.Controls.AddRange(@($ok, $cancel)); $dlg.CancelButton = $cancel; $dlg.AcceptButton = $ok
+  $dlg.ClientSize = New-Object System.Drawing.Size($W, ($y + 42))
+  $bc.add_Click({
+    $ofd = New-Object System.Windows.Forms.OpenFileDialog; $ofd.Title = Get-Text 'Dot1xChooseCert'
+    $ofd.Filter = (Get-Text 'Dot1xCertFilter') + ' (*.pfx;*.p12;*.pem;*.crt;*.cer)|*.pfx;*.p12;*.pem;*.crt;*.cer|*.*|*.*'
+    if ($ofd.ShowDialog() -eq 'OK') { $tc.Text = $ofd.FileName } })
+  $bk.add_Click({
+    $ofd = New-Object System.Windows.Forms.OpenFileDialog; $ofd.Title = Get-Text 'Dot1xChooseKey'; $ofd.Filter = 'PEM (*.key;*.pem)|*.key;*.pem|*.*|*.*'
+    if ($ofd.ShowDialog() -eq 'OK') { $tk.Text = $ofd.FileName } })
+  $ok.add_Click({
+    if (-not $tc.Text -and -not $tp.Text) { Show-Message $title (Get-Text 'Dot1xNothing'); return }
+    if ($tp.Text -match '[\r\n]' -or $tp.Text.Length -gt 256) { Show-Message $title (Get-Text 'Dot1xErrPasswordLine'); return }
+    $data = $null; $what = @()
+    if ($tc.Text) {
+      $c = Read-Dot1xClient $tc.Text $tk.Text $tw.Text
+      if ($c.Error) { Show-Message $title (Get-Text 'Dot1xRefused' (Split-Path -Leaf $tc.Text) $c.Error) 'Error'; return }
+      $info = Get-Text 'Dot1xCertInfo' $c.Subject $c.NotAfter
+      if ($c.Warning -and -not (Confirm-Action $title ($info + "`r`n`r`n" + $c.Warning) 'Button2')) { return }
+      $data = $c.Data; $what += "$(Split-Path -Leaf $tc.Text) ($($c.Subject))"
+    }
+    if ($tp.Text) { $what += Get-Text 'Dot1xLogPassword' }
+    $dlg.Cursor = 'WaitCursor'
+    try { $why = Send-Dot1xFiles $d $key $data $tp.Text } finally { $dlg.Cursor = 'Default' }
+    if ($why) { Show-Message $title (Get-Text 'Dot1xFailed' $why) 'Error'; return }
+    Add-ChangeLog (Get-Text 'LogDot1x' $name ($what -join ', '))
+    Show-Message $title (Get-Text 'Dot1xDone' $name) 'Information'
+    $dlg.DialogResult = 'OK' })
+  [void]$dlg.ShowDialog($form)
+  $tw.Text = ''; $tp.Text = ''; $dlg.Dispose()
+}
+
 $btnProbRefresh.add_Click({ Update-ProblemView })
 $btnSaveDev.add_Click({ Save-Device })
 $btnReloadDev.add_Click({ Update-DeviceGrid })
@@ -3522,6 +3704,7 @@ $btnReloadCom.add_Click({ Update-CommonGrid })
 $btnBrandDev.add_Click({ if ($script:Selected) { Show-BrandingDialog $script:Selected } })
 $btnRemoteDev.add_Click({ if ($script:Selected) { Start-RemoteScreen $script:Selected } })
 $btnVpnDev.add_Click({ if ($script:Selected) { Show-VpnProfileDialog $script:Selected } })
+$btnDot1xDev.add_Click({ if ($script:Selected) { Show-Dot1xDialog $script:Selected } })
 $btnBrandCom.add_Click({ Show-BrandingDialog $null })
 $btnSaveKeys.add_Click({ Save-Keys })
 $btnReloadKeys.add_Click({ Update-KeysView })
