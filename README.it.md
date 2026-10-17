@@ -256,6 +256,9 @@ e semplice da gestire, e per chi vuole mettere al lavoro il trasporto UDP di Fre
 marchi dei rispettivi proprietari; il confronto riflette informazioni pubbliche e la nostra comprensione,
 correzioni benvenute.
 
+Ognuno più nel dettaglio, e **Linux Mint o Ubuntu con Remmina**: [docs/alternatives.md](docs/alternatives.md) (in inglese).
+Le domande che si fanno per prime (hardware, driver, UDP, Azure, PXE, 802.1X): [docs/faq.md](docs/faq.md).
+
 ## I prossimi passi
 
 Le idee che vorremmo realizzare, più o meno in quest'ordine. Diteci in una issue quali vi servono, o mandate una
@@ -285,6 +288,8 @@ La documentazione è in inglese nella cartella [docs](docs/).
 - [CHANGELOG.md](CHANGELOG.md): le novità di ogni versione.
 - [docs/status.md](docs/status.md): cosa è in produzione, cosa è solo provato, cosa non c'è ancora.
 - [docs/configuration.md](docs/configuration.md): tutte le impostazioni.
+- [docs/faq.md](docs/faq.md): domande frequenti (in inglese).
+- [docs/alternatives.md](docs/alternatives.md): il confronto con Linux Mint + Remmina, IGEL OS, Dell ThinOS, Stratodesk, ThinStation, openthinclient.
 - [docs/manager.md](docs/manager.md): il gestore Windows pagina per pagina: postazioni, impostazioni, postazioni pilota e ritorno indietro (in inglese).
 - [docs/management.md](docs/management.md): la cartella di gestione, la configurazione centrale, le chiavi SSH, gli
   aggiornamenti firmati.

@@ -247,6 +247,9 @@ choice. OpenThinRDP is for networks built on Windows Remote Desktop that want a 
 to manage, and for anyone who wants to put FreeRDP's UDP transport to work. Product names are trademarks of
 their owners; the comparison reflects public information and our understanding, corrections are welcome.
 
+Each of them in more detail, and **Linux Mint or Ubuntu with Remmina**: [docs/alternatives.md](docs/alternatives.md).
+Questions people ask first (hardware, drivers, UDP, Azure, PXE, 802.1X): [docs/faq.md](docs/faq.md).
+
 ## What comes next
 
 Ideas we would like to build, roughly in this order. Tell us in an issue which ones you need, or send a pull
@@ -272,6 +275,8 @@ The result is `out/openthinrdp-<version>.iso`. See [docs/building.md](docs/build
 - [CHANGELOG.md](CHANGELOG.md): what changed in each release.
 - [docs/status.md](docs/status.md): what is in production, what is only tested, what does not exist yet.
 - [docs/configuration.md](docs/configuration.md): every setting.
+- [docs/faq.md](docs/faq.md): frequently asked questions.
+- [docs/alternatives.md](docs/alternatives.md): compared with Linux Mint + Remmina, IGEL OS, Dell ThinOS, Stratodesk, ThinStation, openthinclient.
 - [docs/manager.md](docs/manager.md): the Windows manager, page by page: devices, settings, pilot devices and going back.
 - [docs/management.md](docs/management.md): the management folder, central settings, SSH keys, signed updates.
 - [docs/building.md](docs/building.md): building and customizing the image.
