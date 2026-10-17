@@ -100,6 +100,13 @@ own input is used. A device listed in `USB_REDIRECT` is still passed whole.
 | `WIFI` | `off` | `on` = use Wi-Fi when no cable is connected |
 | `WIFI_SSID`, `WIFI_COUNTRY` | | network name, regulatory country (two letters) |
 | `WIFI_PSK` | | password or 64-hex key. Only in central settings or the dialog; stored only in `/etc/wpa_supplicant` |
+| `WIFI_SECURITY` | `psk` | `psk` = a password (WPA2-Personal, `WIFI_PSK`); `peap` or `tls` = WPA2/WPA3-Enterprise with the 802.1X settings below. See [802.1X and Wi-Fi Enterprise](#8021x-and-wi-fi-enterprise) |
+| `DOT1X` | `off` | 802.1X on the cable: `peap` (an account and its password) or `tls` (a certificate of the device). See [802.1X and Wi-Fi Enterprise](#8021x-and-wi-fi-enterprise) |
+| `EAP_IDENTITY` | | the identity: `DOMAIN\user`, `user@domain`, `host/name.domain`. With `tls`, empty = the common name of the certificate |
+| `EAP_ANONYMOUS` | | outer identity, sent in clear before the tunnel, e.g. `anonymous@example.com`. Empty = the identity |
+| `EAP_CA` | `system` | the authority that signed the certificate of the RADIUS server: `system` (the system trust store, with the CAs of the site) or the name of a `.crt` file in `/etc/openthinrdp/ca` |
+| `EAP_SERVER_NAME` | | name(s) the certificate of the RADIUS server must be for (or a name under them), space separated. Always set it |
+| `EAP_PASSWORD` | | the PEAP password. Only in the dialog, the central settings or sent by the manager; stored only as a secret of the device |
 | `VPN` | `off` | `wireguard` or `openvpn`: the device's own VPN, for devices outside the office. See [VPN](#vpn) |
 | `VPN_SERVER`, `VPN_SERVER_KEY` | | WireGuard: the server, `name[:port]` (51820 when no port), and its public key |
 | `VPN_ADDRESS` | | WireGuard: the address of this device in the tunnel with its prefix, e.g. `10.8.0.15/24`. One per device: ignored in `common.conf` |
@@ -152,6 +159,143 @@ when the profile asks for them (`auth-user-pass`).
 The state of the VPN is in the report (`VPN=`), in the manager (Summary, Network) and in the diagnostics of the
 device. Events: *VPN: ...* in the event log.
 
+### 802.1X and Wi-Fi Enterprise
+
+Corporate networks often admit nothing on a switch port that has not authenticated with **802.1X**, and enterprise
+Wi-Fi uses **WPA2/WPA3-Enterprise**, the same protocol over the air. The device does both with `wpa_supplicant`:
+
+- `DOT1X=peap` or `tls`: 802.1X on every wired adapter (`dot1x.sh`, one `openthinrdp-dot1x@<adapter>` service each,
+  `wpa_supplicant -D wired`).
+- `WIFI_SECURITY=peap` or `tls`: the Wi-Fi network of `WIFI_SSID` as WPA2- or WPA3-Enterprise.
+- **One block of EAP settings serves both**: the same account (PEAP) or the same certificate (EAP-TLS) on the cable
+  and on the Wi-Fi, as a Windows PC uses the same credentials for both. A network that wants a different identity on
+  each is rare enough not to double every setting.
+
+Two methods, the ones Windows NPS and FreeRADIUS offer for domain devices:
+
+| | PEAP (`peap`) | EAP-TLS (`tls`) |
+|---|---|---|
+| Who authenticates | an account and its password (PEAP-MSCHAPv2) | a certificate of the device and its private key |
+| Where the secret comes from | the settings dialog (*802.1X password*), `EAP_PASSWORD` in the central settings, or the manager (**802.1X...**, over SSH) | the manager (**802.1X...**, over SSH): a `.pfx` as Windows exports it, or a PEM certificate and its key |
+| Identity | `EAP_IDENTITY`, e.g. `EXAMPLE\svc-thin-8021x` | `EAP_IDENTITY`, or empty = the common name of the certificate |
+
+```
+# config\common.conf: every device on 802.1X ports with one service account (PEAP)
+DOT1X=peap
+EAP_IDENTITY=EXAMPLE\svc-thin-8021x
+EAP_ANONYMOUS=anonymous@example.com
+EAP_CA=corp-root.crt
+EAP_SERVER_NAME=nps.example.com
+```
+
+**The server is always checked.** The device sends nothing secret before the RADIUS server has shown a certificate
+signed by `EAP_CA` and made out to `EAP_SERVER_NAME` (or a name under it, `domain_suffix_match`); a server that fails
+either check is refused (*certificate of the server not accepted: ...*) and the password never leaves the device.
+`EAP_CA=system` trusts the system store, which holds the public authorities **and** the authorities of your site
+(`ca/*.crt` of the site files, `/etc/openthinrdp/ca`); a file name (e.g. `corp-root.crt`, from that folder) trusts that
+authority only. **Set `EAP_SERVER_NAME` always**: without it any server with a certificate of `EAP_CA`, with `system`
+any server with a public certificate, would get the password; the status of the device says so with a WARNING, and the
+manager notes it when the settings are saved.
+
+**On the cable**, in the order things happen:
+
+1. The adapter comes up (boot, cable plugged in, settings changed): its supplicant starts **before** the address is
+   asked (a `pre-up` of the adapter), and DHCP (or the static address) waits for the authentication, 40 s at most.
+2. **Authenticated**: the port is open, DHCP goes on. When the port was authenticated after the address was already
+   asked (a supplicant restarted, a switch that answered late), the address is asked again (`dhcpcd -n`): a switch may
+   put an authenticated device in another VLAN than before.
+3. **Refused**: DHCP goes on too, for the network the switch gives a refused device (a guest or restricted VLAN, or
+   none). The reason is in the state: *password refused by the server*, *certificate of the server not accepted:
+   Domain suffix mismatch (...)*, *refused by the server (certificate, account or network policy)*.
+   A **PEAP password the server refuses is not tried again for an hour**, or until a new one arrives (dialog, central
+   settings, manager): switches ask again every minute, and a domain account would be locked.
+4. **No authenticator**: a port that does not answer 802.1X at all (a switch without it, a desk at home) gets the
+   network without it after 15 s, and the state says *no authenticator: DHCP without 802.1X*. A device set up for
+   802.1X works on any switch; the supplicant keeps listening, and a switch that starts 802.1X later is answered.
+5. **Cable out and in**: authenticated again (an EAPOL-Start of its own after 2 and 8 s, when the switch does not ask
+   first), then the address again.
+
+Missing pieces are no error of the settings (the password or the certificate come later, from the manager): the state
+says *incomplete: no password* or *no client certificate*, and the network works without 802.1X meanwhile.
+
+**Secrets.** The PEAP password and the private key of the certificate are secrets of the device, kept like the Wi-Fi
+key: in the TPM when there is one (`TPM_SECRETS`), otherwise in root-only files; never in the settings files, never in
+the status. The manager sends them with **802.1X...** in the header of a device (shown with `DOT1X` or an enterprise
+Wi-Fi), over SSH with the key of the vault (`SSH=on`), on standard input: never through the management folder, which
+every device can read. A certificate is checked twice, in the manager (the password of a `.pfx`, its private key, the
+dates, the use for client authentication) and on the device with openssl (the key belongs to the certificate, not
+expired); the key is kept **decrypted**, its password nowhere. `EAP_PASSWORD` in `common.conf` works too (compared by
+its hash, applied once), but every device that reads the file can read it: per device, prefer the manager.
+
+**Getting there the first time.** A device on a port that admits nothing without 802.1X has no network until it is set
+up: type the PEAP settings in its settings dialog (section *802.1X*), or set it up first on a port without 802.1X, or
+one with MAC authentication bypass or a guest VLAN that reaches the management folder. EAP-TLS needs the network once
+anyway, for the manager to send the certificate.
+
+**State and troubleshooting.** The report has `DOT1X=` (adapter by adapter: *authenticated (PEAP, server ...)*,
+*failed: ...*, *no authenticator*, *incomplete: ...*, *no link*, or `off`), shown in the manager (Summary, Network) and
+in the diagnostics of the device; `WIFI_STATUS` says *(802.1X PEAP)* or what is missing. Events: *802.1X: authenticated
+on eth0 (...)*, *802.1X: failed on eth0: ...*, *802.1X: no authenticator on eth0 ...*. Everything the supplicant says:
+`journalctl -u openthinrdp-dot1x@eth0` (SSH).
+
+**Wi-Fi Enterprise** joins WPA2-Enterprise and WPA3-Enterprise networks (`WPA-EAP` and `WPA-EAP-SHA256`, protected
+management frames when the access point offers or requires them), with the same EAP settings and the same checks of
+the server. Not supported: WPA3-Enterprise 192-bit (Suite B), and WPA3-Personal (SAE) for `psk` networks. On Wi-Fi the
+supplicant's own back-off applies to a refused password (10 s, then longer), not the hour of the cable.
+
+#### Windows NPS: PEAP with domain accounts
+
+1. Install the *Network Policy and Access Services* role and register the NPS server in Active Directory.
+2. **Server certificate.** NPS needs a certificate for its name, e.g. `nps.example.com`, from your AD CS (the *RAS and
+   IAS Server* template, autoenrollment for the NPS server), or any CA. Export the root CA as Base-64 (`.cer`), put it
+   in the site files as `ca/corp-root.crt` (image or update package), and set `EAP_CA=corp-root.crt` (or `system`) and
+   `EAP_SERVER_NAME=nps.example.com`.
+3. **RADIUS clients**: the switches (and Wi-Fi controllers) with their address and shared secret.
+4. **Network policy**: conditions *Windows Groups* = a group of the accounts the devices use, *NAS Port Type* =
+   Ethernet (and Wireless - IEEE 802.11); constraints, *Authentication Methods*: **Microsoft: Protected EAP (PEAP)**,
+   edited to use the server certificate above, with *Secured password (EAP-MSCHAP v2)* inside. Leave the other methods
+   off. A refused device: the reason is in the NPS log (Event Viewer, *Network Policy Server*).
+5. The device: `DOT1X=peap`, `EAP_IDENTITY=EXAMPLE\account` (a user account: a thin client has no domain computer
+   password to use), its password with the manager or the dialog.
+
+#### Windows NPS: EAP-TLS with certificates from AD CS
+
+1. A **certificate template** for the devices: duplicate *Workstation Authentication* (or *User*), Enhanced Key Usage
+   *Client Authentication*, *Allow private key to be exported*, subject from the request or built from Active Directory.
+   Issue one certificate per device, e.g. for a computer account created for it, subject `CN=host/thin1.example.com`
+   (and that name as DNS name in the subject alternative name), and export it with its private key as `.pfx`.
+2. NPS maps the certificate to an account in Active Directory. With the *strong certificate mapping* that Windows
+   enforces (KB5014754), give the certificate the security identifier of the account (issued by an enterprise CA for
+   that account) or map it explicitly on the account (`altSecurityIdentities`), otherwise the mapping, and the
+   authentication, may fail.
+3. **Network policy** as for PEAP, with the authentication method **Microsoft: Smart Card or other certificate** (its
+   server certificate as above).
+4. The device: `DOT1X=tls`, `EAP_IDENTITY` empty (the common name of the certificate: `host/thin1.example.com`), and the
+   `.pfx` with **802.1X...** in the manager.
+
+#### FreeRADIUS
+
+```
+# clients.conf: each switch or Wi-Fi controller
+client switches { ipaddr = 192.0.2.0/24  secret = <shared secret> }
+
+# mods-available/eap, tls-config tls-common: the server certificate, and the CA of the device certificates (EAP-TLS)
+private_key_file = ${certdir}/nps.example.com.key
+certificate_file = ${certdir}/nps.example.com.crt
+ca_file = ${cadir}/corp-root.crt
+
+# mods-config/files/authorize: a local account for PEAP (or the mschap module with ntlm_auth for domain accounts)
+svc-thin-8021x Cleartext-Password := "..."
+```
+
+PEAP-MSCHAPv2 and EAP-TLS are enabled in the default `eap` module; its first proposal (MD5) is declined by the device,
+which asks for PEAP or TLS as set. The switch is a plain 802.1X authenticator with the FreeRADIUS server as its RADIUS
+server.
+
+Tested against hostapd (802.1X authenticator on a wired link, and a WPA2/WPA3-Enterprise access point on virtual
+radios) with its own EAP server and with FreeRADIUS 3.2: PEAP and EAP-TLS, a wrong password (one try, then the hour),
+a server of another CA or another name, no authenticator, the cable out and in.
+
 ### Desktops in the cloud
 
 OpenThinRDP connects with RDP to any Windows it can reach, wherever it runs. An RDS deployment (broker, session
@@ -185,7 +329,7 @@ own to test on. Reports are welcome in the [Discussions](https://github.com/Open
 | `MGMT_USER` | | account of the management folder: `user`, `DOMAIN\user` or `user@domain`. Empty = `smb.cred` of the image |
 | `MGMT_PASSWORD` | | its password. Only in central settings or the dialog; stored only in `/etc/openthinrdp/smb.cred` |
 | `SECURITY_UPDATES` | `on` | Debian security updates, never FreeRDP, never a reboot |
-| `TPM_SECRETS` | `on` | with a TPM 2.0: folder password, Wi-Fi key and SSH host keys kept encrypted in it ([security.md](security.md)); `off` = root-only files, and back out of the TPM at the next start |
+| `TPM_SECRETS` | `on` | with a TPM 2.0: folder password, Wi-Fi key, SSH host keys, VPN and 802.1X secrets kept encrypted in it ([security.md](security.md)); `off` = root-only files, and back out of the TPM at the next start |
 | `UPDATE_FROM` | `github` | OpenThinRDP software updates: `github` (signed releases, checked every 3 hours), `share` (`updates\` of the management folder) or `off`, see [management.md](management.md#signed-updates) |
 | `UPDATE_GITHUB` | `OpenThinRdp/openthinrdp` | repository of the releases, `owner/repository` (for a fork) |
 | `UPDATE_KEY` | `any` | signature an update from the management folder needs: `any` (project key or site key) or `site` (only the site key, once the device has it), see [management.md](management.md#a-fleet-on-its-own-key) |
