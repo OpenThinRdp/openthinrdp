@@ -56,6 +56,24 @@ otr_lang(){
 # wait for it, 15 minutes at most
 wait_update(){ local i; for i in $(seq 1 180); do systemctl is-active -q openthinrdp-update.service || return 0; sleep 5; done; }
 
+# an installed system that boots its own initramfs (not the live system of the ISO): GRUB on a PC, the firmware
+# partition of the Raspberry Pi image (raspi-firmware copies every new initramfs there)
+otr_installed(){ { [ -f /etc/default/grub ] && [ -d /boot/grub ]; } || [ -f /boot/firmware/config.txt ]; }
+# architecture of this device: amd64 on a PC, arm64 on a Raspberry Pi (OTR_ARCH: the tests)
+otr_arch(){ echo "${OTR_ARCH:-$(dpkg --print-architecture 2>/dev/null)}"; }
+# the packages of a package list (image/lb/packages.list) for one architecture: what is between "#if ARCHITECTURES
+# <arch>..." (or "#nif") and "#endif" only when it applies (live-build's syntax), no comments, no empty lines
+pkg_list(){ awk -v a="$1" '/^#if ARCHITECTURES /{s=1; for(i=3;i<=NF;i++) if($i==a) s=0; next}
+  /^#nif ARCHITECTURES /{s=0; for(i=3;i<=NF;i++) if($i==a) s=1; next} /^#endif/{s=0; next}
+  /^[[:space:]]*(#|$)/{next} !s{print $1}' "$2"; }
+# the .deb files of an unpacked update package ($1) for this device: debs/*.deb and debs/<architecture>/*.deb, and of
+# those only the ones built for its architecture or for all: an arm64 device never gets the amd64 FreeRDP
+pkg_debs(){ local a d x; a=$(otr_arch)
+  for d in "$1"/debs/*.deb "$1/debs/$a"/*.deb; do
+    [ -f "$d" ] || continue; x=$(dpkg-deb -f "$d" Architecture 2>/dev/null)
+    if [ "$x" = all ] || [ "$x" = "$a" ]; then echo "$d"; fi
+  done; }
+
 # the fingerprint of the first key in an OpenPGP public key file (armored or binary), upper case, as the manager
 # shows it; fails when the file is missing or holds no version 4 key
 key_fingerprint(){

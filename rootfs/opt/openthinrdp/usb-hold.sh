@@ -23,9 +23,11 @@ case "$1" in
     for id in "$@"; do [[ $id =~ ^[0-9a-f]{4}:[0-9a-f]{4}$ ]] || { echo "not a VID:PID: $id" >&2; exit 2; }; done
     release   # anything still held from a previous connection
     systemctl stop openthinrdp-usb-release.timer >/dev/null 2>&1
+    . "$OTR/lib/usb.sh"; SYS=" $(usb_system_ids | tr '\n' ' ') "
     for d in /sys/bus/usb/devices/[0-9]*-[0-9]*; do
       n=${d##*/}; [[ $n =~ ^[0-9]+-[0-9.]+$ ]] && [ -f "$d/idVendor" ] || continue
       [ "$(cat "$d/bDeviceClass" 2>/dev/null)" = 09 ] && continue          # never a hub
+      [[ $SYS == *" $(cat "$d/idVendor"):$(cat "$d/idProduct") "* ]] && continue   # never the disk of the system
       [[ " $* " == *" $(cat "$d/idVendor"):$(cat "$d/idProduct") "* ]] || continue
       p=$(readlink -f "$d/port") && [ -f "$p/disable" ] || continue
       echo 1 > "$p/disable" && echo "$p" >> "$H"

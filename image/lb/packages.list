@@ -1,5 +1,8 @@
 # Packages of the image. Recommended packages are NOT installed (lb config --apt-recommends false): whatever
 # a feature needs must be listed here. Chromium and extra firmware are added by inside.sh from build.conf.
+# The same list makes the Raspberry Pi image (image/rpi/inside.sh) and is checked by every update (install.sh):
+# packages of one architecture only go between "#if ARCHITECTURES <arch>" and "#endif" (live-build's syntax,
+# no nesting).
 
 # X session and kiosk
 xserver-xorg
@@ -37,8 +40,10 @@ opensc
 pcsc-tools
 
 # video decoding on Intel
+#if ARCHITECTURES amd64
 intel-media-va-driver
 vainfo
+#endif
 
 # network, management, updates
 ifupdown
@@ -71,8 +76,10 @@ fuse3
 keyboard-configuration
 console-setup
 locales
+#if ARCHITECTURES amd64
 shim-signed
 grub-efi-amd64-signed
+#endif
 # TPM 2.0 for systemd-creds: the secrets of the device kept in the TPM when there is one (lib/secrets.sh)
 libtss2-esys-3.0.2-0t64
 libtss2-mu-4.0.1-0t64
@@ -82,10 +89,23 @@ libtss2-tcti-device0t64
 # firmware for the usual thin client and small PC hardware (with FIRMWARE=all in build.conf live-build adds
 # every other firmware package too): Intel and AMD graphics, Intel audio, Realtek
 # network, Intel Wi-Fi. Anything else: EXTRA_FIRMWARE in build.conf (e.g. firmware-atheros firmware-mediatek)
+#if ARCHITECTURES amd64
 firmware-intel-graphics
 firmware-amd-graphics
 firmware-intel-sound
 firmware-sof-signed
-firmware-realtek
 firmware-iwlwifi
 firmware-misc-nonfree
+#endif
+# USB network adapters (Realtek) on every architecture
+firmware-realtek
+
+# Raspberry Pi 4 (image/build-rpi.sh, docs/arm.md): Debian's kernel and the Pi boot firmware (raspi-firmware puts
+# kernel, initramfs and device trees on the FAT partition at every kernel update), the Wi-Fi firmware of the
+# board, sfdisk for the first boot (the root partition grows to the SD card)
+#if ARCHITECTURES arm64
+linux-image-arm64
+raspi-firmware
+firmware-brcm80211
+fdisk
+#endif
