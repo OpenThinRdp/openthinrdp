@@ -364,7 +364,16 @@ settings_spec(){
   sec "$L_SEC_WIFI"
   fld WIFI choice "$L_F_WIFI" "$wf" "$(chs ONV ONL)" "$L_H_WIFI"
   fld WIFI_SSID text "$L_F_SSID" "$ws" "" "$L_H_SSID"
+  fld WIFI_SECURITY choice "$L_F_WIFISEC" "$wsec" "$(chs WSECV WSECL)" "$L_H_WIFISEC"
   fld WIFI_PSK password "$L_F_WIFIPSK" "" "" "$L_H_WIFIPSK"
+  sec "$L_SEC_DOT1X"
+  fld DOT1X_STATE ro "$L_F_STATUS" "$d1xs" "" ""
+  fld DOT1X choice "$L_F_DOT1X" "$d1x" "$(chs D1XV D1XL)" "$L_H_DOT1X"
+  fld EAP_IDENTITY text "$L_F_EAPID" "$eid" "" "$L_H_EAPID"
+  fld EAP_ANONYMOUS text "$L_F_EAPANON" "$ean" "" "$L_H_EAPANON"
+  fld EAP_PASSWORD password "$L_F_EAPPW" "" "" "$L_H_EAPPW"
+  fld EAP_CA text "$L_F_EAPCA" "$eca" "" "$L_H_EAPCA"
+  fld EAP_SERVER_NAME text "$L_F_EAPSERVER" "$esn" "" "$L_H_EAPSERVER"
   sec "$L_SEC_USB"
   fld USB_MODE choice "$L_F_USBMODE" "$um" "$(chs USBV USBL)" "$L_H_USBMODE"
   fld USB_REDIRECT text "$L_F_USBLIST" "$ur" "" "$L_H_USBLIST"
@@ -397,6 +406,8 @@ settings_read(){
       USB_MODE) um=$v ;; USB_REDIRECT) ur=$v ;; SECURITY_UPDATES) su=$v ;; WEB_BUTTON) wb=$v ;; WEB_URL) wu=$v ;;
       KIOSK_URL) ku=$v ;; KIOSK_RELOAD_MIN) kr=$v ;; POWER_ON_TIME) pon=$v ;; POWER_OFF_TIME) poff=$v ;;
       POWER_ON_DAYS) pdays=$v ;; WIFI) wf=$v ;; WIFI_SSID) ws=$v ;; WIFI_PSK) wp=$v ;;
+      WIFI_SECURITY) wsec=$v ;; DOT1X) d1x=$v ;; EAP_IDENTITY) eid=$v ;; EAP_ANONYMOUS) ean=$v ;; EAP_PASSWORD) epw=$v ;;
+      EAP_CA) eca=$v ;; EAP_SERVER_NAME) esn=$v ;;
     esac
   done <<< "$1"
 }
@@ -419,7 +430,11 @@ settings_dialog(){
   local -a ONV=(on off) ONL=("$L_ON" "$L_OFF") TRV=(auto udp tcp) TRL=("$L_TR_AUTO" "$L_TR_UDP" "$L_TR_TCP")
   local -a WEBV=(none app browser kiosk) WEBL=("$L_WEB_NONE" "$L_WEB_APP" "$L_WEB_BROWSER" "$L_WEB_KIOSK")
   local -a LNV=(en it) LNL=(English Italiano)
+  local -a WSECV=(psk peap tls) WSECL=("$L_WSEC_PSK" "$L_WSEC_PEAP" "$L_WSEC_TLS") D1XV=(off peap tls) D1XL=("$L_OFF" "$L_D1X_PEAP" "$L_D1X_TLS")
   local h u br brf dom lbi nm ip mask gw d1 d2 ntp off thr share mu mp um ur su tr wb wu ku kr pon poff pdays wf ws wp ln
+  local wsec d1x d1xs eid ean epw eca esn
+  wsec=$(cfg WIFI_SECURITY); d1x=$(cfg DOT1X); eid=$(cfg EAP_IDENTITY); ean=$(cfg EAP_ANONYMOUS); eca=$(cfg EAP_CA); esn=$(cfg EAP_SERVER_NAME)
+  d1xs=$("$OTR/dot1x.sh" status 2>/dev/null)
   h=$(hostname); u=$(cfg DEFAULT_USER); br=$(cfg BROKER); brf=$(cfg BROKER_FALLBACK); dom=$(cfg DOMAIN); mu=$(cfg MGMT_USER)
   lbi=$(cfg LOAD_BALANCE_INFO); nm=$(cfg NETMODE)
   if [ "$nm" = static ]; then ip=$(cfg IPADDR); mask=$(cfg NETMASK); gw=$(cfg GATEWAY)
@@ -444,7 +459,7 @@ settings_dialog(){
       out=$(settings_spec | ui form --heading="$(plain "$L_SETTINGS")" --small="$(plain "$st")" \
               --t-save="$L_SAVE" --t-close="$L_CLOSE" --t-terminal="$L_TERMINAL"); r=$?
       case $r in
-        0) wp=""; mp=""; settings_read "$out" ;;
+        0) wp=""; mp=""; epw=""; settings_read "$out" ;;
         11) break ;;
         12) xterm -fa Monospace -fs 11 2>/dev/null; break ;;
         *) ev "settings: the settings screen failed (exit $r), the earlier dialog instead" ;;
@@ -487,9 +502,11 @@ settings_dialog(){
       "NTP=$ntp" "SHUTDOWN_SECS=$off" "SESSION_THRESHOLD=$thr" "MGMT_SHARE=$share" "MGMT_USER=$mu" "USB_MODE=$um" \
       "USB_REDIRECT=$ur" "SECURITY_UPDATES=$su" "TRANSPORT=$tr" "WEB_BUTTON=$wb" "WEB_URL=$wu" "KIOSK_URL=$ku" \
       "KIOSK_RELOAD_MIN=$kr" "POWER_ON_TIME=$pon" "POWER_OFF_TIME=$poff" "POWER_ON_DAYS=$pdays" "LANGUAGE=$ln" \
-      "WIFI=$wf" "WIFI_SSID=$ws" > "$tmp"
+      "WIFI=$wf" "WIFI_SSID=$ws" "WIFI_SECURITY=$wsec" "DOT1X=$d1x" "EAP_IDENTITY=$eid" "EAP_ANONYMOUS=$ean" \
+      "EAP_CA=$eca" "EAP_SERVER_NAME=$esn" > "$tmp"
     [ -n "$wp" ] && printf 'WIFI_PSK=%s\n' "$wp" >> "$tmp"
     [ -n "$mp" ] && printf 'MGMT_PASSWORD=%s\n' "$mp" >> "$tmp"
+    [ -n "$epw" ] && printf 'EAP_PASSWORD=%s\n' "$epw" >> "$tmp"
     msg=$(sudo -n "$OTR/save-config.sh" "$tmp" 2>&1); r=$?
     rm -f "$tmp"
     if [ $r -eq 0 ]; then
@@ -528,6 +545,8 @@ diag_text(){
     echo
     echo "Network card    ${IF:-none}  $(cat "/sys/class/net/$IF/operstate" 2>/dev/null)  MAC $(cat "/sys/class/net/$IF/address" 2>/dev/null)"
     echo "IP address      $(ip -4 -o addr show dev "$IF" 2>/dev/null | awk '{print $4}' | head -1)"
+    # 802.1X on the cable, as the supplicant of each adapter sees it now (dot1x.sh status needs no root)
+    [ "$(cfg DOT1X)" != off ] && echo "802.1X          $("$OTR/dot1x.sh" status 2>/dev/null)"
     if [ -n "$GW" ] && command -v ping >/dev/null; then
       echo "Gateway         $GW  ($(ping -c1 -W1 "$GW" >/dev/null 2>&1 && echo "$L_DIAG_OK" || echo "$L_DIAG_FAIL"))"
     else echo "Gateway         ${GW:-none}"; fi

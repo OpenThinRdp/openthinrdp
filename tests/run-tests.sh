@@ -4,7 +4,7 @@
 #   docker run --rm -v "$PWD":/src:ro debian:trixie bash /src/tests/run-tests.sh
 set -u
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq >/dev/null && apt-get install -y -qq wpasupplicant iproute2 procps systemd python3 gnupg sqv >/dev/null 2>&1
+apt-get update -qq >/dev/null && apt-get install -y -qq wpasupplicant iproute2 procps systemd python3 gnupg sqv openssl >/dev/null 2>&1
 # software updates are fetched from local files: no test ever talks to GitHub
 export OTR_UPDATE_BASE_URL=file:///tmp/otr-release
 cp -a /src/rootfs/. /
@@ -388,6 +388,136 @@ sed -i '/^VPN_ROUTES=/d' $OTR_CONF; rm -rf /usr/local/bin/openvpn /tmp/ovpn.args
 ok "VPN: status off when off; WireGuard without its settings says what is missing" '[ "$($OTR/vpn.sh status)" = off ] && echo VPN=wireguard >> $OTR_CONF && $OTR/vpn.sh apply && $OTR/vpn.sh status | grep -q "VPN_SERVER, VPN_SERVER_KEY and VPN_ADDRESS are needed"'
 sed -i '/^VPN=/d' $OTR_CONF; $OTR/vpn.sh apply; rm -rf /run/openthinrdp/vpn
 
+# --- 802.1X on the cable (dot1x.sh) and Wi-Fi Enterprise (lib/eap.sh): validation, the configurations wpa_supplicant
+# gets (parsed by the real one), the secrets, the certificate from the manager, the wait before DHCP and its fallback.
+# The protocol itself is tested against hostapd and FreeRADIUS in a lab (docs/configuration.md#8021x-and-wi-fi-enterprise);
+# here wpa_supplicant, wpa_cli and systemd are stand-ins and the adapter a directory with its carrier.
+ok "802.1X: peap, tls (eap-tls) and off, anything else off; Wi-Fi psk, peap, tls, anything else psk" 'printf "DOT1X=PEAP\nWIFI_SECURITY=EAP-TLS\n" > "$T"; P=$($OTR/save-config.sh "$T" --print 2>&1); echo "$P" | grep -qx DOT1X=peap && echo "$P" | grep -qx WIFI_SECURITY=tls && printf "DOT1X=yes\nWIFI_SECURITY=wpa3\n" > "$T" && P=$($OTR/save-config.sh "$T" --print 2>&1) && echo "$P" | grep -qx DOT1X=off && echo "$P" | grep -qx WIFI_SECURITY=psk'
+ok "802.1X: identities DOMAIN\\user, user@domain, host/name, a computer account; quotes and ; refused" 'check x "EAP_IDENTITY=EXAMPLE\\thin-1" && check x "EAP_IDENTITY=host/pc1.example.com" && check x "EAP_IDENTITY=PC1\$" && check x "EAP_ANONYMOUS=anonymous@example.com" && ! check x "EAP_IDENTITY=a\"b" && ! check x "EAP_ANONYMOUS=a;b"'
+ok "802.1X: the CA is system (also when empty) or a .crt name of the site folder, never a path" 'printf "EAP_CA=\n" > "$T"; $OTR/save-config.sh "$T" --print 2>&1 | grep -qx EAP_CA=system && check x "EAP_CA=System" && check x "EAP_CA=corp-root.crt" && ! check x "EAP_CA=../corp.crt" && ! check x "EAP_CA=/etc/ssl/corp.crt" && ! check x "EAP_CA=corp.pem"'
+ok "802.1X: server names normalized, a bad one refused" 'printf "EAP_SERVER_NAME=nps1.example.com, nps2.example.com;\n" > "$T"; $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "EAP_SERVER_NAME=nps1.example.com nps2.example.com" && ! check x "EAP_SERVER_NAME=nps_1.example.com"'
+ok "802.1X: a missing password or certificate is no error (the device reports it)" 'check x "DOT1X=peap" && check x "DOT1X=tls" && check x "$(printf "WIFI=on\nWIFI_SSID=Corp\nWIFI_SECURITY=peap")" && ! check x "$(printf "WIFI=on\nWIFI_SSID=Corp\nWIFI_SECURITY=psk")"'
+ok "802.1X password: 256 characters at most, printed only as a hash" '! check x "EAP_PASSWORD=$(printf "%0257d" 0)" && printf "EAP_PASSWORD=Pw|with=all \$tuff\n" > "$T" && P=$($OTR/save-config.sh "$T" --print 2>&1) && ! echo "$P" | grep -q "tuff" && echo "$P" | grep -qx "EAP_PASSWORD=$(printf "Pw|with=all \$tuff" | sha256sum | cut -c1-64)"'
+# a test CA, a client of it, and the CA in the site folder
+X=/tmp/x509; mkdir -p $X /etc/openthinrdp/ca
+openssl req -x509 -newkey rsa:2048 -nodes -keyout $X/ca.key -subj "/CN=Test CA" -days 30 -out $X/ca.crt 2>/dev/null
+cli(){ openssl req -new -newkey rsa:2048 -nodes -keyout $X/$1.key -subj "/CN=$2" -out $X/$1.csr 2>/dev/null
+  openssl x509 -req -in $X/$1.csr -CA $X/ca.crt -CAkey $X/ca.key -CAcreateserial ${3:--days 30} -out $X/$1.crt 2>/dev/null; }
+cli client 'host\/thin1.example.test'; cli other 'host\/thin2.example.test'; cli old 'old' '-not_before 20200101000000Z -not_after 20200201000000Z'
+openssl pkey -in $X/client.key -aes256 -passout pass:Key-Pw1 -out $X/client-enc.key
+openssl pkcs12 -export -inkey $X/client.key -in $X/client.crt -certfile $X/ca.crt -passout pass:Pfx-Pw1 -out $X/client.p12
+cp $X/ca.crt /etc/openthinrdp/ca/test-ca.crt
+# stand-ins: wpa_supplicant keeps its configuration and says the lines of /tmp/wpa.script; wpa_cli writes what it is
+# asked (terminate ends the supplicant); systemctl runs the unit of dot1x.sh in the background
+mkdir -p /usr/local/sbin
+cat > /usr/local/sbin/wpa_supplicant <<'STUB'
+#!/bin/bash
+rm -f /tmp/wpa.stop; IF=x
+while [ $# -gt 0 ]; do case "$1" in -c) cp "$2" /tmp/wpa.conf ;; -i) IF=$2 ;; esac; shift; done
+echo start >> /tmp/wpa.starts
+[ -f /tmp/wpa.script ] && while IFS= read -r l; do sleep 0.2; echo "$IF: $l"; done < /tmp/wpa.script
+while [ ! -f /tmp/wpa.stop ]; do sleep 0.2; done
+STUB
+cat > /usr/local/sbin/wpa_cli <<'STUB'
+#!/bin/bash
+echo "$*" >> /tmp/wpa_cli.log; case "$*" in *terminate*) touch /tmp/wpa.stop ;; esac
+STUB
+cat > /usr/local/sbin/systemctl <<'STUB'
+#!/bin/bash
+u=""; for a in "$@"; do case "$a" in openthinrdp-dot1x@*) u=${a#openthinrdp-dot1x@}; u=${u%.service} ;; esac; done
+run(){ pgrep -f "dot1x.sh run $u\$" >/dev/null; }
+case "$1" in
+  is-active) [ -n "$u" ] && run ;;
+  start) [ -n "$u" ] && { run || { setsid /opt/openthinrdp/dot1x.sh run "$u" >> /tmp/d1x-run.log 2>&1 < /dev/null & }; } ;;
+  stop) [ -n "$u" ] && { pkill -f "dot1x.sh run $u\$"; touch /tmp/wpa.stop; sleep 0.5; } ;;
+  list-units) pgrep -af "dot1x.sh run" | awk '{print "openthinrdp-dot1x@" $NF ".service"}' | sort -u ;;
+  *) exit 1 ;;
+esac
+STUB
+chmod 755 /usr/local/sbin/wpa_supplicant /usr/local/sbin/wpa_cli /usr/local/sbin/systemctl
+export OTR_DOT1X_SYS=/tmp/sys OTR_DOT1X_NOAUTH=2 OTR_DOT1X_WAIT=10 OTR_DOT1X_HOLD=600
+mkdir -p /tmp/sys/eth9; echo 1 > /tmp/sys/eth9/carrier
+# one scenario: the lines the "switch" makes the supplicant say, dot1x.sh wait as ifupdown runs it, its duration
+scen(){ $OTR/dot1x.sh stop eth9; rm -f /tmp/wpa.* /tmp/wpa_cli.log /run/openthinrdp/dot1x/eth9.*; printf '%s\n' "$@" > /tmp/wpa.script
+  [ $# = 0 ] && rm -f /tmp/wpa.script; : > $OTR_EVENTS; S0=$(date +%s); $OTR/dot1x.sh wait eth9; WAITED=$(( $(date +%s) - S0 )); }
+st(){ cat /run/openthinrdp-dot1x/eth9 2>/dev/null; }
+: > $OTR_CONF
+printf 'DOT1X=peap\nEAP_IDENTITY=EXAMPLE\\thin\nEAP_ANONYMOUS=anonymous@example.test\nEAP_CA=test-ca.crt\nEAP_SERVER_NAME=nps1.example.test nps2.example.test\nEAP_PASSWORD=Pw "x" \\ y\n' > "$T"
+$OTR/save-config.sh "$T" >/dev/null 2>&1
+ok "802.1X password: stored root-only, never in the settings" '[ "$(cat $OTR_ETC/dot1x/password)" = "Pw \"x\" \\ y" ] && [ "$(stat -c %a $OTR_ETC/dot1x/password)" = 600 ] && ! grep -q "Pw " $OTR_CONF && grep -qx "EAP_IDENTITY=EXAMPLE\\\\thin" $OTR_CONF'
+printf 'EAP_PASSWORD=\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
+ok "802.1X password: an empty one keeps the saved one" '[ "$(cat $OTR_ETC/dot1x/password)" = "Pw \"x\" \\ y" ]'
+scen "CTRL-EVENT-EAP-STARTED EAP authentication started" "CTRL-EVENT-EAP-PEER-CERT depth=0 subject='/O=Test/CN=nps1.example.test' hash=00" \
+  "CTRL-EVENT-EAP-SUCCESS EAP authentication completed successfully"
+ok "802.1X PEAP: DHCP waits for the authentication, state and event" '[ "$(st)" = "authenticated (PEAP, server nps1.example.test)" ] && [ $WAITED -le 3 ] && grep -q "802.1X: authenticated on eth9 (PEAP, server nps1.example.test)" $OTR_EVENTS'
+ok "802.1X PEAP: the configuration of the wired supplicant" 'grep -qx "ap_scan=0" /tmp/wpa.conf && grep -qx "	key_mgmt=IEEE8021X" /tmp/wpa.conf && grep -qx "	eap=PEAP" /tmp/wpa.conf && grep -qx "	identity=\"EXAMPLE\\\\thin\"" /tmp/wpa.conf && grep -qx "	anonymous_identity=\"anonymous@example.test\"" /tmp/wpa.conf && grep -qx "	ca_cert=\"/etc/openthinrdp/ca/test-ca.crt\"" /tmp/wpa.conf && grep -qx "	domain_suffix_match=\"nps1.example.test;nps2.example.test\"" /tmp/wpa.conf && grep -qx "	phase2=\"auth=MSCHAPV2\"" /tmp/wpa.conf'
+ok "802.1X PEAP: the password as hex, exactly (quotes, backslash, spaces)" '[ "$(sed -n "s/^	password=//p" /tmp/wpa.conf)" = "$(printf "Pw \"x\" \\\\ y" | od -An -v -tx1 | tr -d " \n")" ] && [ "$(stat -c %a /run/openthinrdp/dot1x/eth9.conf)" = 600 ]'
+ok "802.1X: the real wpa_supplicant reads the wired configuration (and refuses a broken one)" '! timeout 3 /usr/sbin/wpa_supplicant -D wired -i lo -c /tmp/wpa.conf 2>&1 | grep -qE "Failed to read or parse|^Line [0-9]+:" && sed "s/eap=PEAP/eap=PEAPX/" /tmp/wpa.conf > /tmp/wpa.bad && timeout 3 /usr/sbin/wpa_supplicant -D wired -i lo -c /tmp/wpa.bad 2>&1 | grep -qE "^Line [0-9]+:"'
+ok "802.1X: the state readable by all, without secrets" '[ "$(stat -c %a /run/openthinrdp-dot1x/eth9)" = 644 ] && [ "$($OTR/dot1x.sh status)" = "eth9: authenticated (PEAP, server nps1.example.test)" ]'
+scen
+ok "802.1X: no authenticator, DHCP after the timeout (with EAPOL-Start again meanwhile)" '[ "$(st)" = "no authenticator: DHCP without 802.1X" ] && [ $WAITED -ge 2 ] && [ $WAITED -le 5 ] && grep -q "802.1X: no authenticator on eth9" $OTR_EVENTS && grep -q "reassociate" /tmp/wpa_cli.log'
+echo 0 > /tmp/sys/eth9/carrier; scen
+ok "802.1X: no cable, ifup is not held (the supplicant authenticates when it comes)" '[ "$(st)" = "no link" ] && [ $WAITED -le 7 ]'
+echo 1 > /tmp/sys/eth9/carrier; sleep 1.5
+ok "802.1X: the cable plugged in, authenticating again" '[ "$(st)" = authenticating ] || [ "$(st)" = "no authenticator: DHCP without 802.1X" ]'
+scen "CTRL-EVENT-EAP-STARTED EAP authentication started" "EAP-MSCHAPV2: failure message: 'FAILED' (retry not allowed, error 691)" "CTRL-EVENT-EAP-FAILURE EAP authentication failed"
+sleep 2
+ok "802.1X PEAP: a refused password stops the supplicant, not tried again for an hour (account lockout)" 'st | grep -q "^failed: password refused by the server: next try at [0-9][0-9]:[0-9][0-9], or as soon as a new password arrives$" && grep -q terminate /tmp/wpa_cli.log && [ -f /run/openthinrdp/dot1x/eth9.hold ] && [ "$(wc -l < /tmp/wpa.starts)" = 1 ] && [ $WAITED -le 3 ]'
+$OTR/dot1x.sh stop eth9; S0=$(date +%s); $OTR/dot1x.sh wait eth9; WAITED=$(( $(date +%s) - S0 ))
+ok "802.1X PEAP: the adapter restarted meanwhile: still waiting, said at once, nothing sent" 'st | grep -q "^failed: password refused by the server: next try at" && [ $WAITED -le 3 ] && [ "$(wc -l < /tmp/wpa.starts)" = 1 ]'
+ok "802.1X: a new password from the manager clears the wait, stored as a secret" 'printf "\xef\xbb\xbfNew-Pw2\r\n" | $OTR/dot1x.sh password | grep -qx OK=password && [ "$(cat $OTR_ETC/dot1x/password)" = New-Pw2 ] && [ ! -f /run/openthinrdp/dot1x/eth9.hold ] && ! echo | $OTR/dot1x.sh password | grep -q OK'
+scen "CTRL-EVENT-EAP-STARTED EAP authentication started" "CTRL-EVENT-EAP-TLS-CERT-ERROR reason=9 depth=0 subject='/CN=rogue.example.test' err='Domain suffix mismatch'" "CTRL-EVENT-EAP-FAILURE EAP authentication failed"
+ok "802.1X: a server certificate refused is said, the password was not sent (no wait)" '[ "$(st)" = "failed: certificate of the server not accepted: Domain suffix mismatch (/CN=rogue.example.test)" ] && [ ! -f /run/openthinrdp/dot1x/eth9.hold ] && grep -q "802.1X: failed on eth9: certificate of the server not accepted" $OTR_EVENTS'
+# the client certificate from the manager
+I(){ $OTR/dot1x.sh client; }
+ok "802.1X certificate: a key of another certificate, a wrong password, expired, garbage: refused, nothing stored" 'cat $X/client.crt $X/other.key | I | grep -qx "ERROR=the private key does not belong to the certificate" && { echo PASSWORD=nope; cat $X/client.crt $X/client-enc.key; } | I | grep -q "^ERROR=the private key cannot be read" && cat $X/old.crt $X/old.key | I | grep -q "^ERROR=the certificate expired" && echo hello | I | grep -qx "ERROR=no certificate" && { echo PASSWORD=nope; echo "PKCS12=$(base64 -w0 $X/client.p12)"; } | I | grep -q "^ERROR=the PKCS#12 file cannot be opened" && [ ! -e $OTR_ETC/dot1x/client.crt ] && [ ! -e $OTR_ETC/dot1x/client.key ]'
+ok "802.1X certificate: PEM with an encrypted key (Windows line ends), stored decrypted as a secret" '{ echo PASSWORD=Key-Pw1; cat $X/client.crt $X/client-enc.key; } | sed "s/\$/\r/" | I | grep -q "^OK=client CN=host/thin1.example.test" && [ "$(stat -c %a $OTR_ETC/dot1x/client.key)" = 600 ] && [ "$(stat -c %a $OTR_ETC/dot1x/client.crt)" = 644 ] && head -1 $OTR_ETC/dot1x/client.key | grep -qx -- "-----BEGIN PRIVATE KEY-----" && grep -q "802.1X: client certificate received from the manager (CN=host/thin1.example.test" $OTR_EVENTS'
+ok "802.1X certificate: a PKCS#12 file (.pfx) with its chain" '{ echo PASSWORD=Pfx-Pw1; echo "PKCS12=$(base64 -w0 $X/client.p12)"; } | I | grep -q "^OK=client" && [ "$(grep -c "BEGIN CERTIFICATE" $OTR_ETC/dot1x/client.crt)" = 2 ] && openssl x509 -in $OTR_ETC/dot1x/client.crt -noout -subject | grep -q thin1'
+printf 'DOT1X=tls\nEAP_IDENTITY=\nEAP_ANONYMOUS=\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
+scen "CTRL-EVENT-EAP-STARTED EAP authentication started" "CTRL-EVENT-EAP-SUCCESS EAP authentication completed successfully"
+ok "802.1X EAP-TLS: the certificate and key, the identity from the certificate" '[ "$(st)" = "authenticated (EAP-TLS)" ] && grep -qx "	eap=TLS" /tmp/wpa.conf && grep -qx "	identity=\"host/thin1.example.test\"" /tmp/wpa.conf && grep -qx "	client_cert=\"/etc/openthinrdp/dot1x/client.crt\"" /tmp/wpa.conf && grep -qx "	private_key=\"/etc/openthinrdp/dot1x/client.key\"" /tmp/wpa.conf && ! grep -q "password=" /tmp/wpa.conf && ! timeout 3 /usr/sbin/wpa_supplicant -D wired -i lo -c /tmp/wpa.conf 2>&1 | grep -qE "Failed to read or parse|^Line [0-9]+:"'
+mv $OTR_ETC/dot1x/client.crt /tmp/client.crt.save; scen
+ok "802.1X EAP-TLS without a certificate: says what is missing, DHCP at once" 'st | grep -q "^incomplete: no client certificate" && [ $WAITED -le 2 ] && grep -q "802.1X: settings incomplete on eth9: no client certificate" $OTR_EVENTS'
+mv /tmp/client.crt.save $OTR_ETC/dot1x/client.crt
+printf 'EAP_SERVER_NAME=\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
+ok "802.1X: without a server name the status warns" '$OTR/dot1x.sh status | grep -q "WARNING: EAP_SERVER_NAME empty"'
+printf 'EAP_SERVER_NAME=nps1.example.test\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
+# Wi-Fi: the same EAP block, WPA2/WPA3-Enterprise; the personal network as before
+W=/etc/wpa_supplicant/openthinrdp-wifi.conf
+printf 'WIFI=on\nWIFI_SSID=Corp\nWIFI_SECURITY=tls\nWIFI_COUNTRY=it\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
+ok "Wi-Fi Enterprise EAP-TLS: WPA2/WPA3 (WPA-EAP and SHA256, PMF when offered), the 802.1X certificate" 'grep -qx "country=IT" $W && grep -qx "	ssid=\"Corp\"" $W && grep -qx "	key_mgmt=WPA-EAP WPA-EAP-SHA256" $W && grep -qx "	ieee80211w=1" $W && grep -qx "	eap=TLS" $W && grep -qx "	private_key=\"/etc/openthinrdp/dot1x/client.key\"" $W && [ "$(stat -c %a $W)" = 600 ]'
+printf 'WIFI_SECURITY=peap\nEAP_IDENTITY=EXAMPLE\\thin\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
+ok "Wi-Fi Enterprise PEAP: the 802.1X password, read by the real wpa_supplicant" 'grep -qx "	eap=PEAP" $W && grep -q "^	password=$(printf New-Pw2 | od -An -v -tx1 | tr -d " \n")$" $W && ! timeout 3 /usr/sbin/wpa_supplicant -D nl80211 -i lo -c $W 2>&1 | grep -qE "Failed to read or parse|^Line [0-9]+:"'
+printf 'WIFI_SECURITY=psk\n' > "$T"
+ok "Wi-Fi back to a password: it must be given again" '! $OTR/save-config.sh "$T" >/dev/null 2>&1'
+printf 'WIFI_SECURITY=psk\nWIFI_PSK=password123\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
+ok "Wi-Fi personal: the file exactly as before" '[ "$(cat $W)" = "$(printf "ctrl_interface=/run/wpa_supplicant\ncountry=IT\nnetwork={\n\tssid=\"Corp\"\n\tpsk=%s\n\tkey_mgmt=WPA-PSK\n\tieee80211w=1\n}" "$(wpa_passphrase Corp password123 | sed -n "s/^[[:space:]]*psk=//p")")" ]'
+# central settings: the password applied once, compared by hash; a Wi-Fi key left there does not loop on enterprise
+printf 'EAP_PASSWORD=Central-Eap1\r\nWIFI_SECURITY=peap\r\nWIFI_PSK=password123\r\n' > $OTR_LIB/central-common.conf; : > $OTR_EVENTS
+$OTR/central-apply.sh; $OTR/central-apply.sh
+ok "802.1X: the central password applied once (hidden in the events), then in line" '[ "$(cat $OTR_ETC/dot1x/password)" = Central-Eap1 ] && [ "$(grep -c "central configuration applied" $OTR_EVENTS)" = 1 ] && grep -q "EAP_PASSWORD(hidden)" $OTR_EVENTS && grep -q "^in line" $OTR_LIB/central-status'
+rm -f $OTR_LIB/central-common.conf; : > $OTR_LIB/central-managed
+$OTR/report.sh >/dev/null 2>&1
+ok "802.1X: the report has the state, never the password or the key" 'grep -q "^DOT1X=eth9: " /run/openthinrdp-status.txt && grep -qx "CFG_DOT1X=tls" /run/openthinrdp-status.txt && ! grep -qE "Central-Eap1|New-Pw2|PRIVATE KEY|$(printf Central-Eap1 | od -An -v -tx1 | tr -d " \n")" /run/openthinrdp-status.txt $OTR_CONF $OTR_EVENTS && ! grep -q "^CFG_EAP_PASSWORD" /run/openthinrdp-status.txt'
+printf 'DOT1X=off\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1; $OTR/dot1x.sh apply
+ok "802.1X off: the supplicants stopped, the status says off" '! pgrep -f "dot1x.sh run" >/dev/null && [ "$($OTR/dot1x.sh status)" = off ] && [ -z "$(ls /run/openthinrdp-dot1x/)" ]'
+# the settings screen of the device (kiosk.sh: the spec ui.py shows, and what comes back from it)
+(
+  eval "$(sed -n '/^settings_spec(){/,/^}/p; /^settings_read(){/,/^}/p' $OTR/kiosk.sh)"; otr_lang
+  NETV=(dhcp static) NETL=(a b) USBV=(all) USBL=(a) ONV=(on off) ONL=(a b) TRV=(auto) TRL=(a) WEBV=(none) WEBL=(a) LNV=(en) LNL=(a)
+  WSECV=(psk peap tls) WSECL=(a b c) D1XV=(off peap tls) D1XL=("$L_OFF" "$L_D1X_PEAP" "$L_D1X_TLS")
+  h= u= br= brf= dom= lbi= tr=auto thr= off= nm=dhcp ip= mask= gw= d1= d2= ntp= wf=on ws= wp= um=all ur= wb=none wu= ku= kr=
+  pon= poff= pdays= share= mu= mp= su=on ln=en ean= epw=
+  wsec=peap d1x=tls d1xs="eth0: authenticated (EAP-TLS)" eid='EXAMPLE\thin' eca=system esn=nps.example.test
+  settings_spec > /tmp/spec
+  settings_read "$(printf 'DOT1X=peap\nEAP_PASSWORD=p w=x\nEAP_IDENTITY=EX\\u\nWIFI_SECURITY=tls\nEAP_SERVER_NAME=a.example b.example\n')"
+  echo "$d1x|$epw|$eid|$wsec|$esn" > /tmp/spec.read
+)
+ok "settings screen: an 802.1X section with the state, the method, the identity, an empty password field" 'grep -qP "^S\t802.1X$" /tmp/spec && grep -qP "^F\tDOT1X_STATE\tro\t[^\t]+\teth0: authenticated \(EAP-TLS\)\t" /tmp/spec && grep -qP "^F\tDOT1X\tchoice\t[^\t]+\ttls\toff=Off\|peap=PEAP \(user and password\)\|tls=EAP-TLS \(certificate\)\t" /tmp/spec && grep -qP "^F\tEAP_IDENTITY\ttext\tIdentity\tEXAMPLE\\\\thin\t" /tmp/spec && grep -qP "^F\tEAP_PASSWORD\tpassword\t[^\t]+\t\t" /tmp/spec && grep -qP "^F\tWIFI_SECURITY\tchoice\t[^\t]+\tpeap\t" /tmp/spec'
+ok "settings screen: what it gives back" '[ "$(cat /tmp/spec.read)" = "peap|p w=x|EX\\u|tls|a.example b.example" ]'
+rm -rf /usr/local/sbin/wpa_supplicant /usr/local/sbin/wpa_cli /usr/local/sbin/systemctl /tmp/sys /tmp/wpa.* /tmp/wpa_cli.log /tmp/spec* $X $OTR_ETC/dot1x /etc/openthinrdp/ca
+sed -i '/^WIFI/d; /^DOT1X/d; /^EAP_/d' $OTR_CONF; rm -f $W; unset OTR_DOT1X_SYS OTR_DOT1X_NOAUTH OTR_DOT1X_WAIT OTR_DOT1X_HOLD
+
 # --- Kerberos: a server's own name instead of an alias shared by two brokers, or an address
 printf '%s\n' '10.9.9.1 broker1.example.test broker1' '10.9.9.2 broker2.example.test broker2' \
   '10.9.9.1 rdbroker.example.test' '10.9.9.2 rdbroker.example.test' >> /etc/hosts
@@ -425,6 +555,9 @@ ok "secrets: a TPM that does not give it back correctly leaves the plain file" '
 rm -f /etc/wpa_supplicant/openthinrdp-wifi.conf
 mkdir -p /etc/ssh/sshd_config.d; printf 'fake host key\n' > /tmp/hk; secret_store ssh_host_ed25519_key /tmp/hk
 ok "secrets: sshd is pointed at the host key in memory before it starts" '$OTR/secrets.sh && grep -qx "HostKey $R/ssh_host_ed25519_key" /etc/ssh/sshd_config.d/00-openthinrdp-hostkeys.conf && [ -s $R/ssh_host_ed25519_key ] && [ ! -e /etc/ssh/ssh_host_ed25519_key ]'
+mkdir -p $OTR_ETC/dot1x; printf 'KEY\n' > /tmp/k; secret_store eap-client.key /tmp/k
+ok "secrets: the 802.1X key in the TPM keeps its path (the Wi-Fi configuration names it), a link to memory" '[ -L $OTR_ETC/dot1x/client.key ] && [ "$(readlink $OTR_ETC/dot1x/client.key)" = $R/eap-client.key ] && grep -qx KEY $OTR_ETC/dot1x/client.key && ! grep -q KEY $OTR_SEALED/eap-client.key.cred'
+rm -rf $OTR_SEALED/eap-client.key.cred $R/eap-client.key $OTR_ETC/dot1x
 echo TPM_SECRETS=off >> $OTR_CONF; : > $OTR_EVENTS
 ok "secrets: TPM_SECRETS=off puts them back in root-only files" '$OTR/secrets.sh && [ -f $C ] && [ ! -L $C ] && grep -qx password=Secret2 $C && [ "$(stat -c %a $C)" = 600 ] && [ -f /etc/ssh/ssh_host_ed25519_key ] && [ ! -e $OTR_SEALED/smb.cred.cred ] && [ ! -e /etc/ssh/sshd_config.d/00-openthinrdp-hostkeys.conf ] && grep -q "back to root-only files" $OTR_EVENTS && [ "$(secret_mode)" = "file (TPM_SECRETS=off)" ]'
 ok "secrets: TPM_SECRETS=off moves nothing in" '$OTR/secrets.sh && [ -f $C ] && [ ! -L $C ] && [ ! -e $OTR_SEALED/smb.cred.cred ]'

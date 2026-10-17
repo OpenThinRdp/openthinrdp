@@ -1,0 +1,13 @@
+[Unit]
+Description=OpenThinRDP: 802.1X on the wired adapter %i (DOT1X=peap|tls)
+# started by the pre-up of the adapter (dot1x.sh wait), early at boot: no default dependencies, the secrets first
+DefaultDependencies=no
+After=local-fs.target openthinrdp-secrets.service
+Before=shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+# started and stopped by /opt/openthinrdp/dot1x.sh (wait, stop, apply): not enabled by itself
+ExecStart=/opt/openthinrdp/dot1x.sh run %i
+Restart=on-failure
+RestartSec=10

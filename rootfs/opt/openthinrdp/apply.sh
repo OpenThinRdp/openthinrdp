@@ -1,5 +1,5 @@
 #!/bin/bash
-# Apply the settings to the system: network (DHCP/static/Wi-Fi), DNS, time servers, security updates,
+# Apply the settings to the system: network (DHCP/static/Wi-Fi, 802.1X), DNS, time servers, security updates,
 # USB ownership (pcscd), SSH and keyboard. Runs as root.
 #   boot = at startup (ifupdown already brought up the known adapters: only new ones are started here)
 #   now  = after a change (the adapters whose configuration changed are restarted)
@@ -27,6 +27,8 @@ DOM=$(cfg DOMAIN | tr 'A-Z' 'a-z'); [[ $DOM == *.* ]] || DOM=""
 WCF=/etc/wpa_supplicant/openthinrdp-wifi.conf; WL=""   # a link to the copy in memory when kept in the TPM (lib/secrets.sh)
 if [ "$(cfg WIFI)" = on ] && [ -s "$WCF" ] && command -v wpa_supplicant >/dev/null; then WL=$(wifi_nics | head -1); fi
 [ "$IF" = "$(wifi_nics | head -1)" ] && [ "$MODE" = static ] && IF=$(wired_nics | head -1)   # static only on a cable
+# 802.1X on the cable (dot1x.sh): before its address every wired adapter waits for its supplicant to authenticate
+D1X=""; [ "$(cfg DOT1X)" != off ] && command -v wpa_supplicant >/dev/null && D1X=1
 
 # --- interfaces. allow-hotplug = the boot does not wait for the network (the login form does not need it).
 # DHCP: every wired adapter (whichever has the cable gets the address). Static: only the main one.
@@ -43,6 +45,7 @@ NEW=$(mktemp)
     else
       printf '\nallow-hotplug %s\niface %s inet dhcp\n' "$i" "$i"
     fi
+    [ -n "$D1X" ] && printf '    pre-up %s/dot1x.sh wait %s\n    post-down %s/dot1x.sh stop %s\n' "$OTR" "$i" "$OTR" "$i"
   done
   # Wi-Fi: always DHCP; the cable stays preferred (dhcpcd gives wireless a higher metric).
   # Power saving off: with power_save on the remote session stutters.
@@ -179,4 +182,6 @@ fi
 # --- VPN (VPN=wireguard|openvpn|off): in the background, the server's name may need the network just restarted;
 # report.sh (vpn.sh check) tries again every 5 minutes
 setsid "$OTR/vpn.sh" apply 9>&- >/dev/null 2>&1 < /dev/null &
+# --- 802.1X (DOT1X=peap|tls|off): the supplicants of the adapters not restarted above follow the new settings
+setsid "$OTR/dot1x.sh" apply $CHANGED 9>&- >/dev/null 2>&1 < /dev/null &
 exit 0
