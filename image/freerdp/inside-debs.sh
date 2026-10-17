@@ -30,8 +30,17 @@ V="$FREERDP_VERSION_BASE.$DATE.$SHORT+otr$FREERDP_OTR_REVISION"
 dch -b -v "$V" -D trixie-backports "OpenThinRDP: FreeRDP $FREERDP_COMMIT with the UDP transport (RDPEUDP)" </dev/null
 # the UDP code exports functions Debian's symbol files do not know yet: they only matter for a distribution
 rm -f debian/*.symbols
-DPKG_GENSYMBOLS_CHECK_LEVEL=0 DEB_BUILD_OPTIONS="nocheck parallel=$(nproc)" dpkg-buildpackage -b -us -uc -d > /b/build.log 2>&1 \
-  || { grep -nE 'error|Error' /b/build.log | head -30; tail -30 /b/build.log; exit 1; }
+dbp(){ DPKG_GENSYMBOLS_CHECK_LEVEL=0 DEB_BUILD_OPTIONS="nocheck parallel=${JOBS:-$(nproc)}" dpkg-buildpackage -b -us -uc -d "$@" >> /b/build.log 2>&1; }
+# RETRIES (emulated builds, build-debs.sh): under qemu-user an arm64 program cannot start while the binfmt entry of
+# the host is missing, e.g. for the instant a privileged container that boots systemd re-registers the entries of
+# the host. A compile step that failed that way is not a build error: the build goes on where it stopped (-nc).
+: > /b/build.log
+ok=0; dbp && ok=1
+for i in $(seq 1 "${RETRIES:-0}"); do
+  [ $ok = 1 ] && break
+  echo "build stopped (attempt $i of $((RETRIES + 1))), going on where it stopped"; dbp -nc && ok=1
+done
+[ $ok = 1 ] || { grep -nE 'error|Error' /b/build.log | head -30; tail -30 /b/build.log; exit 1; }
 # a thin client needs the X11 client and its libraries; debug symbols apart, for whoever has to debug a crash
 cd /b
 mkdir -p /out/debug
