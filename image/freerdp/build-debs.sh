@@ -27,19 +27,28 @@ if [ "$ARCH" != amd64 ] && [ "$(uname -m)" != aarch64 ]; then
     || { echo "this machine cannot run $ARCH containers: install the qemu-user emulation (Debian: qemu-user-binfmt)"; exit 1; }
 fi
 mkdir -p "$OUT"
-"$ENGINE" run --rm "${PLAT[@]}" -e FREERDP_REPO="$FREERDP_REPO" -e FREERDP_COMMIT="$FREERDP_COMMIT" \
-  -e FREERDP_VERSION_BASE="$FREERDP_VERSION_BASE" -e FREERDP_OTR_REVISION="$FREERDP_OTR_REVISION" \
-  ${JOBS:+-e JOBS="$JOBS"} ${PLAT:+-e RETRIES=3} -v "$HERE/inside-debs.sh":/inside-debs.sh:ro -v "$OUT":/out "$IMG" bash /inside-debs.sh
+# another architecture: a build whose check failed is kept (SHA256SUMS.unchecked) and only checked again
+if [ -f "$OUT/SHA256SUMS.unchecked" ]; then echo "Built earlier, not checked yet: $OUT"
+else
+  "$ENGINE" run --rm "${PLAT[@]}" -e FREERDP_REPO="$FREERDP_REPO" -e FREERDP_COMMIT="$FREERDP_COMMIT" \
+    -e FREERDP_VERSION_BASE="$FREERDP_VERSION_BASE" -e FREERDP_OTR_REVISION="$FREERDP_OTR_REVISION" \
+    ${JOBS:+-e JOBS="$JOBS"} ${PLAT:+-e RETRIES=3} -v "$HERE/inside-debs.sh":/inside-debs.sh:ro -v "$OUT":/out "$IMG" bash /inside-debs.sh
+  [ "$ARCH" = amd64 ] || mv "$OUT/SHA256SUMS" "$OUT/SHA256SUMS.unchecked"
+fi
 if [ "$ARCH" != amd64 ]; then
   # a cross-architecture build is checked where it will run: the packages are of that architecture, they install
-  # together on a plain Debian 13 of it, and the client has the UDP transport
+  # together on a plain Debian 13 of it (with trixie-backports, where some of their libraries are, as in the
+  # images), and the client has the UDP transport. Until then SHA256SUMS is SHA256SUMS.unchecked: no image and no
+  # update package takes the build.
   "$ENGINE" run --rm "${PLAT[@]}" -e ARCH="$ARCH" -v "$OUT":/out:ro "$IMG" bash -c '
     set -e; for d in /out/*.deb; do a=$(dpkg-deb -f "$d" Architecture)
       [ "$a" = "$ARCH" ] || [ "$a" = all ] || { echo "${d##*/} is for $a, not $ARCH"; exit 1; }; done
+    echo "deb http://deb.debian.org/debian trixie-backports main" > /etc/apt/sources.list.d/backports.list
     apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends /out/*.deb >/dev/null
     echo "$(uname -m): $(xfreerdp3 --version | head -1)"
     xfreerdp3 --buildconfig | grep -o "WITH_RDPEUDP=ON" || { echo "no UDP transport in this build"; exit 1; }' \
-    || { echo "the $ARCH packages in $OUT failed their check"; rm -f "$OUT/SHA256SUMS"; exit 1; }
+    || { echo "the $ARCH packages in $OUT failed their check (kept: run again to check them again)"; exit 1; }
+  mv "$OUT/SHA256SUMS.unchecked" "$OUT/SHA256SUMS"
 fi
 # one archive to attach to a release (package names have "~" and "+", which release asset names do not keep)
 TAR=openthinrdp-freerdp-${FREERDP_COMMIT:0:9}$SUF.tar
