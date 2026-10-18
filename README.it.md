@@ -96,7 +96,7 @@ ARM (il Raspberry Pi 4 è [in preparazione](https://github.com/OpenThinRdp/opent
 | Driver | il kernel Debian 13 completo e tutti i pacchetti firmware di Debian: quello che fa girare Debian 13 fa girare OpenThinRDP |
 | Memoria | 2 GB di RAM |
 | Spazio | 8 GB per installarlo (eMMC, SSD o disco); nessuno per provarlo in live da una chiavetta |
-| Rete | cavo, Wi-Fi (WPA2 personale) o un adattatore Ethernet USB |
+| Rete | cavo, Wi-Fi o un adattatore Ethernet USB; WPA2/WPA3 personale o Enterprise, e 802.1X sul cavo |
 | TPM 2.0 | facoltativo: se c'è, i segreti del dispositivo (password della cartella di gestione, chiave Wi-Fi, chiavi SSH) restano cifrati dentro il TPM ([sicurezza](docs/security.md)); senza, funziona uguale |
 | Lato Windows | un broker RDS (host di sessione o raccolta VDI su Hyper-V), oppure qualsiasi PC o server Windows che accetti il Desktop remoto (Pro, Enterprise, Server), in sede o in qualsiasi cloud |
 
@@ -266,7 +266,6 @@ pull request:
 
 - **VPN**: WireGuard e OpenVPN, così una postazione a casa o in una sede distaccata raggiunge il broker da sola.
 - **RD Gateway**: Desktop remoto in HTTPS da fuori rete, senza VPN.
-- **Wi-Fi con 802.1X** (WPA-Enterprise) e 802.1X sulla rete cablata.
 - **Installazione da rete (PXE)** per molte postazioni insieme.
 - **Altro hardware provato** e altre lingue (un file ciascuna).
 

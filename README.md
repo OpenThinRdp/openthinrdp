@@ -95,7 +95,7 @@ Not for you (yet): Citrix, VMware/Omnissa Horizon and other protocols (OpenThinR
 | Drivers | the complete Debian 13 kernel and every Debian firmware package: what runs Debian 13 runs OpenThinRDP |
 | Memory | 2 GB of RAM |
 | Storage | 8 GB to install it (eMMC, SSD or disk); nothing to try it live from a USB stick |
-| Network | cable, Wi-Fi (WPA2 personal) or a USB Ethernet adapter |
+| Network | cable, Wi-Fi or a USB Ethernet adapter; WPA2/WPA3 personal or Enterprise, and 802.1X on the cable |
 | TPM 2.0 | optional: with one, the device's secrets (management folder password, Wi-Fi key, SSH host keys) are kept encrypted in it ([security](docs/security.md)); without one it works the same |
 | Windows side | an RD Connection Broker (RDS session hosts or a Hyper-V VDI collection), or any Windows PC or server that accepts Remote Desktop (Pro, Enterprise, Server), on premises or in any cloud |
 
@@ -255,7 +255,6 @@ Questions people ask first (hardware, drivers, UDP, Azure, PXE, 802.1X): [docs/f
 Ideas we would like to build, roughly in this order. Tell us in an issue which ones you need, or send a pull
 request:
 
-- **Wi-Fi with 802.1X** (WPA-Enterprise) and wired 802.1X.
 - **Network installation (PXE)** for many devices at once.
 - **More tested hardware** and more languages (one file each).
 

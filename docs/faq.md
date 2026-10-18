@@ -120,9 +120,10 @@ Network boot is considered for a later version.
 
 ### Does it support 802.1X?
 
-Not yet. Wired 802.1X and WPA2/WPA3-Enterprise Wi-Fi are being added
-([#60](https://github.com/OpenThinRdp/openthinrdp/issues/60)). Wi-Fi with a password (WPA2-Personal) and a
-VPN work today.
+Yes, since 0.2.1: 802.1X on the cable and WPA2/WPA3-Enterprise Wi-Fi, with PEAP (a domain or machine account)
+or EAP-TLS (a certificate from your CA). The RADIUS server is checked against your CA before any password is sent,
+and on a switch without 802.1X the device goes on by itself. Setup with Windows NPS or FreeRADIUS:
+[802.1X and Wi-Fi Enterprise](configuration.md#8021x-and-wi-fi-enterprise).
 
 ### Why not just Linux Mint with Remmina?
 
