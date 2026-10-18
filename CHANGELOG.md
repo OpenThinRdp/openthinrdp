@@ -3,9 +3,7 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
-## Unreleased
-
-- **Docs: FAQ and the alternatives** ([#56](https://github.com/OpenThinRdp/openthinrdp/issues/56) follow-up): [docs/faq.md](docs/faq.md) answers what people ask first (hardware, drivers, UDP, Azure, PXE, 802.1X, maturity), [docs/alternatives.md](docs/alternatives.md) compares OpenThinRDP with Linux Mint + Remmina, IGEL OS, Dell ThinOS, Stratodesk, ThinStation and openthinclient.
+## 0.2.1 (2026-10-18)
 
 - **802.1X on the cable, and WPA2/WPA3-Enterprise Wi-Fi** ([#60](https://github.com/OpenThinRdp/openthinrdp/issues/60)).
   Networks that open a switch port only to devices that authenticate now take OpenThinRDP.
@@ -37,6 +35,15 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
 - **Docs: drivers and hardware.** The ISO has the complete Debian kernel and every firmware package, and the
   documentation now says so. [docs/hardware.md](docs/hardware.md) has the requirements, the tested devices, and used
   thin clients that meet the requirements.
+- **Docs: FAQ and the alternatives.**
+  - [docs/faq.md](docs/faq.md) answers what people ask first: hardware, drivers, UDP, Azure, PXE, 802.1X, maturity.
+  - [docs/alternatives.md](docs/alternatives.md) compares OpenThinRDP with Linux Mint + Remmina, IGEL OS, Dell
+    ThinOS, Stratodesk, ThinStation and openthinclient.
+- **Docs: a page of its own for the manager** ([#56](https://github.com/OpenThinRdp/openthinrdp/issues/56)):
+  [docs/manager.md](docs/manager.md), and screenshots of the 0.2.0 manager.
+- **The manager names the devices a pilot-only release cannot hold back**
+  ([#57](https://github.com/OpenThinRdp/openthinrdp/issues/57)). Devices before 0.2.0 do not know `UPDATE_TO` and take
+  the newest version in the folder anyway.
 
 ## 0.2.0 (2026-10-17)
 
