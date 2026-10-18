@@ -37,8 +37,8 @@ hardware e pull request sono benvenute.
 
 ### Su quale hardware gira?
 
-Qualsiasi PC o thin client x86 a 64 bit, con UEFI o BIOS tradizionale, 2 GB di RAM e 8 GB di memoria (nessuna per
-farlo girare live da una chiavetta USB). Provati: Dell OptiPlex 3000 Thin Client in produzione, QEMU/KVM con UEFI e
+Qualsiasi PC o thin client x86 a 64 bit, con UEFI o BIOS tradizionale, 2 GB di RAM e 8 GB di spazio su disco (nessuno
+per farlo girare live da una chiavetta USB). Provati: Dell OptiPlex 3000 Thin Client in produzione, QEMU/KVM con UEFI e
 con BIOS. Thin client usati come Dell Wyse 5070, HP t630 o Fujitsu Futro S740 rispettano i requisiti. Vedi
 [hardware.md](hardware.md) e le guide [sostituire Dell ThinOS](guides/replace-dell-thinos.md) e
 [un vecchio PC come thin client](guides/old-pc-thin-client.md) (in inglese).

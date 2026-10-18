@@ -84,8 +84,10 @@ numbers: [docs/udp.md](docs/udp.md#on-a-lossy-line).
   system, no sign-in, the page chosen centrally ([see below](#screens-that-only-show-a-web-page)), so one image
   covers the whole fleet.
 
-Not for you (yet): Citrix, VMware/Omnissa Horizon and other protocols (OpenThinRDP does RDP only), ARM devices
-(the Raspberry Pi 4 is [in preparation](https://github.com/OpenThinRdp/openthinrdp/issues/61)), 32-bit only PCs.
+Not for you (yet): Citrix, VMware/Omnissa Horizon and other protocols (OpenThinRDP does RDP only), 32-bit only
+PCs. ARM is experimental: an SD card image for the Raspberry Pi 4
+([pre-release](https://github.com/OpenThinRdp/openthinrdp/releases/tag/rpi-test-1)), tested in QEMU emulation only,
+not yet on a real board ([what to check](docs/arm.md)); the Pi 5 is not supported yet.
 
 ## Requirements
 
@@ -236,7 +238,7 @@ that you can read: the whole client side is a few shell scripts in `rootfs/opt/o
 |---|---|---|---|---|---|
 | Cost | free | comes with Dell thin clients | subscription per device | licence per device | free |
 | Source | open (Apache 2.0) | closed | closed | closed | open |
-| Runs on | x86-64 PCs and thin clients, UEFI or BIOS | Dell thin clients | many x86-64 devices | x86-64 PCs, Raspberry Pi | x86 PCs |
+| Runs on | x86-64 PCs and thin clients, UEFI or BIOS; Raspberry Pi 4 (experimental) | Dell thin clients | many x86-64 devices | x86-64 PCs, Raspberry Pi | x86 PCs |
 | Protocols | RDP only | Citrix, Omnissa/VMware, Microsoft and more | Citrix, Omnissa/VMware, Microsoft and more | many | many (you build the image) |
 | Management | shared folder + Windows tool, no server | Wyse Management Suite | UMS server | NoTouch Center | configuration files on a network server |
 | Updates | signed, from GitHub or your folder | vendor firmware | vendor | vendor | rebuild the image |
