@@ -5,6 +5,17 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
 
 ## Unreleased
 
+- **802.1X on the cable, and WPA2/WPA3-Enterprise Wi-Fi** ([#60](https://github.com/OpenThinRdp/openthinrdp/issues/60)).
+  Networks that open a switch port only to devices that authenticate now take OpenThinRDP.
+  - `DOT1X=peap|tls` for the cable, `WIFI_SECURITY=peap|tls` for Wi-Fi, with one set of EAP settings for both:
+    PEAP with a domain or machine account, or EAP-TLS with a certificate from your CA (e.g. AD CS).
+  - The RADIUS server's certificate is checked against your CA and its name before any password is sent.
+  - The password and the certificate's key are secrets of the device, sealed in the TPM when there is one. The
+    manager sends them over SSH (**802.1X...**), never through the management folder.
+  - DHCP waits for the authentication. On a switch with no 802.1X at all the device goes on after 15 s and says so.
+  - A password the server refuses is not tried again for an hour, so a domain account is not locked.
+  - Tested against hostapd and FreeRADIUS (cable, and Wi-Fi on virtual radios). Setup notes for Windows NPS:
+    [docs/configuration.md](docs/configuration.md#8021x-and-wi-fi-enterprise).
 - **PCs with a legacy BIOS** ([#62](https://github.com/OpenThinRdp/openthinrdp/issues/62)). The live system already
   started on them, but the installation stopped at the boot loader. The Debian installer tried to remove the Secure
   Boot chain the image carries, a protected package, to put in the BIOS GRUB. Now on a BIOS the EFI packages are
