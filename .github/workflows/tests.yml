@@ -12,6 +12,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Shell syntax of every script
-        run: for f in rootfs/opt/openthinrdp/*.sh rootfs/opt/openthinrdp/lib/*.sh management/publish/*.sh image/*.sh image/freerdp/*.sh; do bash -n "$f" || exit 1; done
+        run: for f in rootfs/opt/openthinrdp/*.sh rootfs/opt/openthinrdp/lib/*.sh management/publish/*.sh image/*.sh image/freerdp/*.sh image/rpi/*.sh image/rpi/openthinrdp-growroot tests/rpi-qemu.sh; do bash -n "$f" || exit 1; done
       - name: System tests in Debian 13
         run: docker run --rm -v "$PWD":/src:ro debian:trixie bash /src/tests/run-tests.sh

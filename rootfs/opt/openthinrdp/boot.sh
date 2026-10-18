@@ -48,7 +48,9 @@ fi
 # package lists never downloaded (offline install): fetch them once, in the background
 [ -z "$(ls /var/lib/apt/lists/ 2>/dev/null | grep -v -e lock -e partial -e auxfiles)" ] && { (sleep 60; apt-get update -q >/dev/null 2>&1) & }
 
-# --- once, on the INSTALLED system only (not on the live image)
+# --- once, on a PC installed from the ISO only (not on the live image). A Raspberry Pi has no GRUB: its image is
+# built with the silent command line (/etc/default/raspi-extra-cmdline) and keeps Debian's initramfs (MODULES=most:
+# the SD card, USB disk and display drivers are all there, whatever the board boots from)
 if [ -f /etc/default/grub ] && [ -d /boot/grub ]; then
   # direct and silent boot: no GRUB menu, no kernel or systemd messages, the splash until the login form
   if [ ! -f "$OTR_LIB/.grub-silent" ]; then

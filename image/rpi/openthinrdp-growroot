@@ -1,0 +1,30 @@
+#!/bin/bash
+# First boot of the Raspberry Pi image (image/build-rpi.sh): the root partition, the last one on the SD card or USB
+# disk, grows to the end of the card, then its file system (online). Harmless when there is nothing to grow; once
+# done, the service turns itself off.
+set -u
+log(){ echo "openthinrdp-growroot: $*"; }
+off(){ systemctl disable openthinrdp-growroot.service >/dev/null 2>&1; exit 0; }
+DEV=$(readlink -f "$(findmnt -n -o SOURCE /)")
+P=${DEV##*/}; DISK=$(lsblk -n -o PKNAME "$DEV" 2>/dev/null | head -1)
+N=$(cat "/sys/class/block/$P/partition" 2>/dev/null)
+[ -n "$DISK" ] && [ -n "$N" ] || { log "the root file system ($DEV) is not on a partition: nothing to grow"; off; }
+START=$(cat "/sys/class/block/$P/start"); SIZE=$(cat "/sys/class/block/$P/size"); TOTAL=$(cat "/sys/class/block/$DISK/size")
+# only the last partition can grow
+for q in /sys/class/block/"$DISK"/"$DISK"*; do
+  [ -f "$q/start" ] && [ "$(cat "$q/start")" -gt "$START" ] && { log "$P is not the last partition of $DISK"; off; }
+done
+# less than 64 MB left at the end: nothing worth doing
+if [ $(( TOTAL - START - SIZE )) -gt 131072 ]; then
+  log "growing $P to the end of $DISK ($(( SIZE / 2048 )) -> $(( (TOTAL - START) / 2048 )) MB)"
+  # the disk is in use: the table is written, the kernel is told about the one partition (partx), no re-read
+  echo ", +" | sfdisk -q --no-reread --no-tell-kernel -N "$N" "/dev/$DISK" || { log "sfdisk failed"; exit 1; }
+  partx -u --nr "$N" "/dev/$DISK" || { log "partx failed: the new size counts from the next boot"; exit 1; }
+fi
+# the file system to the size of the partition (also after a growth that was cut short by a power loss)
+FS=$(( $(dumpe2fs -h "$DEV" 2>/dev/null | awk -F: '/^Block count/{c=$2} /^Block size/{s=$2} END{print c*s}') / 512 ))
+if [ "$FS" -lt $(( $(cat "/sys/class/block/$P/size") - 8192 )) ]; then
+  resize2fs "$DEV" >/dev/null 2>&1 || { log "resize2fs failed"; exit 1; }
+  log "file system of $P: $(df -h / | awk 'NR==2{print $2}')"
+fi
+off

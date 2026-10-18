@@ -102,10 +102,12 @@ firmware-realtek
 
 # Raspberry Pi 4 (image/build-rpi.sh, docs/arm.md): Debian's kernel and the Pi boot firmware (raspi-firmware puts
 # kernel, initramfs and device trees on the FAT partition at every kernel update), the Wi-Fi firmware of the
-# board, sfdisk for the first boot (the root partition grows to the SD card)
+# board, sfdisk for the first boot (the root partition grows to the SD card), zstd for the initramfs (Debian's
+# default compression: without it the initramfs on the FAT partition is gzip, larger and slower to unpack)
 #if ARCHITECTURES arm64
 linux-image-arm64
 raspi-firmware
 firmware-brcm80211
 fdisk
+zstd
 #endif
