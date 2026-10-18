@@ -1,5 +1,7 @@
 # Frequently asked questions
 
+*[Italiano](faq.it.md)*
+
 ## The project
 
 ### What is OpenThinRDP?
@@ -37,7 +39,9 @@ hardware and pull requests are welcome.
 
 Any 64-bit x86 PC or thin client with UEFI or a legacy BIOS, 2 GB of RAM and 8 GB of storage (none to run it live
 from a USB stick). Tested: Dell OptiPlex 3000 Thin Client in production, QEMU/KVM with UEFI and with BIOS. Used thin
-clients such as Dell Wyse 5070, HP t630 or Fujitsu Futro S740 meet the requirements. See [hardware.md](hardware.md).
+clients such as Dell Wyse 5070, HP t630 or Fujitsu Futro S740 meet the requirements. See [hardware.md](hardware.md),
+and the guides [replacing Dell ThinOS](guides/replace-dell-thinos.md) and
+[turning an old PC into a thin client](guides/old-pc-thin-client.md).
 
 ### Did it leave drivers out to be light?
 
@@ -47,7 +51,9 @@ runs no desktop.
 
 ### Does it run on Raspberry Pi or ARM?
 
-Not yet. The Raspberry Pi 4 is in preparation ([#61](https://github.com/OpenThinRdp/openthinrdp/issues/61)).
+Experimentally. There is an SD card image for the Raspberry Pi 4, tested in emulation but not yet on a real board
+([the image](https://github.com/OpenThinRdp/openthinrdp/releases/tag/rpi-test-1), [what to check](arm.md)). The
+Pi 5 is not supported yet.
 
 ### Does it run on old 32-bit thin clients?
 
