@@ -257,7 +257,7 @@ marchi dei rispettivi proprietari; il confronto riflette informazioni pubbliche 
 correzioni benvenute.
 
 Ognuno più nel dettaglio, e **Linux Mint o Ubuntu con Remmina**: [docs/alternatives.md](docs/alternatives.md) (in inglese).
-Le domande che si fanno per prime (hardware, driver, UDP, Azure, PXE, 802.1X): [docs/faq.md](docs/faq.md).
+Le domande che si fanno per prime (hardware, driver, UDP, Azure, PXE, 802.1X): [docs/faq.it.md](docs/faq.it.md).
 
 ## I prossimi passi
 
@@ -287,7 +287,8 @@ La documentazione è in inglese nella cartella [docs](docs/).
 - [CHANGELOG.md](CHANGELOG.md): le novità di ogni versione.
 - [docs/status.md](docs/status.md): cosa è in produzione, cosa è solo provato, cosa non c'è ancora.
 - [docs/configuration.md](docs/configuration.md): tutte le impostazioni.
-- [docs/faq.md](docs/faq.md): domande frequenti (in inglese).
+- [docs/faq.it.md](docs/faq.it.md): domande frequenti.
+- Guide (in inglese): [sostituire Dell ThinOS sui thin client Dell](docs/guides/replace-dell-thinos.md), [un vecchio PC come thin client](docs/guides/old-pc-thin-client.md).
 - [docs/alternatives.md](docs/alternatives.md): il confronto con Linux Mint + Remmina, IGEL OS, Dell ThinOS, Stratodesk, ThinStation, openthinclient.
 - [docs/manager.md](docs/manager.md): il gestore Windows pagina per pagina: postazioni, impostazioni, postazioni pilota e ritorno indietro (in inglese).
 - [docs/management.md](docs/management.md): la cartella di gestione, la configurazione centrale, le chiavi SSH, gli
