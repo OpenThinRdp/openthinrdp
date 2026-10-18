@@ -53,12 +53,15 @@ production fleet does not use them, so test them in your environment first:
   FreeRADIUS, new in 0.2.1; not yet on a real switch or with Windows NPS.
 - **Desktops in the cloud** (Azure, AWS, any provider): the same RDP, through an RD Gateway or a VPN, but we have
   no cloud deployment to test on ([what to know](configuration.md#desktops-in-the-cloud)).
+- **Raspberry Pi 4** (arm64), experimental: an SD card image
+  ([pre-release](https://github.com/OpenThinRdp/openthinrdp/releases/tag/rpi-test-1)), tested only in QEMU arm64
+  emulation, not yet on a real board ([what to check](arm.md)).
 
 ## Not available yet
 
 - Citrix, VMware/Omnissa Horizon or any protocol other than RDP.
 - Azure Virtual Desktop and Windows 365 (Microsoft Entra ID sign-in and Microsoft's gateway).
-- ARM devices.
+- The Raspberry Pi 5 and other ARM devices.
 - Network boot (PXE).
 - Disk encryption, signed central configuration.
 
