@@ -399,6 +399,7 @@ ok "Kerberos: an unknown name stays" '[ "$(krb_host nowhere.example.test)" = now
 
 ok "the secrets unit never pulls tpm2.target (on Debian it waits 90 s for a TPM a device may not have)" '! grep -q "^Wants=.*tpm2.target" /src/rootfs/etc/systemd/system/openthinrdp-secrets.service && grep -q "acpi/tables/TPM2" $OTR/secrets.sh'
 ok "apply.sh unmounts only disks on USB when the USB rules change (an internal SATA disk is sd* too: /boot/efi)" 'grep -A2 "only disks on USB" /src/rootfs/opt/openthinrdp/apply.sh | grep -q "usb_of_block.*|| continue"'
+ok "X starts after the device has its name (a rename under a running X leaves the screen black)" 'grep -q "touch /run/openthinrdp-name-ready" /src/rootfs/opt/openthinrdp/boot.sh && grep -q "openthinrdp-name-ready" /src/rootfs/etc/skel/.bash_profile && [ "$(grep -n "name-ready" /src/rootfs/opt/openthinrdp/boot.sh | cut -d: -f1)" -lt "$(grep -n "apply.sh. boot" /src/rootfs/opt/openthinrdp/boot.sh | cut -d: -f1)" ]'
 # --- secrets in the TPM (lib/secrets.sh, secrets.sh). A fake TPM: systemd-creds "seals" with base64 while
 # /tmp/faketpm exists (and gives back something else while /tmp/fakebad exists); systemd-analyze has-tpm2 answers
 # like a full TPM then, like "partial" (16) otherwise
