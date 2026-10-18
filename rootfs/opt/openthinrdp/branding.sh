@@ -63,7 +63,7 @@ splash_have(){ { cat "$THEME/logo.png"; echo "$(sed -n 's/^Window.SetBackgroundT
 
 splash(){
   # the live system has no initramfs of its own to rebuild
-  [ -f /etc/default/grub ] && [ -d /boot/grub ] && [ -f "$THEME/openthinrdp.script" ] || return 0
+  otr_installed && [ -f "$THEME/openthinrdp.script" ] || return 0
   # first run: what the theme shows is in the initramfs already (image or previous version)
   [ -f "$BR/splash-applied" ] || { mkdir -p "$BR"; splash_have > "$BR/splash-applied"; }
   [ "$(splash_want)" = "$(cat "$BR/splash-applied")" ] && return 0

@@ -22,6 +22,20 @@ usb_of_block(){
   done
   return 1
 }
+# VID:PID of the USB devices that hold the running system (root, boot partition, the live medium): never passed to
+# Windows nor switched off, whatever USB_MODE and USB_REDIRECT say (a Raspberry Pi that boots from a USB disk, the
+# live system on a stick). From the mounts outside /media, by device number. USB_DEVBLOCK/USB_MOUNTINFO: the tests.
+usb_system_ids(){
+  local mm mp d
+  while read -r _ _ mm _ mp _; do
+    case "$mp" in /media/*) continue ;; esac
+    d=$(readlink -f "${USB_DEVBLOCK:-/sys/dev/block}/$mm" 2>/dev/null) || continue
+    while [ -n "$d" ] && [ "$d" != / ]; do
+      [ -f "$d/idVendor" ] && { echo "$(cat "$d/idVendor"):$(cat "$d/idProduct" 2>/dev/null)"; break; }
+      d=$(dirname "$d")
+    done
+  done < "${USB_MOUNTINFO:-/proc/self/mountinfo}" | sort -u
+}
 # storage of this USB device stays on the thin client and is mounted as a drive: always with USB_MODE=disks, never
 # with all (Windows gets the whole device), with auto when the device is only storage or never goes whole anyway
 # (a smart card reader with storage: the reader goes through /smartcard, its storage as a drive)

@@ -37,9 +37,10 @@ if [ "$1" = install ]; then
   # Going back: install.sh installs a .deb only when it is newer than the installed one, and the install.sh of an
   # older package knows nothing of going back. So the FreeRDP of that version is put back here first (the reason to go
   # back is often FreeRDP itself), unless FreeRDP is pinned on this device.
-  if [ "$3" = downgrade ] && ls "$P"/debs/*.deb >/dev/null 2>&1; then
+  # (the packages of this device's architecture only: lib/common.sh pkg_debs)
+  if [ "$3" = downgrade ] && [ -n "$(pkg_debs "$P")" ]; then
     DG=()
-    for d in "$P"/debs/*.deb; do
+    for d in $(pkg_debs "$P"); do
       n=$(dpkg-deb -f "$d" Package); v=$(dpkg-deb -f "$d" Version)
       [[ $n == *freerdp* || $n == *winpr* ]] && [ -f $OTR_ETC/freerdp-pinned ] && continue
       [ "$(dpkg-query -W -f '${Version}' "$n" 2>/dev/null)" = "$v" ] || DG+=("$d")

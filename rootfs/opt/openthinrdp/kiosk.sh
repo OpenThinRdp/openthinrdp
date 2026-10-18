@@ -155,8 +155,9 @@ fi
 usb_opt(){
   local ids="$CAMID $(cfg USB_REDIRECT)" l="" i x scard
   [ "$(cfg USB_MODE)" != disks ] && ids="$ids $(usb_all_ids)"
-  # smart card readers never go as whole devices, even when listed in USB_REDIRECT (pcscd owns them)
-  scard=" $(for x in /sys/bus/usb/devices/*:*; do [ "$(cat "$x/bInterfaceClass" 2>/dev/null)" = 0b ] && echo "$(cat "${x%:*}/idVendor"):$(cat "${x%:*}/idProduct")"; done | sort -u | tr '\n' ' ') "
+  # smart card readers never go as whole devices, even when listed in USB_REDIRECT (pcscd owns them); nor the disk
+  # the system runs from (a Raspberry Pi booting from USB, the live system on a stick)
+  scard=" $(for x in /sys/bus/usb/devices/*:*; do [ "$(cat "$x/bInterfaceClass" 2>/dev/null)" = 0b ] && echo "$(cat "${x%:*}/idVendor"):$(cat "${x%:*}/idProduct")"; done | sort -u | tr '\n' ' ') $(usb_system_ids | tr '\n' ' ') "
   for i in $(echo $ids | tr ' ' '\n' | tr 'A-F' 'a-f' | sort -u); do
     [[ $i =~ ^[0-9a-f]{4}:[0-9a-f]{4}$ ]] && [[ "$scard" != *" $i "* ]] && l="$l${l:+#}$i"
   done

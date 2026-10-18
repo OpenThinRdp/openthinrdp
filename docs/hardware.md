@@ -51,6 +51,9 @@ bigger module.
 - **ARM** (Raspberry Pi and ARM thin clients): in preparation, the Raspberry Pi 4 first.
 - **32-bit only** CPUs (older Atom and VIA models): Debian 13 no longer runs on them.
 
+**Raspberry Pi 4** (arm64): an SD card image built by `image/build-rpi.sh`, tested in emulation only so far. What is
+different from a PC and what to check on the first board: [arm.md](arm.md).
+
 ## Firmware settings (Dell)
 
 - **Wake-on-LAN**: enable "Wake on LAN" and **disable "Deep Sleep Control"**. With deep sleep in S4/S5 the

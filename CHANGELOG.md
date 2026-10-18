@@ -3,6 +3,23 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## Unreleased
+
+- **Raspberry Pi 4 (arm64), experimental** ([#61](https://github.com/OpenThinRdp/openthinrdp/issues/61)).
+  - `image/build-rpi.sh` makes an SD card image: Debian 13 arm64 with Debian's kernel and `raspi-firmware`, the same
+    kiosk, and a first boot that grows the root to the card. There is no installer.
+  - The FreeRDP with the UDP transport is built for arm64 too (`ARCH=arm64 image/freerdp/build-debs.sh`).
+  - Update packages carry FreeRDP per architecture (`debs/amd64/`, `debs/arm64/`), and a device installs only its own.
+  - Tested in QEMU (arm64 `virt`): it boots with no failed unit and opens the settings dialog, FreeRDP has UDP, and an
+    update installs. It is not yet tested on a real Pi. What to check there: [docs/arm.md](docs/arm.md).
+  - A Pi 4 decodes the graphics in software; the Pi 5 needs a newer kernel layout and is not supported yet.
+- **The USB disk the system runs from is never passed to Windows** (a live stick with `USB_MODE=all` or listed in
+  `USB_REDIRECT`), and its port is never switched off by `usb-hold.sh`.
+- **Only USB disks mounted under `/media` are unmounted when the USB settings change**, so a system booted from a
+  USB disk keeps its own partitions.
+- **Image build:** `ADMIN_PASSWORD_HASH` of `build.conf` reaches the image intact. Its `$` parts were expanded, and
+  `otradmin` got a broken hash.
+
 ## 0.2.1 (2026-10-18)
 
 - **802.1X on the cable, and WPA2/WPA3-Enterprise Wi-Fi** ([#60](https://github.com/OpenThinRdp/openthinrdp/issues/60)).

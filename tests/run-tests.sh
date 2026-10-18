@@ -87,6 +87,18 @@ printf 'USB_MODE=disks\n' > /etc/openthinrdp/openthinrdp.conf
 ok "disks mounts every storage" 'usb_mount_here $UT/1-3 && usb_mount_here $UT/1-1'
 printf 'USB_MODE=all\n' > /etc/openthinrdp/openthinrdp.conf
 ok "all mounts nothing" '! usb_mount_here $UT/1-1 && ! usb_mount_here $UT/1-4'
+# the disk the system runs from (a Raspberry Pi booting from a USB disk): root and boot partition on 1-6, a stick
+# mounted in /media on 1-1, the root of a PC on a SATA disk (no USB device above it)
+mkd 1-6 08; echo 0006 > $UT/1-6/idProduct; echo 0001 > $UT/1-1/idProduct
+mkdir -p $UT/1-6/1-6:1.0/host0/block/sda/sda1 $UT/1-6/1-6:1.0/host0/block/sda/sda2 $UT/1-1/1-1:1.0/host1/block/sdb/sdb1 $UT/ata/block/sdc/sdc2 $UT/devblock
+ln -s $UT/1-6/1-6:1.0/host0/block/sda/sda2 $UT/devblock/8:2; ln -s $UT/1-6/1-6:1.0/host0/block/sda/sda1 $UT/devblock/8:1
+ln -s $UT/1-1/1-1:1.0/host1/block/sdb/sdb1 $UT/devblock/8:17; ln -s $UT/ata/block/sdc/sdc2 $UT/devblock/8:34
+printf '%s\n' '22 1 8:2 / / rw - ext4 /dev/sda2 rw' '23 22 8:1 / /boot/firmware rw - vfat /dev/sda1 rw' '24 22 0:5 / /proc rw - proc proc rw' \
+  '25 22 8:17 / /media/STICK rw - vfat /dev/sdb1 rw' > $UT/mountinfo
+ok "the USB disk of the system is found, a stick in /media is not" '[ "$(USB_DEVBLOCK=$UT/devblock USB_MOUNTINFO=$UT/mountinfo usb_system_ids)" = 1234:0006 ]'
+printf '%s\n' '22 1 8:34 / / rw - ext4 /dev/sdc2 rw' > $UT/mountinfo
+ok "a system on a disk that is not USB: no USB device to keep" '[ -z "$(USB_DEVBLOCK=$UT/devblock USB_MOUNTINFO=$UT/mountinfo usb_system_ids)" ]'
+ok "the kiosk never passes the disk of the system, also when listed in USB_REDIRECT" '( eval "$(sed -n "/^usb_opt(){/,/^}/p" $OTR/kiosk.sh)"; CAMID=""; USBFILTER=""; usb_all_ids(){ echo "1234:0006 abcd:0001"; }; usb_system_ids(){ echo 1234:0006; }; printf "USB_MODE=all\nUSB_REDIRECT=1234:0006\n" > $OTR_CONF; [ "$(usb_opt)" = "/usb:auto,id:abcd:0001" ] )'
 : > /etc/openthinrdp/openthinrdp.conf; rm -rf "$UT"
 printf 'NETMODE=Statico\nIPADDR=192.0.2.10\nNETMASK=255.255.255.0\nGATEWAY=192.0.2.1\nDNS1=192.0.2.53\n' > "$T"
 ok "static alias normalized" '$OTR/save-config.sh "$T" --print 2>&1 | grep -qx "NETMODE=static"'
@@ -312,7 +324,27 @@ dummy 2.0 /tmp/otr-dummy-2.deb; dpkg -i /tmp/otr-dummy-2.deb >/dev/null 2>&1
 rm -rf $U/pkg-0.3.1; mkdir -p $U/pkg-0.3.1/debs; printf '#!/bin/bash\nexit 0\n' > $U/pkg-0.3.1/install.sh; dummy 1.0 $U/pkg-0.3.1/debs/otr-dummy_1.0_all.deb
 $OTR/auto-update.sh install 0.3.1 downgrade
 ok "going back: the older .deb of the package is put back, the version recorded" '[ "$(dpkg-query -W -f "\${Version}" otr-dummy)" = 1.0 ] && [ "$(cat $OTR_LIB/update-version)" = 0.3.1 ] && grep -q "^up to date: 0.3.1" $U/status'
+# going back on a device of another architecture: only its own .deb (debs/<arch>/), never the other one
+dummy 2.0 /tmp/otr-dummy-2.deb; dpkg -i /tmp/otr-dummy-2.deb >/dev/null 2>&1
+darch(){ local d; d=$(mktemp -d); mkdir -p $d/DEBIAN; printf 'Package: otr-dummy\nVersion: %s\nArchitecture: %s\nMaintainer: t <t@example.invalid>\nDescription: test\n' "$1" "$2" > $d/DEBIAN/control; dpkg-deb -b $d "$3" >/dev/null; }
+rm -rf $U/pkg-0.3.1; mkdir -p $U/pkg-0.3.1/debs/amd64 $U/pkg-0.3.1/debs/arm64; printf '#!/bin/bash\nexit 0\n' > $U/pkg-0.3.1/install.sh
+darch 1.5 amd64 $U/pkg-0.3.1/debs/amd64/otr-dummy_1.5_amd64.deb; darch 1.0 arm64 $U/pkg-0.3.1/debs/arm64/otr-dummy_1.0_arm64.deb
+$OTR/auto-update.sh install 0.3.1 downgrade
+ok "going back: the .deb of this architecture in debs/<arch>/ is put back, the other one ignored" '[ "$(dpkg-query -W -f "\${Version}" otr-dummy)" = 1.5 ] && grep -q "^up to date: 0.3.1" $U/status'
 dpkg -r otr-dummy >/dev/null 2>&1; rm -f /tmp/otr-dummy-2.deb; to ""
+
+# --- packages by architecture (lib/common.sh): the package list and the .deb files of an update package
+PL=/src/image/lb/packages.list
+ok "package list on amd64: GRUB, shim and the Intel driver, nothing of the Raspberry Pi" 'pkg_list amd64 $PL | grep -qx grub-efi-amd64-signed && pkg_list amd64 $PL | grep -qx shim-signed && pkg_list amd64 $PL | grep -qx intel-media-va-driver && ! pkg_list amd64 $PL | grep -qx raspi-firmware && ! pkg_list amd64 $PL | grep -q "^#"'
+ok "package list on arm64: the Pi firmware and kernel, nothing of the PC" 'pkg_list arm64 $PL | grep -qx raspi-firmware && pkg_list arm64 $PL | grep -qx linux-image-arm64 && ! pkg_list arm64 $PL | grep -qE "^(grub|shim|intel-|firmware-intel|firmware-sof)"'
+ok "package list: what is not tied to an architecture is in both" 'for a in amd64 arm64; do pkg_list $a $PL | grep -qx xserver-xorg && pkg_list $a $PL | grep -qx pcscd && pkg_list $a $PL | grep -qx firmware-realtek || exit 1; done'
+ok "package list: #nif, and #if with more architectures" 'printf "a\n#if ARCHITECTURES arm64 armhf\nb\n#endif\n#nif ARCHITECTURES arm64\nc\n#endif\nd\n" > /tmp/pl && [ "$(pkg_list armhf /tmp/pl | tr "\n" " ")" = "a b c d " ] && [ "$(pkg_list arm64 /tmp/pl | tr "\n" " ")" = "a b d " ] && [ "$(pkg_list amd64 /tmp/pl | tr "\n" " ")" = "a c d " ]'
+PD=/tmp/pd; rm -rf $PD; mkdir -p $PD/debs/amd64 $PD/debs/arm64
+darch 1 all $PD/debs/x_all.deb; darch 1 amd64 $PD/debs/site_amd64.deb; darch 1 amd64 $PD/debs/amd64/f_amd64.deb; darch 1 arm64 $PD/debs/arm64/f_arm64.deb
+ok "debs of an update package on amd64: its own and the ones for all" '[ "$(OTR_ARCH=amd64 pkg_debs $PD | xargs -n1 basename | sort | tr "\n" " ")" = "f_amd64.deb site_amd64.deb x_all.deb " ]'
+ok "debs of an update package on arm64: never an amd64 one" '[ "$(OTR_ARCH=arm64 pkg_debs $PD | xargs -n1 basename | sort | tr "\n" " ")" = "f_arm64.deb x_all.deb " ]'
+ok "install.sh takes the package list and the .deb files by architecture" 'grep -q "pkg_list \"\$ARCH\" packages.list" /src/management/publish/install.sh && grep -q "DEBS=\$(pkg_debs .)" /src/management/publish/install.sh && bash -n /src/management/publish/install.sh'
+rm -rf $PD /tmp/pl
 ok "UPDATE_GITHUB must be owner/repository" '! check x "UPDATE_GITHUB=not a repo"'
 ok "the manager carries the same project key as the devices" 'cmp -s /src/management/windows/openthinrdp-release.asc /src/rootfs/opt/openthinrdp/keys/openthinrdp-release.asc'
 # make-update.sh without -k: the package and LATEST.txt for the manager to sign (vault), never published unsigned
@@ -328,6 +360,16 @@ ok "make-update: the manager zip, named and hashed in the signed LATEST.txt" 'gr
 ok "make-update: the zip has the manager and its VERSION, no .exe" 'python3 -c "import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); n=z.namelist(); sys.exit(not (\"OpenThinRDP-Manager.ps1\" in n and \"lang/en.psd1\" in n and z.read(\"VERSION\").strip()==b\"9.0.3\" and not any(x.endswith(\".exe\") for x in n)))" $MZ'
 ok "make-update -o: the index of the version in updates/versions" 'cmp -s /tmp/mu-share/updates/LATEST.txt /tmp/mu-share/updates/versions/9.0.3.txt && cmp -s /tmp/mu-share/updates/LATEST.txt.sig /tmp/mu-share/updates/versions/9.0.3.txt.sig'
 ok "make-update -o: the last 3 packages and the ones devices are set to are kept" '[ ! -e /tmp/mu-share/updates/openthinrdp-update-8.0.0.tar.gz ] && [ -e /tmp/mu-share/updates/openthinrdp-update-9.0.1.tar.gz ] && [ -e /tmp/mu-share/updates/openthinrdp-update-9.0.3.tar.gz ]'
+# -f: the FreeRDP builds of every architecture, each in debs/<arch>/ (stand-in packages)
+FC=$(. /tmp/mu/image/freerdp/freerdp.conf; echo $FREERDP_COMMIT)
+mkdir -p /tmp/mu/out/freerdp/$FC; darch 9 amd64 /tmp/mu/out/freerdp/$FC/freerdp3-x11_9_amd64.deb; (cd /tmp/mu/out/freerdp/$FC && sha256sum *.deb > SHA256SUMS)
+/tmp/mu/management/publish/make-update.sh -v 9.0.4 -f >/tmp/mu.log 2>&1
+ok "make-update -f without an arm64 build: amd64 in debs/amd64, arm64 devices keep theirs" 'grep -q "no arm64 FreeRDP packages" /tmp/mu.log && [ "$(tar -tzf /tmp/mu/out/update-9.0.4/openthinrdp-update-9.0.4.tar.gz | grep "\.deb$" | tr "\n" " ")" = "./debs/amd64/freerdp3-x11_9_amd64.deb " ]'
+mkdir -p /tmp/mu/out/freerdp/$FC-arm64; darch 9 arm64 /tmp/mu/out/freerdp/$FC-arm64/freerdp3-x11_9_arm64.deb; (cd /tmp/mu/out/freerdp/$FC-arm64 && sha256sum *.deb > SHA256SUMS)
+/tmp/mu/management/publish/make-update.sh -v 9.0.5 -f >/tmp/mu.log 2>&1
+ok "make-update -f with the arm64 build too: both, each in its folder" '[ "$(tar -tzf /tmp/mu/out/update-9.0.5/openthinrdp-update-9.0.5.tar.gz | grep "\.deb$" | sort | tr "\n" " ")" = "./debs/amd64/freerdp3-x11_9_amd64.deb ./debs/arm64/freerdp3-x11_9_arm64.deb " ]'
+echo broken >> /tmp/mu/out/freerdp/$FC-arm64/freerdp3-x11_9_arm64.deb
+ok "make-update -f refuses an arm64 build that does not match its SHA256SUMS" '! /tmp/mu/management/publish/make-update.sh -v 9.0.6 -f >/dev/null 2>&1'
 rm -rf /tmp/mu /tmp/mu-share /tmp/mu.log
 
 # --- RD Gateway: validation, and the options connect() of the kiosk gives FreeRDP (FreeRDP replaced by a stub)
@@ -529,6 +571,7 @@ ok "Kerberos: an unknown name stays" '[ "$(krb_host nowhere.example.test)" = now
 
 ok "the secrets unit never pulls tpm2.target (on Debian it waits 90 s for a TPM a device may not have)" '! grep -q "^Wants=.*tpm2.target" /src/rootfs/etc/systemd/system/openthinrdp-secrets.service && grep -q "acpi/tables/TPM2" $OTR/secrets.sh'
 ok "apply.sh unmounts only disks on USB when the USB rules change (an internal SATA disk is sd* too: /boot/efi)" 'grep -A2 "only disks on USB" /src/rootfs/opt/openthinrdp/apply.sh | grep -q "usb_of_block.*|| continue"'
+ok "apply.sh unmounts only what usb-mount.sh mounted in /media (a Pi booting from USB: /boot/firmware)" 'grep -A1 "only disks on USB" /src/rootfs/opt/openthinrdp/apply.sh | grep -qF "\$2 ~ \"^/media/\""'
 ok "X starts after the device has its name (a rename under a running X leaves the screen black)" 'grep -q "touch /run/openthinrdp-name-ready" /src/rootfs/opt/openthinrdp/boot.sh && grep -q "openthinrdp-name-ready" /src/rootfs/etc/skel/.bash_profile && [ "$(grep -n "name-ready" /src/rootfs/opt/openthinrdp/boot.sh | cut -d: -f1)" -lt "$(grep -n "apply.sh. boot" /src/rootfs/opt/openthinrdp/boot.sh | cut -d: -f1)" ]'
 # --- secrets in the TPM (lib/secrets.sh, secrets.sh). A fake TPM: systemd-creds "seals" with base64 while
 # /tmp/faketpm exists (and gives back something else while /tmp/fakebad exists); systemd-analyze has-tpm2 answers

@@ -1,0 +1,10 @@
+[Unit]
+Description=OpenThinRDP: the root partition grows to the whole SD card (first boot of the Raspberry Pi image)
+After=systemd-remount-fs.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/openthinrdp-growroot
+
+[Install]
+WantedBy=multi-user.target

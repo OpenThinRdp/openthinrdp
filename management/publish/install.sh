@@ -16,11 +16,15 @@ for f in rootfs/opt/openthinrdp/*.sh rootfs/opt/openthinrdp/lib/*.sh rootfs/opt/
   bash -n "$f" || { log "ERROR: syntax of $f"; exit 1; }
 done
 visudo -cqf rootfs/etc/sudoers.d/openthinrdp || { log "ERROR: sudoers file not valid"; exit 1; }
+# the helpers of the NEW version (package list and .deb files by architecture)
+. rootfs/opt/openthinrdp/lib/common.sh
+ARCH=$(otr_arch)
 
 prog 15
-# 2) Debian packages the new version needs and that are missing (needs the Debian mirror)
+# 2) Debian packages the new version needs and that are missing (needs the Debian mirror). Those of this
+# architecture only: packages.list keeps the PC-only ones (GRUB, Intel drivers) and the Raspberry Pi ones apart.
 if [ -f packages.list ]; then
-  MISSING=$(grep -vE '^\s*(#|$)' packages.list | while read -r p; do dpkg -s "$p" >/dev/null 2>&1 || echo "$p"; done | tr '\n' ' ')
+  MISSING=$(pkg_list "$ARCH" packages.list | while read -r p; do dpkg -s "$p" >/dev/null 2>&1 || echo "$p"; done | tr '\n' ' ')
   if [ -n "${MISSING// /}" ]; then
     log "installing missing packages: $MISSING"
     apt-get -o DPkg::Lock::Timeout=300 update -q >/dev/null 2>&1
@@ -33,14 +37,17 @@ fi
 prog 40
 # 3) .deb files shipped in the package (e.g. a FreeRDP build): only when newer than the installed ones.
 # /etc/openthinrdp/freerdp-pinned (with the reason inside) keeps FreeRDP as it is on this device.
-if ls debs/*.deb >/dev/null 2>&1; then
+# debs/*.deb and debs/<architecture>/*.deb (make-update.sh -f: FreeRDP for amd64 and arm64), only those built for
+# this architecture or for all.
+DEBS=$(pkg_debs .)
+if [ -n "$DEBS" ]; then
   INST=()
-  for d in debs/*.deb; do
+  for d in $DEBS; do
     n=$(dpkg-deb -f "$d" Package); v=$(dpkg-deb -f "$d" Version); cur=$(dpkg-query -W -f '${Version}' "$n" 2>/dev/null)
     if [[ $n == *freerdp* || $n == *winpr* ]] && [ -f /etc/openthinrdp/freerdp-pinned ]; then
       log "$n not updated: pinned ($(head -1 /etc/openthinrdp/freerdp-pinned))"; continue
     fi
-    { [ -z "$cur" ] || dpkg --compare-versions "$v" gt "$cur"; } && INST+=("./$d")
+    { [ -z "$cur" ] || dpkg --compare-versions "$v" gt "$cur"; } && INST+=("$d")   # ./debs/...: a path for apt
   done
   if [ ${#INST[@]} -gt 0 ]; then
     apt-get -o DPkg::Lock::Timeout=300 update -q >/dev/null 2>&1

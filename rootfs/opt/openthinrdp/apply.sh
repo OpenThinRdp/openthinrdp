@@ -115,10 +115,12 @@ if ! cmp -s "$NEWR" "$R"; then
   udevadm control --reload 2>/dev/null
   udevadm trigger --subsystem-match=usb --action=change 2>/dev/null
   systemctl try-restart pcscd.service 2>/dev/null
-  # storage already mounted from devices now passed whole: unmount it, Windows will use it
+  # storage already mounted from devices now passed whole: unmount it, Windows will use it. Only what usb-mount.sh
+  # mounted (/media): a system disk on SATA or USB (/, /boot/efi, /boot/firmware of a Raspberry Pi) is never touched
   . "$OTR/lib/usb.sh"
-  # only disks on USB: an internal SATA disk is sd* too, and its /boot/efi must never be unmounted here
-  awk '$1 ~ "^/dev/sd" {print $1" "$2}' /proc/mounts | while read -r d mp; do
+  # only what usb-mount.sh mounted (/media): a system on a USB disk (a Raspberry Pi booting from USB: /,
+  # /boot/firmware) is never touched. And only disks on USB: an internal SATA disk is sd* too (/boot/efi)
+  awk '$1 ~ "^/dev/sd" && $2 ~ "^/media/" {print $1" "$2}' /proc/mounts | while read -r d mp; do
     ub=$(usb_of_block "${d#/dev/}") || continue
     usb_mount_here "$ub" || { systemd-mount --umount "$mp" 2>/dev/null; continue; }
     id=$(udevadm info -q property -n "$d" | awk -F= '/^ID_VENDOR_ID=/{v=$2} /^ID_MODEL_ID=/{m=$2} END{print tolower(v":"m)}')

@@ -82,7 +82,8 @@ if [ "$FREERDP_FROM" = openthinrdp ]; then
   cp /out/freerdp/$FREERDP_COMMIT/*.deb config/packages.chroot/
   echo freerdp3-x11 >> config/package-lists/openthinrdp-site.list.chroot
 fi
-printf 'LOCALE=%s\nTIMEZONE=%s\nKEYBOARD=%s\nFREERDP_FROM=%s\nADMIN_PASSWORD_HASH=%s\n' "$LOCALE" "$TIMEZONE" "$KEYBOARD" "$FREERDP_FROM" "${ADMIN_PASSWORD_HASH:-}" > $C/etc/openthinrdp/build.env
+# %q: the password hash is full of "$" and the hook sources this file (with %s the live system got a broken hash)
+printf 'LOCALE=%q\nTIMEZONE=%q\nKEYBOARD=%q\nFREERDP_FROM=%q\nADMIN_PASSWORD_HASH=%q\n' "$LOCALE" "$TIMEZONE" "$KEYBOARD" "$FREERDP_FROM" "${ADMIN_PASSWORD_HASH:-}" > $C/etc/openthinrdp/build.env
 cp $B/image/lb/hook.chroot config/hooks/normal/0100-openthinrdp.hook.chroot
 sed -e "s|@LOCALE@|$LOCALE|" -e "s|@KEYBOARD@|$KEYBOARD|" -e "s|@TIMEZONE@|$TIMEZONE|" -e "s|@ADMIN_HASH@|${ADMIN_PASSWORD_HASH:-!}|" \
   $B/image/lb/preseed.cfg.in > config/includes.binary/install/preseed.cfg

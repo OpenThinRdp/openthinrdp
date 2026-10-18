@@ -9,8 +9,11 @@
 #         kept in its vault (OpenThinRDP-Manager.cmd -Sign <path>\LATEST.txt, or Vault > Sign an update), so the
 #         signing key never sits on the build machine.
 #     -f  ship the FreeRDP with UDP of image/freerdp/freerdp.conf (out/freerdp/<commit>, made by image/build.sh
-#         or image/freerdp/build-debs.sh): devices get it when it is newer than theirs
-#     -d  other .deb files to ship (e.g. your own FreeRDP build): installed only when newer
+#         or image/freerdp/build-debs.sh): devices get it when it is newer than theirs. Every architecture built
+#         goes in debs/<architecture>/: amd64 (needed), arm64 when out/freerdp/<commit>-arm64 is there
+#         (ARCH=arm64 image/freerdp/build-debs.sh); each device installs only its own (install.sh)
+#     -d  other .deb files to ship (e.g. your own FreeRDP build): installed only when newer, and only on the
+#         devices of their architecture
 #     -s  site folder to ship too (site.conf, logos, ca/, update-key.asc, authorized_keys). Never in a release
 #     -o  management folder (mounted, e.g. /mnt/thinclients): the package goes to <folder>/updates.
 #         Without -o the result stays in out/update-<version>/.
@@ -29,9 +32,16 @@ while getopts "v:k:fd:s:o:" o; do
 done
 if [ -n "$FRDP" ]; then
   . "$ROOT/image/freerdp/freerdp.conf"
-  FRDP="$ROOT/out/freerdp/$FREERDP_COMMIT"
-  [ -f "$FRDP/SHA256SUMS" ] || { echo "no FreeRDP packages in $FRDP: run image/freerdp/build-debs.sh (or image/build.sh) first"; exit 2; }
-  (cd "$FRDP" && sha256sum -c --quiet SHA256SUMS) || { echo "FreeRDP packages in $FRDP do not match their SHA256SUMS"; exit 2; }
+  FRDP=""   # "<architecture>:<folder>" of every FreeRDP build to ship
+  for a in amd64 arm64; do
+    d="$ROOT/out/freerdp/$FREERDP_COMMIT"; [ $a = amd64 ] || d="$d-$a"
+    if [ ! -f "$d/SHA256SUMS" ]; then
+      [ $a = amd64 ] && { echo "no FreeRDP packages in $d: run image/freerdp/build-debs.sh (or image/build.sh) first"; exit 2; }
+      echo "no $a FreeRDP packages in $d (ARCH=$a image/freerdp/build-debs.sh): $a devices keep the FreeRDP they have"; continue
+    fi
+    (cd "$d" && sha256sum -c --quiet SHA256SUMS) || { echo "FreeRDP packages in $d do not match their SHA256SUMS"; exit 2; }
+    FRDP="$FRDP $a:$d"
+  done
 fi
 [[ $V =~ ^[0-9A-Za-z._-]+$ ]] || { echo "version missing or not valid (-v)"; exit 2; }
 # without a key here the package cannot go to a management folder: it would be published unsigned
@@ -46,7 +56,7 @@ cp "$ROOT/image/lb/packages.list" "$STAGE/packages.list"
 # the project's pictures: install.sh puts them only where a device still shows an older project picture
 mkdir -p "$STAGE/project-branding"; cp "$ROOT"/image/branding/logo.png "$ROOT"/image/branding/splash.png "$STAGE/project-branding/"
 if [ -n "$DEBS" ]; then mkdir -p "$STAGE/debs"; cp "$DEBS"/*.deb "$STAGE/debs/"; fi
-if [ -n "$FRDP" ]; then mkdir -p "$STAGE/debs"; cp "$FRDP"/*.deb "$STAGE/debs/"; fi
+for x in $FRDP; do mkdir -p "$STAGE/debs/${x%%:*}"; cp "${x#*:}"/*.deb "$STAGE/debs/${x%%:*}/"; done
 if [ -n "$SITE" ]; then
   mkdir -p "$STAGE/site"
   for f in site.conf logo.png splash.png update-key.asc authorized_keys; do [ -f "$SITE/$f" ] && cp "$SITE/$f" "$STAGE/site/"; done
