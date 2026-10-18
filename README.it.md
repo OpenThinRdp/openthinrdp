@@ -77,7 +77,8 @@ Per arrivarci è servita una correzione al trasporto UDP di FreeRDP, che abbiamo
   qualsiasi fornitore, raggiunti tramite RD Gateway o VPN, con UDP attraverso la VPN
   ([dettagli](docs/configuration.md#desktops-in-the-cloud)). Azure Virtual Desktop e Windows 365 non sono ancora
   supportati (richiedono l'accesso con Microsoft Entra ID).
-- Avete **PC o thin client x86-64 con UEFI** (Secure Boot funziona) e volete tenerli in servizio senza una licenza
+- Avete **PC o thin client x86-64, nuovi o vecchi**: UEFI con o senza Secure Boot, oppure BIOS tradizionale, con il
+  kernel e i firmware Debian completi ([hardware](docs/hardware.md)), e volete tenerli in servizio senza una licenza
   per postazione.
 - Volete **provare RDP in UDP** su client veri, o aiutarlo a entrare in FreeRDP.
 - Vi servono **schermi che mostrano solo una pagina web**: TV nella hall, dashboard, punti informativi, tabelloni
@@ -85,13 +86,14 @@ Per arrivarci è servita una correzione al trasporto UDP di FreeRDP, che abbiamo
   ([vedi sotto](#schermi-che-mostrano-solo-una-pagina-web)): una sola immagine per tutto il parco macchine.
 
 Non (ancora) per voi: Citrix, VMware/Omnissa Horizon e altri protocolli (OpenThinRDP fa solo RDP), dispositivi
-ARM, PC senza UEFI.
+ARM (il Raspberry Pi 4 è [in preparazione](https://github.com/OpenThinRdp/openthinrdp/issues/61)), PC solo a 32 bit.
 
 ## Requisiti
 
 | | Minimo |
 |---|---|
-| Dispositivo | qualsiasi PC o thin client x86 a 64 bit con **UEFI** (Secure Boot supportato, non obbligatorio): vanno bene anche i vecchi PC d'ufficio |
+| Dispositivo | qualsiasi PC o thin client x86 a 64 bit, **UEFI** (Secure Boot supportato, non obbligatorio) **o BIOS tradizionale**: vanno bene anche i vecchi PC d’ufficio e i thin client usati |
+| Driver | il kernel Debian 13 completo e tutti i pacchetti firmware di Debian: quello che fa girare Debian 13 fa girare OpenThinRDP |
 | Memoria | 2 GB di RAM |
 | Spazio | 8 GB per installarlo (eMMC, SSD o disco); nessuno per provarlo in live da una chiavetta |
 | Rete | cavo, Wi-Fi (WPA2 personale) o un adattatore Ethernet USB |
@@ -242,7 +244,7 @@ che si può leggere: tutta la parte client sono pochi script in `rootfs/opt/open
 |---|---|---|---|---|---|
 | Costo | gratuito | incluso nei thin client Dell | abbonamento per postazione | licenza per postazione | gratuito |
 | Sorgente | aperto (Apache 2.0) | chiuso | chiuso | chiuso | aperto |
-| Gira su | PC e thin client x86-64 con UEFI | thin client Dell | molti dispositivi x86-64 | PC x86-64, Raspberry Pi | PC x86 |
+| Gira su | PC e thin client x86-64, UEFI o BIOS | thin client Dell | molti dispositivi x86-64 | PC x86-64, Raspberry Pi | PC x86 |
 | Protocolli | solo RDP | Citrix, Omnissa/VMware, Microsoft e altri | Citrix, Omnissa/VMware, Microsoft e altri | molti | molti (immagine da costruire) |
 | Gestione | cartella condivisa + strumento Windows, nessun server | Wyse Management Suite | server UMS | NoTouch Center | file di configurazione su un server di rete |
 | Aggiornamenti | firmati, da GitHub o dalla vostra cartella | firmware del produttore | del produttore | del produttore | si ricostruisce l'immagine |

@@ -7,6 +7,10 @@
 . "$OTR/lib/secrets.sh"
 mkdir -p "$OTR_LOG"; touch "$OTR_EVENTS"
 install -d -m 700 "$OTR_SECRETS"
+# The TPM driver may still be loading. The unit does not pull tpm2.target: on Debian it always waits for /dev/tpmrm0,
+# up to 90 s at every boot of a device that has no TPM at all (most old thin clients). So only when the firmware
+# declares a TPM 2.0 (ACPI table TPM2) its device is waited for here, at most 10 s.
+[ -e /sys/firmware/acpi/tables/TPM2 ] && [ ! -e /dev/tpmrm0 ] && udevadm wait --timeout=10 /dev/tpmrm0 >/dev/null 2>&1
 ON=0; secret_enabled && ON=1
 OFF=0; [ "$(secret_setting)" = off ] && OFF=1
 moved=""; back=""; lost=""

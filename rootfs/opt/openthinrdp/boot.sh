@@ -17,6 +17,9 @@ if [ "$(hostname)" = thinclient ]; then
     rm -f "$T"
   fi
 fi
+# the automatic login starts X only after this (/etc/skel/.bash_profile): X started under the old name keeps a
+# cookie for it, and after the rename no program can open the screen (the first start of a new device stayed black)
+touch /run/openthinrdp-name-ready
 
 # network, DNS, time servers, updates, USB, SSH, keyboard
 "$OTR/apply.sh" boot

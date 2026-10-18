@@ -76,21 +76,23 @@ numbers: [docs/udp.md](docs/udp.md#on-a-lossy-line).
   or with any provider, reached through the RD Gateway or a VPN, with UDP through a VPN
   ([details](docs/configuration.md#desktops-in-the-cloud)). Azure Virtual Desktop and Windows 365 are not supported
   yet (they need a Microsoft Entra ID sign-in).
-- You have **x86-64 PCs or thin clients with UEFI** (Secure Boot works) and want to keep them useful without a
-  licence per device.
+- You have **x86-64 PCs or thin clients, new or old**: UEFI with or without Secure Boot, or a legacy BIOS, with the
+  complete Debian kernel and firmware ([hardware](docs/hardware.md)), and want to keep them useful without a licence
+  per device.
 - You want to **try RDP over UDP** on real clients, or help bring it into FreeRDP.
 - You need **screens that only show a web page**: hall TVs, dashboards, info points, production boards. The same
   system, no sign-in, the page chosen centrally ([see below](#screens-that-only-show-a-web-page)), so one image
   covers the whole fleet.
 
-Not for you (yet): Citrix, VMware/Omnissa Horizon and other protocols (OpenThinRDP does RDP only), ARM devices,
-PCs without UEFI.
+Not for you (yet): Citrix, VMware/Omnissa Horizon and other protocols (OpenThinRDP does RDP only), ARM devices
+(the Raspberry Pi 4 is [in preparation](https://github.com/OpenThinRdp/openthinrdp/issues/61)), 32-bit only PCs.
 
 ## Requirements
 
 | | Minimum |
 |---|---|
-| Device | any 64-bit x86 PC or thin client with **UEFI** (Secure Boot supported, not required): old office PCs are fine |
+| Device | any 64-bit x86 PC or thin client, **UEFI** (Secure Boot supported, not required) **or legacy BIOS**: old office PCs and used thin clients are fine |
+| Drivers | the complete Debian 13 kernel and every Debian firmware package: what runs Debian 13 runs OpenThinRDP |
 | Memory | 2 GB of RAM |
 | Storage | 8 GB to install it (eMMC, SSD or disk); nothing to try it live from a USB stick |
 | Network | cable, Wi-Fi (WPA2 personal) or a USB Ethernet adapter |
@@ -234,7 +236,7 @@ that you can read: the whole client side is a few shell scripts in `rootfs/opt/o
 |---|---|---|---|---|---|
 | Cost | free | comes with Dell thin clients | subscription per device | licence per device | free |
 | Source | open (Apache 2.0) | closed | closed | closed | open |
-| Runs on | x86-64 PCs and thin clients with UEFI | Dell thin clients | many x86-64 devices | x86-64 PCs, Raspberry Pi | x86 PCs |
+| Runs on | x86-64 PCs and thin clients, UEFI or BIOS | Dell thin clients | many x86-64 devices | x86-64 PCs, Raspberry Pi | x86 PCs |
 | Protocols | RDP only | Citrix, Omnissa/VMware, Microsoft and more | Citrix, Omnissa/VMware, Microsoft and more | many | many (you build the image) |
 | Management | shared folder + Windows tool, no server | Wyse Management Suite | UMS server | NoTouch Center | configuration files on a network server |
 | Updates | signed, from GitHub or your folder | vendor firmware | vendor | vendor | rebuild the image |

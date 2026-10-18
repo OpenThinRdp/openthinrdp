@@ -43,7 +43,8 @@ d-i partman/early_command string \
   if [ -n "$DISK" ]; then \
     debconf-set partman-auto/disk "$DISK"; \
     debconf-set grub-installer/bootdev "$DISK"; \
-  fi
+  fi; \
+  [ -d /sys/firmware/efi ] || debconf-set grub-installer/skip true
 d-i partman-auto/method string regular
 d-i partman-auto/choose_recipe select atomic
 d-i partman/alignment string optimal
@@ -60,6 +61,19 @@ d-i pkgsel/upgrade select none
 d-i pkgsel/update-policy select none
 popularity-contest/participate boolean false
 
+# Legacy BIOS (no /sys/firmware/efi): the image carries the Secure Boot chain (shim-signed, grub-efi-amd64-signed),
+# and grub-installer stops when it tries to remove it for grub-pc (the signed GRUB is a protected package). So with a
+# BIOS grub-installer is skipped (partman/early_command above) and here the EFI packages, useless without UEFI, are
+# removed, grub-pc comes from the medium and goes onto the disk the partitioning used.
+d-i preseed/late_command string \
+  if [ ! -d /sys/firmware/efi ]; then \
+    DISK=$(debconf-get partman-auto/disk); \
+    [ -n "$DISK" ] || DISK=$(list-devices disk | head -n1); \
+    in-target dpkg --purge --force-remove-protected --force-depends shim-signed shim-helpers-amd64-signed grub-efi-amd64-signed grub-efi-amd64-bin grub-efi-amd64 >/dev/null 2>&1; \
+    echo "grub-pc grub-pc/install_devices multiselect $DISK" > /target/tmp/grub-pc.seed; \
+    in-target debconf-set-selections /tmp/grub-pc.seed; rm -f /target/tmp/grub-pc.seed; \
+    apt-install grub-pc && in-target grub-install --target=i386-pc "$DISK" && in-target update-grub; \
+  fi
 d-i grub-installer/only_debian boolean true
 d-i grub-installer/with_other_os boolean true
 d-i grub-installer/bootdev string default

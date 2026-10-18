@@ -16,6 +16,9 @@ mkdir -p /lb && cd /lb
 CFG=(--distribution trixie --architectures amd64
   --archive-areas "main contrib non-free non-free-firmware" --backports true
   --debian-installer live --debian-installer-gui false --memtest none --loadlin false --win32-loader false
+  # GRUB for both firmware types: PCs with a legacy BIOS (old thin clients) get the same menu as UEFI ones (our
+  # entries, the 10 s timeout), not isolinux with Debian's
+  --bootloaders "grub-pc,grub-efi"
   # FIRMWARE=all: every firmware package, so the image runs on any PC (the downloadable ISO);
   # FIRMWARE=thinclient: only the set in packages.list, ~600 MB less. The installer copy of the firmware is
   # never needed: the installation is offline. No recommended packages, fast compression.

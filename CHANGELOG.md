@@ -3,6 +3,28 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## Unreleased
+
+- **PCs with a legacy BIOS** ([#62](https://github.com/OpenThinRdp/openthinrdp/issues/62)). The live system already
+  started on them, but the installation stopped at the boot loader. The Debian installer tried to remove the Secure
+  Boot chain the image carries, a protected package, to put in the BIOS GRUB. Now on a BIOS the EFI packages are
+  removed and GRUB for BIOS goes onto the disk. The boot menu is the same on BIOS as on UEFI: our entries and the 10 s
+  timeout, instead of isolinux with Debian's. Old thin clients without UEFI (Dell Wyse 5060, HP t620 and the like)
+  can now be installed. Tested in QEMU with SeaBIOS: live system, confirmed installation, first start from the disk.
+- **No 90-second wait at every start of a device without a TPM.** The service that opens the secrets pulled
+  `tpm2.target`, which on Debian waits up to 90 s for `/dev/tpmrm0`. It no longer does. It waits for the TPM itself, at
+  most 10 s, only when the firmware declares one.
+- **The first start of a new device no longer stays black.** At its first start a device renames itself (from its
+  MAC address). With the boot now that fast, the screen could start under the old name, and after the rename no
+  program could open it, the settings dialog included. The screen now starts after the rename (at most 10 s later).
+  Measured in QEMU: start to settings dialog in about 20 s with a BIOS and 9 s with UEFI, from about 2 minutes.
+- **An internal SATA disk is never unmounted when the USB settings change.** With `USB_MODE=all`, a change of the
+  USB rules unmounted every mounted `sd*` partition that was not on USB, `/boot/efi` included, on PCs with a SATA disk.
+  Now only USB disks are considered.
+- **Docs: drivers and hardware.** The ISO has the complete Debian kernel and every firmware package, and the
+  documentation now says so. [docs/hardware.md](docs/hardware.md) has the requirements, the tested devices, and used
+  thin clients that meet the requirements.
+
 ## 0.2.0 (2026-10-17)
 
 - **Pilot devices first, and going back to an earlier version** ([#50](https://github.com/OpenThinRdp/openthinrdp/issues/50)).

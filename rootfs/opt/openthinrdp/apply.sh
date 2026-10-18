@@ -114,8 +114,10 @@ if ! cmp -s "$NEWR" "$R"; then
   systemctl try-restart pcscd.service 2>/dev/null
   # storage already mounted from devices now passed whole: unmount it, Windows will use it
   . "$OTR/lib/usb.sh"
+  # only disks on USB: an internal SATA disk is sd* too, and its /boot/efi must never be unmounted here
   awk '$1 ~ "^/dev/sd" {print $1" "$2}' /proc/mounts | while read -r d mp; do
-    usb_mount_here "$(usb_of_block "${d#/dev/}")" || { systemd-mount --umount "$mp" 2>/dev/null; continue; }
+    ub=$(usb_of_block "${d#/dev/}") || continue
+    usb_mount_here "$ub" || { systemd-mount --umount "$mp" 2>/dev/null; continue; }
     id=$(udevadm info -q property -n "$d" | awk -F= '/^ID_VENDOR_ID=/{v=$2} /^ID_MODEL_ID=/{m=$2} END{print tolower(v":"m)}')
     for u in $(cfg USB_REDIRECT); do [ "$id" = "$u" ] && systemd-mount --umount "$mp" 2>/dev/null; done
   done
