@@ -14,6 +14,13 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
 - **No 90-second wait at every start of a device without a TPM.** The service that opens the secrets pulled
   `tpm2.target`, which on Debian waits up to 90 s for `/dev/tpmrm0`. It no longer does. It waits for the TPM itself, at
   most 10 s, only when the firmware declares one.
+- **The first start of a new device no longer stays black.** At its first start a device renames itself (from its
+  MAC address). With the boot now that fast, the screen could start under the old name, and after the rename no
+  program could open it, the settings dialog included. The screen now starts after the rename (at most 10 s later).
+  Measured in QEMU: start to settings dialog in about 20 s with a BIOS and 9 s with UEFI, from about 2 minutes.
+- **An internal SATA disk is never unmounted when the USB settings change.** With `USB_MODE=all`, a change of the
+  USB rules unmounted every mounted `sd*` partition that was not on USB, `/boot/efi` included, on PCs with a SATA disk.
+  Now only USB disks are considered.
 - **Docs: drivers and hardware.** The ISO has the complete Debian kernel and every firmware package, and the
   documentation now says so. [docs/hardware.md](docs/hardware.md) has the requirements, the tested devices, and used
   thin clients that meet the requirements.
