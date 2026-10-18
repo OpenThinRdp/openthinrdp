@@ -7,6 +7,7 @@
 # central-apply.sh uses it to compare like with like.
 . /opt/openthinrdp/lib/common.sh
 . /opt/openthinrdp/lib/secrets.sh
+. /opt/openthinrdp/lib/eap.sh
 otr_lang
 F="$1"; [ -f "$F" ] || { echo "$V_NODATA"; exit 1; }
 has(){ grep -q "^$1=" "$F"; }
@@ -109,7 +110,6 @@ V[VPN_DNS]=$(get VPN_DNS | tr -s ' ,;' ' ' | sed 's/^ //; s/ $//')
 for t in ${V[VPN_DNS]}; do ipok "$t" || err "$V_VPN_DNS $t"; done
 
 # --- Wi-Fi: the key lives ONLY in the TPM or in a root-only file (lib/secrets.sh); an empty password keeps the saved one
-WCF=$(secret_path wifi.conf)
 V[WIFI]=$(onoff "$(get WIFI)"); V[WIFI_SSID]=$(get WIFI_SSID)
 V[WIFI_COUNTRY]=$(get WIFI_COUNTRY | tr 'a-z' 'A-Z'); [[ ${V[WIFI_COUNTRY]} =~ ^([A-Z]{2})?$ ]] || err "$V_COUNTRY"
 WPIN=$(sed -n 's/^WIFI_PSK=//p' "$F" | head -1 | tr -d '\r'); WHEX=""
@@ -122,14 +122,30 @@ fi
 BADSSID='["|\\]'
 [ -z "${V[WIFI_SSID]}" ] || { [ ${#V[WIFI_SSID]} -le 32 ] && ! [[ ${V[WIFI_SSID]} =~ $BADSSID ]]; } || err "$V_SSID"
 # the key already saved, valid only for the same network (a country change rewrites the file with it)
-OLDHEX=""; grep -qF "ssid=\"${V[WIFI_SSID]}\"" $WCF 2>/dev/null && OLDHEX=$(sed -n 's/^[[:space:]]*psk=//p' $WCF | head -1)
+OLDHEX=$(wifi_saved_psk "${V[WIFI_SSID]}")
+case "$(low "$(get WIFI_SECURITY)")" in peap) V[WIFI_SECURITY]=peap ;; tls|eap-tls) V[WIFI_SECURITY]=tls ;; *) V[WIFI_SECURITY]=psk ;; esac
 # Wi-Fi on without an adapter is not an error: a common configuration may enable Wi-Fi for every device,
-# and apply.sh simply does nothing on the wired-only ones
+# and apply.sh simply does nothing on the wired-only ones. Enterprise (peap, tls) needs no key: the 802.1X settings below
 if [ "${V[WIFI]}" = on ]; then
   [ -n "${V[WIFI_SSID]}" ] || err "$V_SSID"
   command -v wpa_supplicant >/dev/null || err "$V_NOWPA"
-  [ -n "$WHEX" ] || [ -n "$OLDHEX" ] || err "$V_WIFIMISSING ${V[WIFI_SSID]}"
+  [ "${V[WIFI_SECURITY]}" != psk ] || [ -n "$WHEX" ] || [ -n "$OLDHEX" ] || err "$V_WIFIMISSING ${V[WIFI_SSID]}"
 fi
+
+# --- 802.1X: on the cable (DOT1X, dot1x.sh) and for Wi-Fi Enterprise, one block of settings (lib/eap.sh). The password
+# lives ONLY in the TPM or a root-only file, like the Wi-Fi key; an empty one keeps the saved one. A missing password,
+# certificate or CA file is no error: the manager sends them later, and the device reports what is missing.
+case "$(low "$(get DOT1X)")" in peap) V[DOT1X]=peap ;; tls|eap-tls) V[DOT1X]=tls ;; *) V[DOT1X]=off ;; esac
+V[EAP_IDENTITY]=$(get EAP_IDENTITY); [ -z "${V[EAP_IDENTITY]}" ] || [[ ${V[EAP_IDENTITY]} =~ $EAP_IDRE ]] || err "$V_EAP_IDENTITY"
+V[EAP_ANONYMOUS]=$(get EAP_ANONYMOUS); [ -z "${V[EAP_ANONYMOUS]}" ] || [[ ${V[EAP_ANONYMOUS]} =~ $EAP_IDRE ]] || err "$V_EAP_ANONYMOUS"
+V[EAP_CA]=$(get EAP_CA)
+case "$(low "${V[EAP_CA]}")" in ''|system) V[EAP_CA]=system ;; *) [[ ${V[EAP_CA]} =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,99}\.crt$ ]] || err "$V_EAP_CA" ;; esac
+V[EAP_SERVER_NAME]=$(get EAP_SERVER_NAME | tr -s ' ,;' ' ' | sed 's/^ //; s/ $//')
+for t in ${V[EAP_SERVER_NAME]}; do nameok "$t" || err "$V_EAP_SERVER $t"; done
+EPW=$(sed -n 's/^EAP_PASSWORD=//p' "$F" | head -1 | tr -d '\r')
+OLDEPW=$(head -1 "$(secret_path eap-password)" 2>/dev/null)
+[ ${#EPW} -le 256 ] || err "$V_EAP_PASSWORD"
+{ [ "${V[DOT1X]}" != off ] || { [ "${V[WIFI]}" = on ] && [ "${V[WIFI_SECURITY]}" != psk ]; }; } && ! command -v wpa_supplicant >/dev/null && err "$V_NOWPA_8021X"
 
 # --- management
 V[MGMT_SHARE]=$(get MGMT_SHARE)
@@ -188,8 +204,10 @@ if [ "${2:-}" = --print ]; then
   for k in $(cfg_keys); do echo "$k=${V[$k]}"; done
   # secrets as a hash: central-apply.sh compares them, nobody can read them back (the kiosk user may run this)
   hs(){ [ -n "$1" ] && printf '%s' "$1" | sha256sum | cut -c1-64; }
-  echo "WIFI_PSK=$(hs "${WHEX:-$OLDHEX}")"
+  # (an enterprise network has no key: a WIFI_PSK left in the central files must not look like a change at every run)
+  if [ "${V[WIFI_SECURITY]}" = psk ]; then echo "WIFI_PSK=$(hs "${WHEX:-$OLDHEX}")"; else echo "WIFI_PSK="; fi
   echo "MGMT_PASSWORD=$(hs "${MPW:-$OLDPW}")"
+  echo "EAP_PASSWORD=$(hs "${EPW:-$OLDEPW}")"
   exit 0
 fi
 
@@ -204,19 +222,13 @@ T=$(mktemp "$OTR_ETC/.conf.XXXXXX")
   for k in $(cfg_keys); do [ -n "${OUT[$k]+x}" ] && echo "$k=${OUT[$k]}"; done; } > "$T"
 chmod 644 "$T"; mv -f "$T" "$OTR_CONF"
 
-# Wi-Fi: the file is written with the new key, or with the saved one of the same network (country changed)
-[ -z "$WHEX" ] && WHEX=$OLDHEX
-if [ -n "$WHEX" ] && [ -n "${V[WIFI_SSID]}" ]; then
-  mkdir -p /etc/wpa_supplicant
-  NW=$(mktemp); chmod 600 "$NW"
-  { echo "ctrl_interface=/run/wpa_supplicant"; [ -n "${V[WIFI_COUNTRY]}" ] && echo "country=${V[WIFI_COUNTRY]}"
-    printf 'network={\n\tssid="%s"\n\tpsk=%s\n\tkey_mgmt=WPA-PSK\n\tieee80211w=1\n}\n' "${V[WIFI_SSID]}" "$WHEX"; } > "$NW"
-  if ! cmp -s "$NW" $WCF; then
-    secret_store wifi.conf "$NW"
-    WL=$(ls /sys/class/net | grep -E '^wl' | head -1)
-    [ -n "$WL" ] && wpa_cli -p /run/wpa_supplicant -i "$WL" reconfigure >/dev/null 2>&1
-  else rm -f "$NW"; fi
+# the 802.1X password (before the Wi-Fi file, which holds it for an enterprise network)
+if [ -n "$EPW" ] && [ "$EPW" != "$OLDEPW" ]; then
+  mkdir -p "$EAP_DIR"; NP=$(mktemp); chmod 600 "$NP"; printf '%s\n' "$EPW" > "$NP"; secret_store eap-password "$NP"
 fi
+# Wi-Fi (lib/eap.sh): the file is written with the new key, or with the saved one of the same network (country
+# changed); for an enterprise network with the 802.1X settings
+wifi_conf_update "$WHEX"
 # account of the management folder (only with MGMT_USER: otherwise the file of the image stays)
 if [ -n "${V[MGMT_USER]}" ]; then
   MU=${V[MGMT_USER]}; MD=${V[DOMAIN]}

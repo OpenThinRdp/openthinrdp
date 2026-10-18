@@ -70,6 +70,8 @@ HOME=${HOME:-/root} xfreerdp3 --buildconfig 2>/dev/null | grep -q 'WITH_RDPEUDP=
   # the VPN: its state, and the WireGuard public key to add as a peer on the server (never the private one)
   echo "VPN=$("$OTR/vpn.sh" status 2>/dev/null)"
   [ "$(cfg VPN)" = wireguard ] && echo "VPN_PUBLIC_KEY=$("$OTR/vpn.sh" pubkey 2>/dev/null)"
+  # 802.1X on the cable, adapter by adapter: authenticated, failed (why), no authenticator, incomplete, or off
+  echo "DOT1X=$("$OTR/dot1x.sh" status 2>/dev/null)"
   # the account of the management folder (never the password): the manager checks what it may write there
   MA=$(sed -n 's/^username=//p' "$CRED" 2>/dev/null | head -1); MD=$(sed -n 's/^domain=//p' "$CRED" 2>/dev/null | head -1)
   case "$MA" in *\\*|*@*) MD="" ;; esac
@@ -93,12 +95,16 @@ HOME=${HOME:-/root} xfreerdp3 --buildconfig 2>/dev/null | grep -q 'WITH_RDPEUDP=
   echo "LAST_UPDATE=${UU#*|}" | sed 's/=$/=never/'
   echo "REBOOT_REQUIRED=$([ -f /run/reboot-required ] && echo yes || echo no)"
   # Wi-Fi (the key never leaves the device: only network, signal, address)
-  WLI=$(wifi_nics | head -1)
+  # (Enterprise: the method, and what is missing while it cannot connect)
+  WLI=$(wifi_nics | head -1); WSEC=$(cfg WIFI_SECURITY); WE=""
+  case "$WSEC" in peap|tls) . "$OTR/lib/eap.sh"; WE=" (802.1X $(echo "$WSEC" | tr a-z A-Z)$(eap_warning | sed 's/^/, /'))" ;; esac
   if [ -z "$WLI" ]; then echo "WIFI_STATUS=no adapter"
   elif iw dev "$WLI" link 2>/dev/null | grep -q Connected; then
     L=$(iw dev "$WLI" link)
-    echo "WIFI_STATUS=connected to $(echo "$L" | sed -n 's/^[[:space:]]*SSID: //p'), signal $(echo "$L" | sed -n 's/^[[:space:]]*signal: //p'), IP $(ip -4 -o addr show dev "$WLI" | awk '{print $4}')"
-  elif [ "$(cfg WIFI)" = on ]; then echo "WIFI_STATUS=on but NOT connected ($(cfg WIFI_SSID))"
+    echo "WIFI_STATUS=connected to $(echo "$L" | sed -n 's/^[[:space:]]*SSID: //p')$WE, signal $(echo "$L" | sed -n 's/^[[:space:]]*signal: //p'), IP $(ip -4 -o addr show dev "$WLI" | awk '{print $4}')"
+  elif [ "$(cfg WIFI)" = on ]; then
+    WM=""; [ -n "$WE" ] && WM=$(eap_missing "$WSEC")
+    echo "WIFI_STATUS=on but NOT connected ($(cfg WIFI_SSID))$WE${WM:+: 802.1X settings incomplete, $WM}"
   else echo "WIFI_STATUS=off"; fi
   SVA=$(cat /sys/class/rtc/rtc0/wakealarm 2>/dev/null)
   echo "NEXT_POWER_ON=$([ -n "$SVA" ] && date -d "@$SVA" '+%a %d/%m %H:%M' || echo none)"

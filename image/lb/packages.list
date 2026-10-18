@@ -46,7 +46,10 @@ dhcpcd-base
 # VPN for devices outside the office (VPN=wireguard|openvpn, vpn.sh)
 wireguard-tools
 openvpn
+# Wi-Fi (personal and enterprise) and 802.1X on the cable (dot1x.sh, wpa_supplicant -D wired); openssl checks and
+# converts the 802.1X client certificate sent by the manager (PEM or PKCS#12)
 wpasupplicant
+openssl
 iw
 ethtool
 iproute2

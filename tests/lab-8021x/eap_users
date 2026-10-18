@@ -1,0 +1,6 @@
+# Phase 1 (outer identity) and phase 2 (inside PEAP) users of the lab EAP server
+"anonymous@lab.example"	PEAP
+"thinuser"	PEAP
+"host/thin1.lab.example"	TLS
+"host/thin2.lab.example"	TLS
+"thinuser"	MSCHAPV2	"Secret-Pw1"	[2]

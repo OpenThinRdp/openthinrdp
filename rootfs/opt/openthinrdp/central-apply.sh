@@ -17,9 +17,9 @@ HOSTF=$OTR_LIB/central-host.conf
 MANAGED=$OTR_LIB/central-managed
 # keys that only the file of a single device may set (they identify the device)
 HOST_ONLY="HOSTNAME DEFAULT_USER NETMODE IPADDR VPN_ADDRESS"
-KEYS="$(cfg_keys | tr '\n' ' ')WIFI_PSK MGMT_PASSWORD"
+KEYS="$(cfg_keys | tr '\n' ' ')WIFI_PSK MGMT_PASSWORD EAP_PASSWORD"
 # secrets: compared through their hash (save-config.sh --print), applied with the value of the central file
-SECRETS="WIFI_PSK MGMT_PASSWORD"
+SECRETS="WIFI_PSK MGMT_PASSWORD EAP_PASSWORD"
 
 [ -f "$COMMON" ] || [ -f "$HOSTF" ] || [ -s "$MANAGED" ] || { echo "no central configuration" > "$ST"; exit 0; }
 
@@ -39,7 +39,7 @@ merge "$HOSTF" host
 T=$(mktemp); E=$(mktemp); chmod 600 "$T" "$E"; trap 'rm -f "$T" "$E"' EXIT
 : > "$E"
 # keys that were managed centrally and are no longer in the central files: back to site.conf / the defaults.
-# HOSTNAME and WIFI_PSK are not stored in the settings file and stay as they are. MGMT_SHARE stays too: a folder
+# HOSTNAME and the secrets are not stored in the settings file and stay as they are. MGMT_SHARE stays too: a folder
 # that moved the device to another folder is not read any more, and the new one need not name itself; released,
 # the device would go back to the folder of its image and bounce between the two at every report.
 RELEASED=""

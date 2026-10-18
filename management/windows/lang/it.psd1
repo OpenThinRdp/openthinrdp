@@ -359,7 +359,7 @@
   Label_SECURITY_UPDATES    = 'Aggiornamenti di sicurezza'
   Help_SECURITY_UPDATES     = 'Aggiornamenti di sicurezza di Debian (FreeRDP non viene mai aggiornato in automatico).'
   Label_TPM_SECRETS         = 'Segreti nel TPM'
-  Help_TPM_SECRETS          = 'on = con un TPM 2.0 la password della cartella, la chiave Wi-Fi e le chiavi SSH restano cifrate al suo interno (dal riavvio successivo); off = file leggibili solo da root (un dispositivo che li aveva nel TPM li rimette fuori).'
+  Help_TPM_SECRETS          = 'on = con un TPM 2.0 la password della cartella, la chiave Wi-Fi, le chiavi SSH e i segreti di VPN e 802.1X restano cifrati al suo interno (dal riavvio successivo); off = file leggibili solo da root (un dispositivo che li aveva nel TPM li rimette fuori).'
   Label_UPDATE_FROM         = 'Aggiornamenti software'
   Help_UPDATE_FROM          = 'Aggiornamenti di OpenThinRDP, firmati, mai durante una sessione. github = le release, controllate ogni 6 ore; share = la cartella updates della cartella di gestione (decidete voi quando); off = nessuno.'
   Label_UPDATE_GITHUB       = 'Repository GitHub'
@@ -608,6 +608,58 @@
   VpnErrNotProfile       = 'non è un profilo client OpenVPN (manca la riga remote o client)'
   VpnErrCommands         = "il profilo esegue comandi o scrive file ('{0}'): togliere quella riga"
   VpnErrOldVersion       = 'la postazione ha una versione senza VPN: aggiornarla prima (0.1.14 o successiva)'
+
+  # ---- 802.1X sul cavo, Wi-Fi Enterprise ----
+  Label_WIFI_SECURITY    = 'Sicurezza Wi-Fi'
+  Help_WIFI_SECURITY     = "psk = una password (WPA2-Personal, la password Wi-Fi sopra); peap o tls = WPA2/WPA3-Enterprise con le impostazioni 802.1X qui sotto (lo stesso account o certificato del cavo). Si collega anche alle reti WPA3-Enterprise (SHA-256, frame di gestione protetti)."
+  Label_DOT1X            = '802.1X sul cavo'
+  Help_DOT1X             = "Per le porte degli switch che ammettono solo postazioni autenticate. off; peap = un account e la sua password (PEAP-MSCHAPv2, es. NPS di Windows con gli account di dominio); tls = un certificato della postazione (EAP-TLS, es. da AD CS), mandato col pulsante 802.1X... L'indirizzo si chiede quando la porta è aperta. Una porta che non risponde affatto all'802.1X: dopo 15 s la rete senza (nessun autenticatore), così una postazione impostata per l'802.1X funziona su qualsiasi switch. Una password rifiutata dal server si riprova solo dopo un'ora (l'account non si blocca)."
+  Label_EAP_IDENTITY     = 'Identità 802.1X'
+  Help_EAP_IDENTITY      = 'L''account: DOMINIO\utente, utente@dominio o host/nome.dominio (lettere, cifre e . _ @ \ / $ + - e spazi). Con EAP-TLS, vuota = il nome nel certificato (il suo CN). La password PEAP si mette sulla postazione, col pulsante 802.1X... (via SSH), o come EAP_PASSWORD scritta a mano in un .conf (allora la può leggere ogni postazione che legge quel file).'
+  Label_EAP_ANONYMOUS    = 'Identità esterna 802.1X'
+  Help_EAP_ANONYMOUS     = "Mandata in chiaro prima del tunnel cifrato, es. anonymous@example.com. Vuota = l'identità. Con EAP-TLS lasciarla vuota, a meno che il server RADIUS non la voglia."
+  Label_EAP_CA           = 'CA del server 802.1X'
+  Help_EAP_CA            = "L'autorità che ha firmato il certificato del server RADIUS (NPS): system = le autorità riconosciute dalla postazione (comprese quelle della cartella ca\ del sito), oppure il nome di un file .crt di quella cartella (/etc/openthinrdp/ca), es. corp-root.crt. Un file che manca su una postazione viene segnalato lì, non rifiutato."
+  Label_EAP_SERVER_NAME  = 'Nome del server 802.1X'
+  Help_EAP_SERVER_NAME   = "Il nome (o i nomi, separati da spazi) nel certificato del server RADIUS, es. nps.example.com: la postazione parla solo con un server che ha un certificato per quel nome o per un nome sotto. Va sempre messo: vuoto = qualsiasi server con un certificato della CA sopra riceve la password (con system, qualsiasi certificato pubblico)."
+  ErrEapId               = '{0}: solo lettere, cifre e . _ @ \ / $ + - e spazi, es. EXAMPLE\utente, utente@example.com, host/pc1.example.com'
+  ErrEapCa               = '{0}: system, oppure il nome di un file .crt della cartella ca\ del sito (senza percorso)'
+  NoteEapNoServer        = "802.1X: nessun nome del server (EAP_SERVER_NAME): qualsiasi server con un certificato della CA scelta sarebbe accettato e riceverebbe la password. Va messo."
+  NoteEapPeap            = '802.1X PEAP: la password va a ogni postazione col pulsante 802.1X... (via SSH), oppure si scrive nelle sue impostazioni.'
+  NoteEapTls             = "802.1X EAP-TLS: certificato e chiave di ogni postazione le arrivano col pulsante 802.1X... (via SSH). Fino ad allora segnala: nessun certificato client."
+  Sum8021x               = '802.1X (cavo)'
+  BtnDot1x               = '802.1X...'
+  TipDot1x               = 'Manda a questa postazione via SSH il certificato client 802.1X (EAP-TLS) e/o la password PEAP (SSH = on e la chiave del gestore nella cassaforte).'
+  Dot1xTitle             = '802.1X - {0}'
+  Dot1xNote              = "Il certificato client con la sua chiave privata (EAP-TLS) e la password (PEAP) vanno a questa postazione via SSH, con la chiave della cassaforte. Sulla postazione sono segreti (nel TPM quando c'è; la chiave è tenuta decifrata, la sua password da nessuna parte): non passano mai dalla cartella di gestione. Un certificato e una password valgono per il cavo e per il Wi-Fi."
+  Dot1xNow               = '802.1X ora: cavo {0}; sicurezza Wi-Fi {1}'
+  Dot1xCert              = 'Certificato (.pfx o PEM)'
+  Dot1xKey               = 'Chiave privata (PEM)'
+  Dot1xKeyPassword       = 'La sua password'
+  Dot1xCertHint          = "Un .pfx/.p12 come lo esporta Windows (con la chiave privata), oppure un certificato PEM con la sua chiave PEM (nello stesso file, o scelta come chiave privata). La password del .pfx o di una chiave cifrata. La postazione controlla che la chiave sia di quel certificato."
+  Dot1xPassword          = 'Password PEAP'
+  Dot1xPasswordHint      = "Per DOT1X o sicurezza Wi-Fi peap: la password dell'identità 802.1X. Vuota = la postazione tiene quella che ha. Una password rifiutata dal server si riprova dopo un'ora, o appena ne arriva una nuova."
+  BtnDot1xSend           = 'Manda'
+  Dot1xChooseCert        = 'Certificato client'
+  Dot1xCertFilter        = 'Certificati'
+  Dot1xChooseKey         = 'Chiave privata del certificato'
+  Dot1xNothing           = 'Scegliere un certificato, o scrivere una password.'
+  Dot1xErrPasswordLine   = 'Una password è una riga di 256 caratteri al massimo.'
+  Dot1xRefused           = '{0} non viene mandato: {1}'
+  Dot1xCertInfo          = 'Certificato: {0}, valido fino al {1}'
+  Dot1xLogPassword       = 'password PEAP'
+  Dot1xFailed            = 'Non mandato: {0}'
+  LogDot1x               = '802.1X di {0}: {1}'
+  Dot1xDone              = "Mandato a {0}: l'802.1X riparte con questo. Lo stato è nel Riepilogo al prossimo rapporto (entro 5 minuti)."
+  Dot1xErrOldVersion     = 'la postazione ha una versione senza 802.1X: aggiornarla prima'
+  Dot1xErrTooBig         = 'il file supera i 192 KB: non è un certificato'
+  Dot1xErrPfx            = 'il .pfx non si apre (password sbagliata?): {0}'
+  Dot1xErrPfxNoKey       = 'il .pfx non contiene la chiave privata (esportarlo con la chiave privata)'
+  Dot1xErrNoKey          = 'nessuna chiave privata PEM: scegliere anche il file della chiave, o mandare un .pfx'
+  Dot1xErrKeyPassword    = 'la chiave privata è cifrata: scrivere la sua password'
+  Dot1xErrNoCert         = 'il certificato non si legge'
+  Dot1xErrExpired        = 'il certificato è scaduto il {0}'
+  Dot1xWarnEku           = "Questo certificato non è fatto per l'autenticazione client (Utilizzo chiavi avanzato): il server RADIUS potrebbe rifiutarlo. Mandarlo lo stesso?"
 
   # ---- versioni delle postazioni: postazioni pilota, tornare indietro (UPDATE_TO) ----
   Label_UPDATE_TO        = 'Versione da installare'

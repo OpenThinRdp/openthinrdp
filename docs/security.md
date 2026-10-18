@@ -26,16 +26,17 @@ keyboard is untrusted and that the management folder is readable by the devices 
   right after start (visible to the local `kiosk` account for a moment at most); it is never stored. The Wi-Fi
   key and the management folder password are never reported or printed back (`save-config.sh --print` shows
   only their hash). The settings PIN hash is never written to the status files.
-- **The device's secrets in the TPM, when there is one.** The management folder password, the Wi-Fi key and the
-  SSH host keys are the only secrets on the device. With a TPM 2.0 (most PCs and thin clients since about 2016)
+- **The device's secrets in the TPM, when there is one.** The management folder password, the Wi-Fi key, the
+  SSH host keys, the VPN key and profile, and the 802.1X password and the private key of the 802.1X certificate
+  ([configuration.md](configuration.md#8021x-and-wi-fi-enterprise)) are the only secrets on the device. With a TPM 2.0 (most PCs and thin clients since about 2016)
   they are kept in `/etc/openthinrdp/sealed/`, encrypted with a key that never leaves the TPM
   (`systemd-creds --with-key=tpm2`), and decrypted at every start into `/run/openthinrdp/secrets/`, in memory
   only, before the network and SSH start. A disk or eMMC taken out of the device, or an image of it, gives
   nothing. They are bound to the TPM only, not to firmware measurements (PCRs), so a BIOS update or a Secure Boot
   change does not lose them. Devices set up before move their plain files into the TPM at the next start; the
   status file says which mode a device is in (`SECRETS=tpm` or `SECRETS=file (no TPM)`, also in the manager).
-  Without a TPM they stay in root-only files (600), as before, so older PCs keep working. The folder password and the
-  Wi-Fi key keep their usual paths, links to the copy in memory, so the network configuration never changes; a
+  Without a TPM they stay in root-only files (600), as before, so older PCs keep working. The folder password, the
+  Wi-Fi key and the 802.1X certificate key keep their usual paths, links to the copy in memory, so the network configuration never changes; a
   secret is read back from the TPM and compared before its plain file is deleted. `TPM_SECRETS=off` (central or per
   device) keeps a device out of the TPM, and puts back in root-only files the secrets of a device that had them there,
   at the next start; set centrally, it counts from the first start after the update. To roll it out, set it off in

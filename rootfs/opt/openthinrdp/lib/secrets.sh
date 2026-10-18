@@ -1,4 +1,5 @@
-# The secrets of the device: the password of the management folder account, the Wi-Fi key, the SSH host keys.
+# The secrets of the device: the password of the management folder account, the Wi-Fi key, the SSH host keys, the VPN
+# key and profile, the 802.1X password and the private key of the 802.1X certificate.
 # Source it after common.sh: . /opt/openthinrdp/lib/secrets.sh   (root only)
 # With a TPM 2.0 (and TPM_SECRETS=on, the default) they are kept encrypted with a key that never leaves the TPM
 # (systemd-creds, --with-key=tpm2, no PCRs: a firmware update or a Secure Boot change does not lose them) in
@@ -19,8 +20,11 @@ declare -A OTR_SECRET_FILES=(
   [vpn-wg.key]=$OTR_ETC/vpn/wg.key
   [vpn-openvpn.conf]=$OTR_ETC/vpn/openvpn.conf
   [vpn-openvpn.auth]=$OTR_ETC/vpn/openvpn.auth
+  [eap-password]=$OTR_ETC/dot1x/password
+  [eap-client.key]=$OTR_ETC/dot1x/client.key
 )
-OTR_SECRET_LINKED="smb.cred wifi.conf"
+# the key of the 802.1X certificate keeps its path too: the Wi-Fi configuration (itself a secret) names it
+OTR_SECRET_LINKED="smb.cred wifi.conf eap-client.key"
 
 # a TPM 2.0 that systemd can use: firmware, driver, device and the tss2 libraries ("partial" = exit 16 = no)
 secret_tpm(){ command -v systemd-creds >/dev/null && systemd-analyze has-tpm2 >/dev/null 2>&1; }
