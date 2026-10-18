@@ -16,6 +16,10 @@ With `FREERDP_FROM=openthinrdp` the build first needs the FreeRDP packages of `i
 it downloads the prebuilt ones (checked against `image/freerdp/SHA256SUMS`) or, when they are not published,
 builds them with `image/freerdp/build-debs.sh` (15-40 minutes, once: they stay in `out/freerdp/`).
 
+The Raspberry Pi 4 SD card image (arm64) is built by `image/build-rpi.sh` from the same site folder, package list and
+image hook: see [arm.md](arm.md). Its FreeRDP is the arm64 build of the same commit (`ARCH=arm64
+image/freerdp/build-debs.sh`, checked against `image/freerdp/SHA256SUMS.arm64`).
+
 ## The site folder
 
 See [image/site.example/README.md](../image/site.example/README.md). In short:
