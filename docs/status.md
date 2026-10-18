@@ -49,6 +49,8 @@ production fleet does not use them, so test them in your environment first:
   and back to an earlier version with its FreeRDP. In the system tests (management folder and GitHub, going back with
   the packages of that version), new in 0.2.0.
 - **The manager updating itself** from the signed releases, new in 0.2.0.
+- **802.1X and WPA2/WPA3-Enterprise Wi-Fi** (PEAP, EAP-TLS): in the system tests and in a lab against hostapd and
+  FreeRADIUS, new in 0.2.1; not yet on a real switch or with Windows NPS.
 - **Desktops in the cloud** (Azure, AWS, any provider): the same RDP, through an RD Gateway or a VPN, but we have
   no cloud deployment to test on ([what to know](configuration.md#desktops-in-the-cloud)).
 
@@ -57,7 +59,7 @@ production fleet does not use them, so test them in your environment first:
 - Citrix, VMware/Omnissa Horizon or any protocol other than RDP.
 - Azure Virtual Desktop and Windows 365 (Microsoft Entra ID sign-in and Microsoft's gateway).
 - ARM devices.
-- 802.1X, network boot (PXE).
+- Network boot (PXE).
 - Disk encryption, signed central configuration.
 
 Tell us what you need first in the [discussions](https://github.com/OpenThinRdp/openthinrdp/discussions).

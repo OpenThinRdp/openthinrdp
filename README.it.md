@@ -96,7 +96,7 @@ ARM (il Raspberry Pi 4 è [in preparazione](https://github.com/OpenThinRdp/opent
 | Driver | il kernel Debian 13 completo e tutti i pacchetti firmware di Debian: quello che fa girare Debian 13 fa girare OpenThinRDP |
 | Memoria | 2 GB di RAM |
 | Spazio | 8 GB per installarlo (eMMC, SSD o disco); nessuno per provarlo in live da una chiavetta |
-| Rete | cavo, Wi-Fi (WPA2 personale) o un adattatore Ethernet USB |
+| Rete | cavo, Wi-Fi o un adattatore Ethernet USB; WPA2/WPA3 personale o Enterprise, e 802.1X sul cavo |
 | TPM 2.0 | facoltativo: se c'è, i segreti del dispositivo (password della cartella di gestione, chiave Wi-Fi, chiavi SSH) restano cifrati dentro il TPM ([sicurezza](docs/security.md)); senza, funziona uguale |
 | Lato Windows | un broker RDS (host di sessione o raccolta VDI su Hyper-V), oppure qualsiasi PC o server Windows che accetti il Desktop remoto (Pro, Enterprise, Server), in sede o in qualsiasi cloud |
 
@@ -256,6 +256,9 @@ e semplice da gestire, e per chi vuole mettere al lavoro il trasporto UDP di Fre
 marchi dei rispettivi proprietari; il confronto riflette informazioni pubbliche e la nostra comprensione,
 correzioni benvenute.
 
+Ognuno più nel dettaglio, e **Linux Mint o Ubuntu con Remmina**: [docs/alternatives.md](docs/alternatives.md) (in inglese).
+Le domande che si fanno per prime (hardware, driver, UDP, Azure, PXE, 802.1X): [docs/faq.md](docs/faq.md).
+
 ## I prossimi passi
 
 Le idee che vorremmo realizzare, più o meno in quest'ordine. Diteci in una issue quali vi servono, o mandate una
@@ -263,7 +266,6 @@ pull request:
 
 - **VPN**: WireGuard e OpenVPN, così una postazione a casa o in una sede distaccata raggiunge il broker da sola.
 - **RD Gateway**: Desktop remoto in HTTPS da fuori rete, senza VPN.
-- **Wi-Fi con 802.1X** (WPA-Enterprise) e 802.1X sulla rete cablata.
 - **Installazione da rete (PXE)** per molte postazioni insieme.
 - **Altro hardware provato** e altre lingue (un file ciascuna).
 
@@ -285,6 +287,8 @@ La documentazione è in inglese nella cartella [docs](docs/).
 - [CHANGELOG.md](CHANGELOG.md): le novità di ogni versione.
 - [docs/status.md](docs/status.md): cosa è in produzione, cosa è solo provato, cosa non c'è ancora.
 - [docs/configuration.md](docs/configuration.md): tutte le impostazioni.
+- [docs/faq.md](docs/faq.md): domande frequenti (in inglese).
+- [docs/alternatives.md](docs/alternatives.md): il confronto con Linux Mint + Remmina, IGEL OS, Dell ThinOS, Stratodesk, ThinStation, openthinclient.
 - [docs/manager.md](docs/manager.md): il gestore Windows pagina per pagina: postazioni, impostazioni, postazioni pilota e ritorno indietro (in inglese).
 - [docs/management.md](docs/management.md): la cartella di gestione, la configurazione centrale, le chiavi SSH, gli
   aggiornamenti firmati.

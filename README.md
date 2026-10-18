@@ -95,7 +95,7 @@ Not for you (yet): Citrix, VMware/Omnissa Horizon and other protocols (OpenThinR
 | Drivers | the complete Debian 13 kernel and every Debian firmware package: what runs Debian 13 runs OpenThinRDP |
 | Memory | 2 GB of RAM |
 | Storage | 8 GB to install it (eMMC, SSD or disk); nothing to try it live from a USB stick |
-| Network | cable, Wi-Fi (WPA2 personal) or a USB Ethernet adapter |
+| Network | cable, Wi-Fi or a USB Ethernet adapter; WPA2/WPA3 personal or Enterprise, and 802.1X on the cable |
 | TPM 2.0 | optional: with one, the device's secrets (management folder password, Wi-Fi key, SSH host keys) are kept encrypted in it ([security](docs/security.md)); without one it works the same |
 | Windows side | an RD Connection Broker (RDS session hosts or a Hyper-V VDI collection), or any Windows PC or server that accepts Remote Desktop (Pro, Enterprise, Server), on premises or in any cloud |
 
@@ -247,12 +247,14 @@ choice. OpenThinRDP is for networks built on Windows Remote Desktop that want a 
 to manage, and for anyone who wants to put FreeRDP's UDP transport to work. Product names are trademarks of
 their owners; the comparison reflects public information and our understanding, corrections are welcome.
 
+Each of them in more detail, and **Linux Mint or Ubuntu with Remmina**: [docs/alternatives.md](docs/alternatives.md).
+Questions people ask first (hardware, drivers, UDP, Azure, PXE, 802.1X): [docs/faq.md](docs/faq.md).
+
 ## What comes next
 
 Ideas we would like to build, roughly in this order. Tell us in an issue which ones you need, or send a pull
 request:
 
-- **Wi-Fi with 802.1X** (WPA-Enterprise) and wired 802.1X.
 - **Network installation (PXE)** for many devices at once.
 - **More tested hardware** and more languages (one file each).
 
@@ -272,6 +274,8 @@ The result is `out/openthinrdp-<version>.iso`. See [docs/building.md](docs/build
 - [CHANGELOG.md](CHANGELOG.md): what changed in each release.
 - [docs/status.md](docs/status.md): what is in production, what is only tested, what does not exist yet.
 - [docs/configuration.md](docs/configuration.md): every setting.
+- [docs/faq.md](docs/faq.md): frequently asked questions.
+- [docs/alternatives.md](docs/alternatives.md): compared with Linux Mint + Remmina, IGEL OS, Dell ThinOS, Stratodesk, ThinStation, openthinclient.
 - [docs/manager.md](docs/manager.md): the Windows manager, page by page: devices, settings, pilot devices and going back.
 - [docs/management.md](docs/management.md): the management folder, central settings, SSH keys, signed updates.
 - [docs/building.md](docs/building.md): building and customizing the image.

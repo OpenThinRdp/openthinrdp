@@ -5,6 +5,8 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
 
 ## Unreleased
 
+- **Docs: FAQ and the alternatives** ([#56](https://github.com/OpenThinRdp/openthinrdp/issues/56) follow-up): [docs/faq.md](docs/faq.md) answers what people ask first (hardware, drivers, UDP, Azure, PXE, 802.1X, maturity), [docs/alternatives.md](docs/alternatives.md) compares OpenThinRDP with Linux Mint + Remmina, IGEL OS, Dell ThinOS, Stratodesk, ThinStation and openthinclient.
+
 - **802.1X on the cable, and WPA2/WPA3-Enterprise Wi-Fi** ([#60](https://github.com/OpenThinRdp/openthinrdp/issues/60)).
   Networks that open a switch port only to devices that authenticate now take OpenThinRDP.
   - `DOT1X=peap|tls` for the cable, `WIFI_SECURITY=peap|tls` for Wi-Fi, with one set of EAP settings for both:
