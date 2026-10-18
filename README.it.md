@@ -17,11 +17,12 @@ per Desktop remoto Windows, RDS e VDI: FreeRDP con il trasporto UDP che la versi
 </p>
 
 OpenThinRDP trasforma piccoli PC e vecchi thin client in postazioni che si accendono direttamente sul form di
-accesso e si collegano a Windows: tramite il broker RDS al desktop o alla VM dell'utente, oppure direttamente a
-un host di sessione o a qualsiasi PC Windows con Desktop remoto attivo, **in sede o nel cloud** (Azure, AWS,
-qualsiasi fornitore). Si gestiscono da una cartella condivisa con un piccolo gestore Windows: stato di ogni
-postazione, configurazione centrale, logo, aggiornamenti firmati, e lo schermo di qualsiasi postazione nel browser.
-Niente agenti, niente server di gestione, nessun servizio cloud da cui dipendere, nessuna licenza per postazione.
+accesso e si collegano a Windows: tramite un RD Connection Broker al desktop o alla VM dell'utente, oppure
+direttamente a un host di sessione o a qualsiasi PC Windows con Desktop remoto attivo, **in sede o nel cloud**
+(Azure, AWS, qualsiasi fornitore). Si gestiscono da una cartella condivisa con un piccolo gestore Windows: stato di
+ogni postazione, configurazione centrale, logo, aggiornamenti firmati, e lo schermo di qualsiasi postazione nel
+browser. Niente agenti, niente server di gestione, nessun servizio cloud da cui dipendere, nessuna licenza per
+postazione.
 
 > **Non è openthinclient.** OpenThinRDP è un progetto nuovo e indipendente, senza alcun legame con openthinclient: i
 > nomi si somigliano, nient'altro è in comune. openthinclient è un progetto più vecchio in cui le postazioni si avviano
@@ -36,9 +37,9 @@ Client collegati a una VDI Windows 11 su Hyper-V, dove il sistema da cui deriva 
 > VDI Windows 11 su Hyper-V dietro due RD Connection Broker, con accesso Kerberos e NTLM di riserva. Le postazioni
 > sono state convertite sul posto dal sistema che avevano prima e ricevono ogni versione dalla loro cartella di
 > gestione (il gestore controlla ogni release di GitHub e la firma di nuovo con la chiave del sito), installata
-> durante le sessioni e applicata quando la sessione finisce. Gli aggiornamenti di sicurezza di FreeRDP arrivano in OpenThinRDP
-> [entro 7 giorni](SECURITY.md#freerdp-security-fixes) (la 3.32.2: in quattro ore). La ISO è provata in QEMU/KVM
-> con Secure Boot a ogni versione e i test di sistema girano a ogni commit
+> durante le sessioni e applicata quando la sessione finisce. Gli aggiornamenti di sicurezza di FreeRDP arrivano in
+> OpenThinRDP [entro 7 giorni](SECURITY.md#freerdp-security-fixes) (la 3.32.2: in quattro ore). La ISO è provata in
+> QEMU/KVM con Secure Boot a ogni versione e i test di sistema girano a ogni commit
 > ([CI](https://github.com/OpenThinRdp/openthinrdp/actions/workflows/tests.yml)). Cosa è in produzione, cosa è solo
 > provato e cosa non c'è ancora: **[docs/status.md](docs/status.md)**. Provatela in live, poi su una postazione,
 > prima di estenderla.
@@ -69,10 +70,11 @@ Per arrivarci è servita una correzione al trasporto UDP di FreeRDP, che abbiamo
 
 ## Per chi è
 
-- Pubblicate desktop con **Servizi Desktop remoto di Windows**: broker RDS con host di sessione o raccolta VDI su
-  Hyper-V. Oppure non c'è nessun broker: ogni postazione si collega a un PC o server Windows (al posto del broker
-  si mette il suo nome), per esempio una reception che lavora sul PC dell'ufficio. Le postazioni fuori sede passano
-  dall'**RD Gateway** in HTTPS ([`RDP_GATEWAY`](docs/configuration.md#rd-gateway)).
+- Pubblicate desktop con **Servizi Desktop remoto di Windows**: RD Connection Broker con host di sessione o
+  raccolta VDI su Hyper-V. Oppure non c'è nessun broker: ogni postazione si collega a un PC o server Windows (al
+  posto del broker si mette il suo nome), per esempio una reception che lavora sul PC dell'ufficio. Le postazioni
+  fuori sede passano dall'**RD Gateway** in HTTPS ([`RDP_GATEWAY`](docs/configuration.md#rd-gateway)) o da una
+  **VPN** tutta loro, WireGuard o OpenVPN ([`VPN`](docs/configuration.md#vpn)).
 - I vostri desktop sono **nel cloud**: un deployment RDS o macchine virtuali Windows in Azure, AWS, Google Cloud o da
   qualsiasi fornitore, raggiunti tramite RD Gateway o VPN, con UDP attraverso la VPN
   ([dettagli](docs/configuration.md#desktops-in-the-cloud)). Azure Virtual Desktop e Windows 365 non sono ancora
@@ -83,22 +85,24 @@ Per arrivarci è servita una correzione al trasporto UDP di FreeRDP, che abbiamo
 - Volete **provare RDP in UDP** su client veri, o aiutarlo a entrare in FreeRDP.
 - Vi servono **schermi che mostrano solo una pagina web**: TV nella hall, dashboard, punti informativi, tabelloni
   di produzione. Lo stesso sistema, senza accesso, con la pagina decisa centralmente
-  ([vedi sotto](#schermi-che-mostrano-solo-una-pagina-web)): una sola immagine per tutto il parco macchine.
+  ([vedi sotto](#schermi-che-mostrano-solo-una-pagina-web)): una sola immagine per tutto il parco.
 
-Non (ancora) per voi: Citrix, VMware/Omnissa Horizon e altri protocolli (OpenThinRDP fa solo RDP), dispositivi
-ARM (il Raspberry Pi 4 è [in preparazione](https://github.com/OpenThinRdp/openthinrdp/issues/61)), PC solo a 32 bit.
+Non (ancora) per voi: Citrix, VMware/Omnissa Horizon e altri protocolli (OpenThinRDP fa solo RDP), PC solo a 32
+bit. ARM è sperimentale: c'è un'immagine per scheda SD per il Raspberry Pi 4
+([pre-release](https://github.com/OpenThinRdp/openthinrdp/releases/tag/rpi-test-1)), provata solo in emulazione con
+QEMU, non ancora su una scheda vera ([cosa controllare](docs/arm.md), in inglese); il Pi 5 non è ancora supportato.
 
 ## Requisiti
 
 | | Minimo |
 |---|---|
-| Dispositivo | qualsiasi PC o thin client x86 a 64 bit, **UEFI** (Secure Boot supportato, non obbligatorio) **o BIOS tradizionale**: vanno bene anche i vecchi PC d’ufficio e i thin client usati |
+| Dispositivo | qualsiasi PC o thin client x86 a 64 bit, **UEFI** (Secure Boot supportato, non obbligatorio) **o BIOS tradizionale**: vanno bene anche i vecchi PC d'ufficio e i thin client usati |
 | Driver | il kernel Debian 13 completo e tutti i pacchetti firmware di Debian: quello che fa girare Debian 13 fa girare OpenThinRDP |
 | Memoria | 2 GB di RAM |
 | Spazio | 8 GB per installarlo (eMMC, SSD o disco); nessuno per provarlo in live da una chiavetta |
 | Rete | cavo, Wi-Fi o un adattatore Ethernet USB; WPA2/WPA3 personale o Enterprise, e 802.1X sul cavo |
-| TPM 2.0 | facoltativo: se c'è, i segreti del dispositivo (password della cartella di gestione, chiave Wi-Fi, chiavi SSH) restano cifrati dentro il TPM ([sicurezza](docs/security.md)); senza, funziona uguale |
-| Lato Windows | un broker RDS (host di sessione o raccolta VDI su Hyper-V), oppure qualsiasi PC o server Windows che accetti il Desktop remoto (Pro, Enterprise, Server), in sede o in qualsiasi cloud |
+| TPM 2.0 | facoltativo: se c'è, i segreti del dispositivo (password della cartella di gestione, chiave Wi-Fi, chiavi SSH dell'host) restano cifrati dentro il TPM ([sicurezza](docs/security.md)); senza, funziona uguale |
+| Lato Windows | un RD Connection Broker (host di sessione RDS o raccolta VDI su Hyper-V), oppure qualsiasi PC o server Windows che accetti il Desktop remoto (Pro, Enterprise, Server), in sede o in qualsiasi cloud |
 
 Hardware provato e impostazioni del firmware: [docs/hardware.md](docs/hardware.md).
 
@@ -109,48 +113,52 @@ Hardware provato e impostazioni del firmware: [docs/hardware.md](docs/hardware.m
 2. Avviate il PC dalla chiavetta. Il menu fa partire da solo il **sistema live** dopo 10 secondi: gira dalla
    chiavetta e **non scrive mai sul disco**.
 3. Con la rete, se su GitHub c'è una versione più nuova di quella della ISO chiede se scaricarla o usare quella
-   della ISO (senza risposta in 30 secondi scarica la nuova): la ISO non serve riscaricarla a ogni versione. Poi si
+   della ISO (senza risposta in 30 secondi: la più nuova), così la ISO non va riscaricata a ogni versione. Poi si
    apre la configurazione: impostate il broker (o il nome di un PC Windows) e il dominio, salvate, accedete.
 4. Vi piace? Riavviate e scegliete **Install**: mostra il disco che sta per cancellare e chiede conferma prima
-   di scrivere qualsiasi cosa (confermate per proseguire), poi circa tre minuti. Installa sul **primo disco interno**, mai
-   su un disco USB (nemmeno la chiavetta). Per le installazioni in serie, *Unattended install* salta la domanda.
+   di scrivere qualsiasi cosa (rispondete *Yes* per proseguire), poi circa tre minuti. Installa sul **primo disco
+   interno**, mai su un disco USB (nemmeno la chiavetta di installazione). Per le installazioni in serie,
+   *Unattended install* salta la domanda.
 
 Cosa serve al dispositivo: [Requisiti](#requisiti).
 
 ## Cosa fa
 
-- **Desktop remoto in UDP.** Windows manda la grafica (e USB, audio e telecamera) in UDP e adatta fotogrammi e qualità alla linea invece di
-  accumulare ritardo: più fluido con server carichi, Wi-Fi con perdite e VPN. L'immagine contiene FreeRDP
-  compilato con il trasporto UDP ancora in revisione ([FreeRDP #13608](https://github.com/FreeRDP/FreeRDP/pull/13608)).
-  Per postazione: `auto` (UDP, TCP se l'UDP è bloccato), `udp` (solo UDP) o `tcp`. Nella nostra prova di 3 ore con
-  perdita di pacchetti, banda limitata, rete staccata e client uccisi la sessione è rimasta sempre in UDP
+- **Desktop remoto in UDP.** Windows manda la grafica (e USB, audio e telecamera) in UDP e adatta fotogrammi e
+  qualità alla linea invece di accumulare ritardo: più fluido con server carichi, Wi-Fi con perdite e VPN.
+  L'immagine contiene FreeRDP compilato con il trasporto UDP ancora in revisione
+  ([FreeRDP #13608](https://github.com/FreeRDP/FreeRDP/pull/13608)). Per postazione: `auto` (UDP, TCP se l'UDP è
+  bloccato), `udp` (solo UDP) o `tcp`. Nella nostra prova di 3 ore con perdita di pacchetti, banda limitata, rete
+  staccata e client uccisi la sessione è rimasta sempre in UDP
   ([risultati](https://github.com/FreeRDP/FreeRDP/pull/13608#issuecomment-6110587552)). Vedi [docs/udp.md](docs/udp.md).
-- **Form di accesso, poi desktop remoto a schermo intero**, avvio in pochi secondi con il vostro logo, niente
+- **Form di accesso, poi desktop remoto a schermo intero.** Avvio in pochi secondi con il vostro logo, niente
   desktop, niente shell. Tentativi, broker di riserva, messaggi chiari per rete assente, broker irraggiungibile,
   macchina virtuale che non parte, password sbagliata (mai ritentata, così l'account non si blocca). Una macchina
   virtuale che si sta riavviando o sta installando un aggiornamento di Windows mostra "In attesa di Windows" (fino
   a 20 minuti) invece di un errore.
-- **Si riconnette da solo** dopo le cadute di rete, si ferma quando la sessione viene chiusa apposta (disconnetti,
-  esci, VM spenta dall'amministratore), e avvisa prima di prendersi una sessione aperta su un'altra postazione.
-  Una sessione presa da un'altra postazione mostra "Sessione aperta altrove" con *Riprendi qui*.
-- **USB pensato per la VDI**: chiavette di firma, chiavi tachigrafo e altri dispositivi particolari vanno a
-  Windows interi, anche collegati a sessione aperta. **Webcam e cuffie funzionano in riunione**: la telecamera
-  passa dal canale telecamera di RDP e il microfono dal canale audio, così Teams, Zoom e il browser della sessione
-  li vedono entrambi (un microfono passato come dispositivo USB resta fuori dalla sessione remota). Tastiere,
-  mouse, touch, hub e schede di rete restano locali; i lettori di smart card passano dal canale smart card.
-  I touch screen funzionano come touch in Windows. Con `USB_MODE=disks` le chiavette USB restano sul thin client e
-  compaiono in Windows come unità; con `USB_MODE=auto` il thin client decide dispositivo per dispositivo: una
-  chiavetta come unità, un dispositivo con memoria e altro (uno strumento, una chiave col suo driver) intero.
+- **Si riconnette da solo** dopo le cadute di rete, si ferma quando la sessione viene chiusa apposta (esci,
+  disconnetti, VM spenta dall'amministratore), e avvisa prima di prendersi una sessione aperta su un'altra
+  postazione. Una sessione presa da un'altra postazione mostra "Sessione aperta altrove" con *Riprendi qui*.
+- **USB pensato per la VDI.** Chiavette di firma, chiavi tachigrafo e altri dispositivi particolari vanno a
+  Windows come dispositivi USB interi, anche collegati a sessione aperta. **Webcam e cuffie funzionano in
+  riunione**: la telecamera passa dal canale telecamera di RDP e il microfono dal canale audio, così Teams, Zoom e
+  il browser della sessione li vedono entrambi (un microfono passato come dispositivo USB resta fuori dalla sessione
+  remota). Tastiere, mouse, touch screen, hub e schede di rete restano locali; i lettori di smart card passano dal
+  canale smart card. I touch screen funzionano come touch in Windows. Con `USB_MODE=disks` le chiavette USB restano
+  sul thin client e compaiono in Windows come unità; con `USB_MODE=auto` il thin client decide dispositivo per
+  dispositivo: una chiavetta come unità, un dispositivo con memoria e altro (uno strumento, una chiave col suo
+  driver) intero.
 - **Gestione da una cartella condivisa (SMB) con un gestore Windows**, senza server: tutto il parco in una finestra,
   impostazioni per tutte le postazioni o per una, e lo **schermo remoto** di qualsiasi postazione
   ([il gestore](#il-gestore-tutto-il-parco-in-una-finestra)).
 - **Aggiornamenti firmati** che non interrompono mai una sessione: dalle release di GitHub (controllate ogni 3
   ore, installati in background, applicati quando la sessione finisce), o dalla vostra cartella quando decidete voi.
   **Una versione si prova prima su poche postazioni**, e si **torna indietro** a una precedente se qualcosa non va
-  ([`UPDATE_TO`](docs/configuration.md#management)): FreeRDP torna indietro con lei. Gli aggiornamenti di sicurezza Debian si installano da soli.
+  ([`UPDATE_TO`](docs/configuration.md#management)): FreeRDP torna indietro con lei.
+  Gli aggiornamenti di sicurezza di Debian si installano da soli.
 - **Configurazione sulla postazione** (anche protetta da PIN): broker o PC, rete (DHCP, statica, Wi-Fi), cartella
-  di gestione e il suo account, modalità USB, pulsante web, orari, lingua. Una postazione nuova prende il nome
-  dalla propria scheda di rete (`thinclient-1a2b3c`).
+  di gestione e il suo account, modalità USB, pulsante web, orari di accensione e spegnimento, lingua. Una
+  postazione nuova prende il nome dalla propria scheda di rete (`thinclient-1a2b3c`).
 - **Diagnostica per l'assistenza**, senza PIN (il pulsante ℹ): rete, raggiungibilità di ogni broker o PC, ora,
   cartella di gestione, ultimi eventi. Solo lettura.
 - **Blindata**: niente desktop, niente menu, niente console di testo (Ctrl+Alt+F1..F12 non fanno nulla), nessun
@@ -206,11 +214,12 @@ una dashboard in ufficio, un punto informativo, un tabellone in produzione. Con 
   riapre la pagina, senza riavvio.
 - **Si ricarica da sola** ogni `KIOSK_RELOAD_MIN` minuti quando nessuno la sta toccando, così una pagina finita in
   errore dopo un problema di rete torna da sola.
-- L'**orario di accensione** accende e spegne gli schermi (`POWER_ON_TIME`, `POWER_OFF_TIME`, `POWER_ON_DAYS`), via
-  cavo o Wi-Fi; stato ed eventi di ogni schermo sono nella cartella di gestione come per ogni altro dispositivo.
-- Cookie e accessi salvati restano anche dopo i riavvii. Per le dashboard con login, un link con gettone di accesso
-  (lo offre la maggior parte degli strumenti per dashboard) evita del tutto di accedere dallo schermo.
-- Chi è davanti allo schermo può comunque arrivare al modulo di accesso: compare per 5 secondi prima della pagina,
+- Gli **orari di accensione e spegnimento** accendono e spengono gli schermi (`POWER_ON_TIME`, `POWER_OFF_TIME`,
+  `POWER_ON_DAYS`), via cavo o Wi-Fi; stato ed eventi di ogni schermo sono nella cartella di gestione come per ogni
+  altro dispositivo.
+- Cookie e accessi salvati restano anche dopo i riavvii. Per le dashboard con login, un link con un gettone di
+  accesso (lo offre la maggior parte degli strumenti per dashboard) evita del tutto di accedere dallo schermo.
+- Chi è davanti allo schermo può comunque arrivare al form di accesso: compare per 5 secondi prima della pagina,
   e Ctrl+Shift+W chiude la pagina. Le impostazioni si possono bloccare con un PIN.
 
 Impostazioni: [docs/configuration.md](docs/configuration.md#web-button-and-kiosk-page).
@@ -244,7 +253,7 @@ che si può leggere: tutta la parte client sono pochi script in `rootfs/opt/open
 |---|---|---|---|---|---|
 | Costo | gratuito | incluso nei thin client Dell | abbonamento per postazione | licenza per postazione | gratuito |
 | Sorgente | aperto (Apache 2.0) | chiuso | chiuso | chiuso | aperto |
-| Gira su | PC e thin client x86-64, UEFI o BIOS | thin client Dell | molti dispositivi x86-64 | PC x86-64, Raspberry Pi | PC x86 |
+| Gira su | PC e thin client x86-64, UEFI o BIOS; Raspberry Pi 4 (sperimentale) | thin client Dell | molti dispositivi x86-64 | PC x86-64, Raspberry Pi | PC x86 |
 | Protocolli | solo RDP | Citrix, Omnissa/VMware, Microsoft e altri | Citrix, Omnissa/VMware, Microsoft e altri | molti | molti (immagine da costruire) |
 | Gestione | cartella condivisa + strumento Windows, nessun server | Wyse Management Suite | server UMS | NoTouch Center | file di configurazione su un server di rete |
 | Aggiornamenti | firmati, da GitHub o dalla vostra cartella | firmware del produttore | del produttore | del produttore | si ricostruisce l'immagine |
@@ -264,33 +273,31 @@ Le domande che si fanno per prime (hardware, driver, UDP, Azure, PXE, 802.1X): [
 Le idee che vorremmo realizzare, più o meno in quest'ordine. Diteci in una issue quali vi servono, o mandate una
 pull request:
 
-- **VPN**: WireGuard e OpenVPN, così una postazione a casa o in una sede distaccata raggiunge il broker da sola.
-- **RD Gateway**: Desktop remoto in HTTPS da fuori rete, senza VPN.
 - **Installazione da rete (PXE)** per molte postazioni insieme.
 - **Altro hardware provato** e altre lingue (un file ciascuna).
 
 ## Costruire la propria immagine
 
-Con il vostro logo, broker, impostazioni e chiavi già dentro (Linux con Docker o Podman):
+Con il vostro logo, il vostro broker, le vostre impostazioni e chiavi già dentro (Linux con Docker o Podman):
 
 ```
-cp -r image/site.example image/site      # poi modificare site.conf, build.conf, aggiungere il logo
-image/build.sh                           # -> out/openthinrdp-<versione>.iso
+cp -r image/site.example image/site      # poi modificare image/site/site.conf e build.conf, aggiungere il logo
+image/build.sh
 ```
 
-Vedi [docs/building.md](docs/building.md).
+Il risultato è `out/openthinrdp-<versione>.iso`. Vedi [docs/building.md](docs/building.md) (in inglese).
 
 ## Documentazione
 
-La documentazione è in inglese nella cartella [docs](docs/).
+Le domande frequenti sono anche in italiano; il resto della documentazione è in inglese.
 
 - [CHANGELOG.md](CHANGELOG.md): le novità di ogni versione.
 - [docs/status.md](docs/status.md): cosa è in produzione, cosa è solo provato, cosa non c'è ancora.
 - [docs/configuration.md](docs/configuration.md): tutte le impostazioni.
-- [docs/faq.it.md](docs/faq.it.md): domande frequenti.
-- Guide (in inglese): [sostituire Dell ThinOS sui thin client Dell](docs/guides/replace-dell-thinos.md), [un vecchio PC come thin client](docs/guides/old-pc-thin-client.md).
+- [docs/faq.it.md](docs/faq.it.md): domande frequenti ([English](docs/faq.md)).
+- Guide: [sostituire Dell ThinOS sui thin client Dell](docs/guides/replace-dell-thinos.md), [un vecchio PC come thin client](docs/guides/old-pc-thin-client.md).
 - [docs/alternatives.md](docs/alternatives.md): il confronto con Linux Mint + Remmina, IGEL OS, Dell ThinOS, Stratodesk, ThinStation, openthinclient.
-- [docs/manager.md](docs/manager.md): il gestore Windows pagina per pagina: postazioni, impostazioni, postazioni pilota e ritorno indietro (in inglese).
+- [docs/manager.md](docs/manager.md): il gestore Windows pagina per pagina: postazioni, impostazioni, postazioni pilota e ritorno indietro.
 - [docs/management.md](docs/management.md): la cartella di gestione, la configurazione centrale, le chiavi SSH, gli
   aggiornamenti firmati.
 - [docs/building.md](docs/building.md): costruire e personalizzare l'immagine.
@@ -310,14 +317,15 @@ La documentazione è in inglese nella cartella [docs](docs/).
 
 ## Contribuire
 
-Issue e pull request sono benvenute, anche in italiano. Per tutto ciò che riguarda connessioni o dispositivi,
-descrivete l'hardware e il lato Windows (broker, versione dell'host di sessione). I problemi di sicurezza vanno segnalati in privato,
-vedi [SECURITY.md](SECURITY.md). Come contribuire: [CONTRIBUTING.md](CONTRIBUTING.md); regole di convivenza:
-[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+Issue e pull request sono benvenute. Per tutto ciò che riguarda connessioni o dispositivi, descrivete l'hardware e
+il lato Windows (broker, versione dell'host di sessione). Vedi [CONTRIBUTING.md](CONTRIBUTING.md) e il
+[codice di condotta](CODE_OF_CONDUCT.md).
+
+Problemi di sicurezza: segnalateli in privato, vedi [SECURITY.md](SECURITY.md).
 
 ## Licenza
 
-Apache License 2.0, vedi [LICENSE](LICENSE). OpenThinRDP usa FreeRDP (Apache 2.0), il visore noVNC dello schermo remoto
-(incluso senza modifiche, MPL 2.0 e BSD, [rootfs/opt/openthinrdp/novnc](rootfs/opt/openthinrdp/novnc)) e pacchetti Debian con le loro
-licenze. Windows e Desktop remoto sono marchi di Microsoft; il progetto non è affiliato a Microsoft né ai
-produttori citati.
+Apache License 2.0, vedi [LICENSE](LICENSE). OpenThinRDP usa FreeRDP (Apache 2.0), il visore noVNC dello schermo
+remoto (incluso senza modifiche, MPL 2.0 e BSD, [rootfs/opt/openthinrdp/novnc](rootfs/opt/openthinrdp/novnc)) e
+pacchetti Debian con le loro licenze. Windows e Desktop remoto sono marchi di Microsoft; il progetto non è affiliato
+a Microsoft né ad alcun produttore citato sopra.
