@@ -48,11 +48,12 @@ bigger module.
 
 ## Not supported
 
-- **ARM** (Raspberry Pi and ARM thin clients): in preparation, the Raspberry Pi 4 first.
+- **ARM** other than the Raspberry Pi 4 (the Raspberry Pi 5, ARM thin clients): not supported yet.
 - **32-bit only** CPUs (older Atom and VIA models): Debian 13 no longer runs on them.
 
-**Raspberry Pi 4** (arm64): an SD card image built by `image/build-rpi.sh`, tested in emulation only so far. What is
-different from a PC and what to check on the first board: [arm.md](arm.md).
+**Raspberry Pi 4** (arm64), experimental: an SD card image built by `image/build-rpi.sh`
+([pre-release](https://github.com/OpenThinRdp/openthinrdp/releases/tag/rpi-test-1)), tested only in QEMU arm64
+emulation, not yet on a real board. What is different from a PC and what to check on the first board: [arm.md](arm.md).
 
 ## Firmware settings (Dell)
 
