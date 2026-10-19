@@ -215,6 +215,8 @@ $script:StaleMinutes = 15     # same threshold as SUMMARY.csv written by the dev
 # keys that identify a device: central-apply.sh ignores them in common.conf
 $script:HostOnly = @('HOSTNAME', 'DEFAULT_USER', 'NETMODE', 'IPADDR', 'VPN_ADDRESS')
 $script:SettingsFile = Join-Path $env:APPDATA 'OpenThinRDP\manager.json'
+# tests and screenshots: settings of their own, never those of the account
+if ($env:OTR_MANAGER_SETTINGS) { $script:SettingsFile = $env:OTR_MANAGER_SETTINGS }
 
 function Set-ManagementFolder([string]$path) {
   if ($path.Length -gt 3) { $path = $path.TrimEnd('\', '/') }
@@ -1814,6 +1816,9 @@ if ($UpdateManager) {
 # -UpdateManager, so that a broken copy of it can still be replaced by an update; without it the rest works as before.
 $script:VdiLoaded = $false
 try { . (Join-Path $PSScriptRoot 'OtrVdi.ps1'); $script:VdiLoaded = $true } catch { Write-Warning "OtrVdi.ps1: $($_.Exception.Message)" }
+# The Health Center (hosts, cluster, storage, DCs, DNS, SQL, devices, backups): OtrHealth.ps1, on top of OtrVdi.ps1
+$script:HealthLoaded = $false
+if ($script:VdiLoaded) { try { . (Join-Path $PSScriptRoot 'OtrHealth.ps1'); $script:HealthLoaded = $true } catch { Write-Warning "OtrHealth.ps1: $($_.Exception.Message)" } }
 if ($FunctionsOnly) { return }
 # files of an update of the manager that were in use (Install-ManagerFile)
 try { Remove-OldManagerFiles } catch { }
@@ -1997,7 +2002,8 @@ $script:IconFont = @('Segoe Fluent Icons', 'Segoe MDL2 Assets') | Where-Object {
 $script:Glyph = @{ Refresh = 'E72C'; Folder = 'E838'; Download = 'E896'; Shield = 'EA18'; Devices = 'E977'; Settings = 'E713'; Key = 'E8D7'; Warning = 'E7BA'
   Screen = 'E7F4'; Picture = 'E91B'; Save = 'E74E'; Undo = 'E7A7'; Delete = 'E74D'; Add = 'E710'; Search = 'E721'; Document = 'E8A5'
   Lock = 'E72E'; Unlock = 'E785'; Certificate = 'EB95'; Vpn = 'E705'
-  History = 'E81C'; Desktop = 'E770'; Play = 'E768'; Power = 'E7E8'; Message = 'E8BD'; Contact = 'E77B'; Repair = 'E90F'; Unplug = 'E8CD'; Cancel = 'E711' }
+  History = 'E81C'; Desktop = 'E770'; Play = 'E768'; Power = 'E7E8'; Message = 'E8BD'; Contact = 'E77B'; Repair = 'E90F'; Unplug = 'E8CD'; Cancel = 'E711'
+  Health = 'E95E'; Sync = 'E895'; Clock = 'E917'; Forward = 'E72A' }
 function New-Glyph([string]$name, $color, [int]$size = 16) {
   if (-not $script:IconFont -or -not $script:Glyph.ContainsKey($name)) { return $null }
   $bmp = New-Object System.Drawing.Bitmap($size, $size)
@@ -2304,10 +2310,12 @@ $navVault = New-NavButton 'NavVault' 'Lock' 4
 $navUpdates = New-NavButton 'NavUpdates' 'Download' 5
 # the Windows side of the desktops: index 6, so the other pages keep theirs (OTR_MANAGER_TAB of the screenshots)
 $navDesktops = New-NavButton 'NavDesktops' 'Desktop' 6
-$script:NavButtons = @($navDevices, $navCommon, $navKeys, $navProblems, $navVault, $navUpdates, $navDesktops)
-# Dock Top stacks the last added on top; the desktops under the devices, the vault next to the SSH keys, the versions
-# after the settings
-foreach ($b in @($navProblems, $navVault, $navKeys, $navUpdates, $navCommon, $navDesktops, $navDevices)) { $nav.Controls.Add($b) }
+# the Health Center (the servers behind the desktops): index 7
+$navHealth = New-NavButton 'NavHealth' 'Health' 7
+$script:NavButtons = @($navDevices, $navCommon, $navKeys, $navProblems, $navVault, $navUpdates, $navDesktops, $navHealth)
+# Dock Top stacks the last added on top; the desktops under the devices and the Health Center under them, the vault next
+# to the SSH keys, the versions after the settings
+foreach ($b in @($navProblems, $navVault, $navKeys, $navUpdates, $navCommon, $navHealth, $navDesktops, $navDevices)) { $nav.Controls.Add($b) }
 
 # ---------------- Devices page: list | selected device ----------------
 $pageDevices = New-Panel 'Fill' $Theme.Page
@@ -2730,6 +2738,113 @@ function Set-DskSplitFit {
 }
 $dskSplit.add_SizeChanged({ Set-DskSplitFit })
 
+# ---------------- Health Center page: the tree of the infrastructure | the selected item ----------------
+# top: the mode (diagnosis only, or diagnosis and repair), refresh, settings, the headline and when it was read;
+# left: cluster -> hosts -> VMs, domain -> DCs and DNS, SQL -> replicas, brokers, devices, backups, each with its dot;
+# right: the selected item: what is wrong in one sentence, its mode, its facts, its checks with their Fix, its actions
+$pageHealth = New-Panel 'Fill' $Theme.Page
+$hcWrap = New-Panel 'Fill' $Theme.Page; $hcWrap.Padding = New-Object System.Windows.Forms.Padding(12, 0, 12, 12)
+$hcCard = New-Panel 'Fill' $Theme.Card; Add-Line $hcCard 'Box'; $hcCard.Padding = New-Object System.Windows.Forms.Padding(1)
+$hcTop = New-Panel 'Top' $Theme.Card 84; Add-Line $hcTop 'Bottom'
+$lblHcMode = New-Label (Get-Text 'HcModeLabel'); $lblHcMode.Location = New-Object System.Drawing.Point(14, 16)
+$cmbHcMode = New-Object System.Windows.Forms.ComboBox; $cmbHcMode.DropDownStyle = 'DropDownList'; $cmbHcMode.Font = $fontBase
+$hcModeTexts = @((Get-Text 'HcModeDiagnose'), (Get-Text 'HcModeRepair'))
+[void]$cmbHcMode.Items.AddRange($hcModeTexts); $cmbHcMode.Width = Get-FitWidth 160 $hcModeTexts $fontBase 40
+$cmbHcMode.Location = New-Object System.Drawing.Point(($lblHcMode.Left + (Get-TextWidth $lblHcMode.Text) + 8), 12)
+$btnHcRefresh = New-ActionButton 'BtnRefresh' 'Refresh' 'secondary'; $btnHcRefresh.Location = New-Object System.Drawing.Point(($cmbHcMode.Right + 10), 9)
+$btnHcSettings = New-ActionButton 'HcBtnSettings' 'Settings' 'secondary'; $btnHcSettings.Location = New-Object System.Drawing.Point(($btnHcRefresh.Right + 8), 9)
+$lblHcHead = New-Label '' $fontBold; $lblHcHead.AutoSize = $false; $lblHcHead.AutoEllipsis = $true; $lblHcHead.Height = 24; $lblHcHead.Location = New-Object System.Drawing.Point(14, 52)
+$lblHcUpdated = New-Label '' $fontSmall $Theme.Muted; $lblHcUpdated.AutoSize = $false; $lblHcUpdated.TextAlign = 'MiddleRight'; $lblHcUpdated.Height = 24
+$hcTop.Controls.AddRange(@($lblHcMode, $cmbHcMode, $btnHcRefresh, $btnHcSettings, $lblHcHead, $lblHcUpdated))
+$script:HcTopCompact = $false
+$hcTop.add_Resize({ param($s, $e)
+  $w = $s.ClientSize.Width
+  $compact = ($cmbHcMode.Right + 10 + (Get-FullWidth @($btnHcRefresh, $btnHcSettings)) + 10) -gt ($w - 14)
+  if ($compact -ne [bool]$script:HcTopCompact) { $script:HcTopCompact = $compact; Set-CompactButtons @($btnHcRefresh, $btnHcSettings) $compact }
+  $btnHcRefresh.Left = $cmbHcMode.Right + 10; $btnHcSettings.Left = $btnHcRefresh.Right + 8
+  $uw = [Math]::Min(320, [Math]::Max(120, (Get-TextWidth $lblHcUpdated.Text $fontSmall) + 10))
+  $lblHcUpdated.SetBounds(($w - $uw - 14), 52, $uw, 24); $lblHcHead.Width = [Math]::Max(80, $w - $uw - 40) })
+$tips.SetToolTip($btnHcRefresh, (Get-Text 'HcTipRefresh')); $tips.SetToolTip($cmbHcMode, (Get-Text 'HcTipMode')); $tips.SetToolTip($lblHcMode, (Get-Text 'HcTipMode'))
+
+$hcSplit = New-Object System.Windows.Forms.SplitContainer; $hcSplit.Dock = 'Fill'; $hcSplit.Orientation = 'Vertical'; $hcSplit.BackColor = $Theme.Line
+$hcSplit.SplitterWidth = 4; $hcSplit.FixedPanel = 'Panel1'; $hcSplit.Panel1.BackColor = $Theme.Card; $hcSplit.Panel2.BackColor = $Theme.Card
+$tvHc = New-Object System.Windows.Forms.TreeView
+$tvHc.Dock = 'Fill'; $tvHc.BorderStyle = 'None'; $tvHc.Font = $fontBase; $tvHc.HideSelection = $false; $tvHc.FullRowSelect = $true; $tvHc.ShowLines = $false
+$tvHc.ItemHeight = 26; $tvHc.ShowNodeToolTips = $true; $tvHc.BackColor = $Theme.Card; $tvHc.ForeColor = $Theme.Text
+$imgHcDots = New-Object System.Windows.Forms.ImageList; $imgHcDots.ColorDepth = 'Depth32Bit'; $imgHcDots.ImageSize = New-Object System.Drawing.Size(16, 22)
+foreach ($k in @('ok', 'off', 'error', 'warn', 'info')) { $imgHcDots.Images.Add($k, (New-Dot $script:KindColor[$k] 16 22)) }
+$tvHc.ImageList = $imgHcDots
+$hcTreePad = New-Panel 'Fill' $Theme.Card; $hcTreePad.Padding = New-Object System.Windows.Forms.Padding(6, 6, 0, 6); $hcTreePad.Controls.Add($tvHc)
+$hcSplit.Panel1.Controls.Add($hcTreePad)
+# the tree takes about a third of the width, between 240 and 380 points
+function Set-HcSplitFit {
+  $w = $hcSplit.Width; if ($w -lt 300) { return }
+  $d = [Math]::Min(380, [Math]::Max(240, [int]($w * 0.32)))
+  if ($w - $d -lt 380) { $d = [Math]::Max(200, $w - 380) }
+  if ($hcSplit.SplitterDistance -ne $d) { try { $hcSplit.SplitterDistance = $d } catch { } }
+}
+$hcSplit.add_SizeChanged({ Set-HcSplitFit })
+
+# the selected item
+$hcDetail = New-Panel 'Fill' $Theme.Card
+$hcHead = New-Panel 'Top' $Theme.Card 92; Add-Line $hcHead 'Bottom'
+$lblHcName = New-Label '' $fontPageTitle; $lblHcName.Location = New-Object System.Drawing.Point(16, 6)
+$lblHcState = New-Label '' $fontSmallBold; $lblHcState.Padding = New-Object System.Windows.Forms.Padding(8, 3, 8, 3); $lblHcState.Visible = $false
+$lblHcWhy = New-Label '' $fontBase $Theme.Muted; $lblHcWhy.AutoSize = $false; $lblHcWhy.AutoEllipsis = $true; $lblHcWhy.Height = 22; $lblHcWhy.Location = New-Object System.Drawing.Point(18, 33)
+$lblHcItemMode = New-Label (Get-Text 'HcItemMode') $fontBase $Theme.Muted; $lblHcItemMode.Location = New-Object System.Drawing.Point(18, 63)
+$cmbHcItem = New-Object System.Windows.Forms.ComboBox; $cmbHcItem.DropDownStyle = 'DropDownList'; $cmbHcItem.Font = $fontBase
+$cmbHcItem.Width = Get-FitWidth 200 (@((Get-Text 'HcItemInherit' (Get-Text 'HcModeRepair'))) + $hcModeTexts) $fontBase 40
+$cmbHcItem.Location = New-Object System.Drawing.Point(($lblHcItemMode.Left + (Get-TextWidth $lblHcItemMode.Text) + 6), 59)
+$hcHead.Controls.AddRange(@($lblHcName, $lblHcState, $lblHcWhy, $lblHcItemMode, $cmbHcItem))
+$hcHead.add_Resize({ param($s, $e) $lblHcWhy.Width = [Math]::Max(80, $s.ClientSize.Width - 34) })
+$tips.SetToolTip($cmbHcItem, (Get-Text 'HcTipMode'))
+$hcInner = New-Object System.Windows.Forms.SplitContainer; $hcInner.Dock = 'Fill'; $hcInner.Orientation = 'Horizontal'; $hcInner.BackColor = $Theme.Line
+$hcInner.SplitterWidth = 4; $hcInner.Panel1.BackColor = $Theme.Card; $hcInner.Panel2.BackColor = $Theme.Card
+# its facts: a label and a value per line
+$lvHcFacts = New-Object System.Windows.Forms.ListView; $lvHcFacts.Dock = 'Fill'; $lvHcFacts.View = 'Details'; $lvHcFacts.HeaderStyle = 'None'; $lvHcFacts.BorderStyle = 'None'
+$lvHcFacts.FullRowSelect = $true; $lvHcFacts.Font = $fontBase; $lvHcFacts.ShowItemToolTips = $true
+[void]$lvHcFacts.Columns.Add('', 160); [void]$lvHcFacts.Columns.Add('', 400)
+$lvHcFacts.add_Resize({ param($s, $e) $s.Columns[1].Width = [Math]::Max(120, $s.ClientSize.Width - $s.Columns[0].Width - 4) })
+$hcFactsPad = New-Panel 'Fill' $Theme.Card; $hcFactsPad.Padding = New-Object System.Windows.Forms.Padding(10, 6, 6, 0); $hcFactsPad.Controls.Add($lvHcFacts)
+$hcInner.Panel1.Controls.Add($hcFactsPad)
+# its checks: state, what, what it means, the fix
+$gridHc = New-Grid
+$gridHc.ReadOnly = $true; $gridHc.SelectionMode = 'FullRowSelect'; $gridHc.MultiSelect = $false; $gridHc.EditMode = 'EditProgrammatically'; $gridHc.ShowCellToolTips = $true
+$hcKindTexts = @('HcStatus_error', 'HcStatus_warn', 'HcStatus_info', 'HcStatus_ok') | ForEach-Object { Get-Text $_ }
+Add-TextColumn $gridHc 'HcColState' 70 $true @() $hcKindTexts
+Add-TextColumn $gridHc 'HcColCheck' 120 $true @('Free memory')
+Add-TextColumn $gridHc 'HcColMeaning' $null $true
+$gridHc.Columns[2].FillWeight = 520
+$script:HcGridWeights = @($gridHc.Columns[0].FillWeight, $gridHc.Columns[1].FillWeight, $gridHc.Columns[2].FillWeight)
+$gridHc.Columns[0].MinimumWidth = Get-FitWidth 50 $hcKindTexts $fontSmallBold 18
+$gridHc.Columns[1].DefaultCellStyle.WrapMode = 'True'
+$gridHc.Columns[2].DefaultCellStyle.WrapMode = 'True'; $gridHc.Columns[2].DefaultCellStyle.Padding = New-Object System.Windows.Forms.Padding(6, 6, 6, 6)
+$gridHc.AutoSizeRowsMode = 'AllCells'
+$hcFixCol = New-Object System.Windows.Forms.DataGridViewButtonColumn; $hcFixCol.HeaderText = ''; $hcFixCol.FlatStyle = 'Flat'; $hcFixCol.AutoSizeMode = 'None'
+$hcFixCol.Width = Get-FitWidth 90 @((Get-Text 'HcFix'), (Get-Text 'HcFixSafe')) $fontBase 26
+[void]$gridHc.Columns.Add($hcFixCol)
+$hcInner.Panel2.Controls.Add($gridHc)
+# the actions of the item; the one that ends something on the right, in red
+$script:HcBarKinds = [ordered]@{ OpenDesktops = 'Desktop'; HostDrain = 'Forward'; HostResume = 'Play'; VmStart = 'Play'; VmRestart = 'Refresh'; VmResume = 'Play'
+  VmRoleOnline = 'Shield'; VmRemoveCheckpoints = 'Delete'; VmStopAction = 'Settings'; TimeSync = 'Clock'; DcSyncAll = 'Sync'; DeviceWake = 'Power' }
+$script:HcButtons = [ordered]@{}
+foreach ($k in $script:HcBarKinds.Keys) { $b = New-ActionButton "HcAct_$k" $script:HcBarKinds[$k] $(if ($k -eq 'OpenDesktops') { 'primary' } else { 'secondary' }); $b.Name = $k; $script:HcButtons[$k] = $b }
+$btnHcShutdown = New-ActionButton 'HcAct_VmShutdown' 'Power' 'danger'; $btnHcShutdown.Name = 'VmShutdown'; $script:HcButtons['VmShutdown'] = $btnHcShutdown
+$barHc = New-ActionBar @($script:HcButtons.Values | Where-Object { $_ -ne $btnHcShutdown }) @($btnHcShutdown)
+$hcDetail.Controls.Add($hcInner); $hcDetail.Controls.Add($hcHead); $hcDetail.Controls.Add($barHc)
+$hcSplit.Panel2.Controls.Add($hcDetail)
+$hcCard.Controls.Add($hcSplit); $hcCard.Controls.Add($hcTop)
+$hcWrap.Controls.Add($hcCard)
+$pageHealth.Controls.Add($hcWrap); $pageHealth.Controls.Add((New-PageHeader (Get-Text 'NavHealth') (Get-Text 'HcPageNote')))
+# the facts keep about 40% of the height of the item, its checks the rest
+function Set-HcInnerFit {
+  $h = $hcInner.Height; if ($h -lt 160) { return }
+  $want = [Math]::Max(80, [Math]::Min([int]($h * 0.42), 22 * ([Math]::Max(3, $lvHcFacts.Items.Count)) + 12))
+  if ([Math]::Abs($hcInner.SplitterDistance - $want) -gt 2) { try { $hcInner.SplitterDistance = $want } catch { } }
+  for ($k = 0; $k -lt 3; $k++) { if ($gridHc.Columns[$k].FillWeight -ne $script:HcGridWeights[$k]) { $gridHc.Columns[$k].FillWeight = $script:HcGridWeights[$k] } }
+}
+$hcInner.add_SizeChanged({ Set-HcInnerFit })
+
 # ---------------- Vault page ----------------
 # three blocks: the vault (open, close, code), the SSH key of the manager, the key that signs the updates
 $pageVault = New-Panel 'Fill' $Theme.Page
@@ -2800,7 +2915,7 @@ $updWrap.Controls.Add($updCard)
 $pageUpdates.Controls.Add($updWrap); $pageUpdates.Controls.Add((New-PageHeader (Get-Text 'NavUpdates') (Get-Text 'PageUpdatesNote')))
 $updCard.add_Resize({ Set-BlockHeights $updCard @($blkFleet, $blkManager) })
 
-$script:Pages = @($pageDevices, $pageCommon, $pageKeys, $pageProblems, $pageVault, $pageUpdates, $pageDesktops)
+$script:Pages = @($pageDevices, $pageCommon, $pageKeys, $pageProblems, $pageVault, $pageUpdates, $pageDesktops, $pageHealth)
 foreach ($p in $script:Pages) { $p.Visible = $false; $content.Controls.Add($p) }
 # Fill first, then the edges: the last one added takes its side first
 $root.Controls.Add($content); $root.Controls.Add($nav); $root.Controls.Add($header); $root.Controls.Add($bar)
@@ -2821,6 +2936,7 @@ function Select-Page([int]$i) {
   if ($i -eq 4) { Update-VaultView }
   if ($i -eq 5) { Update-UpdatesView }
   if ($i -eq 6) { Set-DskSplitFit; Update-DesktopsView; if (-not $script:Vdi.Model) { Start-VdiRefresh } }
+  if ($i -eq 7) { Set-HcSplitFit; Update-HealthView; if (-not $script:Health.Model -and -not $script:Health.Busy) { Start-HealthRefresh } }
 }
 
 function Set-Cell($row, $col, $s, $value) {
@@ -3698,7 +3814,8 @@ $cmbPeriod.add_SelectedIndexChanged({ if ($script:Page -eq 3) { Update-ProblemVi
 # host that does not answer holds nothing in the window. What it found is shown with the time it was read; the actions
 # that stop or end something are not offered on data older than $script:VdiStaleMinutes (OtrVdi.ps1).
 $script:Vdi = @{ Model = $null; Received = $null; Busy = $false; Error = $null; Action = $null; Again = $false }
-function Get-VdiState { @{ Model = $script:Vdi.Model; Received = $script:Vdi.Received; Running = $script:Vdi.Action } }
+# one action at a time, on both pages: an action of the Health Center holds those of the Desktops page too
+function Get-VdiState { @{ Model = $script:Vdi.Model; Received = $script:Vdi.Received; Running = $(if ($script:Vdi.Action) { $script:Vdi.Action } elseif ($script:Health -and $script:Health.Action) { $script:Health.Action }) } }
 function Start-VdiRefresh([switch]$Queue) {
   # asked while reading (after an action, Refresh): read again as soon as this reading ends; the timer only skips
   if ($script:Vdi.Busy) { if ($Queue) { $script:Vdi.Again = $true }; return }
@@ -3737,6 +3854,8 @@ function Complete-VdiRefresh($raw) {
   try { $script:Vdi.Model = ConvertTo-VdiModel $raw $script:Devices $now (Get-VdiSettings); $script:Vdi.Received = Get-Date }
   catch { $script:Vdi.Error = "$($_.Exception.Message) (line $($_.InvocationInfo.ScriptLineNumber))" }
   Update-DesktopsView; Update-VdiBrokersView; Update-VdiNav
+  # the Health Center shows the findings of the brokers and hosts: its model follows
+  if ($script:HealthLoaded -and $script:Health.Raw) { Update-HealthModel }
 }
 # "updated at 10:42:05", "reading the servers...", and why the last reading failed
 function Update-VdiStamp {
@@ -4019,20 +4138,27 @@ $gridVdi.add_KeyDown({ param($s, $e)
   if ($e.KeyCode -eq 'Enter' -and $s.CurrentRow -and $s.CurrentRow.Tag -and $s.CurrentRow.Tag.Fix) {
     $e.Handled = $true; $e.SuppressKeyPress = $true; $f = $s.CurrentRow.Tag; Invoke-VdiAction $f.Fix $f.Where $f.FixArg } })
 $gridVdi.add_CellMouseDown({ param($s, $e) if ($e.Button -eq 'Right' -and $e.RowIndex -ge 0) { $s.CurrentCell = $s.Rows[$e.RowIndex].Cells[[Math]::Max(0, $e.ColumnIndex)] } })
+# from the brokers and hosts of the Desktops page to the Health Center, and from a row to its VM there
+$miVdiHealth = New-Object System.Windows.Forms.ToolStripMenuItem (Get-Text 'HcOpenHealth'); $miVdiHealth.Tag = 'OpenHealth'; [void]$vdiMenu.Items.Add($miVdiHealth)
+[void]$dskMenu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+$miDskHealth = New-Object System.Windows.Forms.ToolStripMenuItem (Get-Text 'HcOpenHealth'); $miDskHealth.Tag = 'OpenHealth'; [void]$dskMenu.Items.Add($miDskHealth)
 $vdiMenu.add_Opening({ param($s, $e)
   $f = if ($gridVdi.CurrentRow) { $gridVdi.CurrentRow.Tag } else { $null }
   $m = $script:Vdi.Model
   $isB = $f -and $m -and @($m.Brokers | Where-Object { $_.Name -eq $f.Where }).Count
   $isH = $f -and $m -and @($m.Hosts | Where-Object { $_.Name -eq $f.Where }).Count
   if (-not ($isB -or $isH)) { $e.Cancel = $true; return }
-  foreach ($mi in $s.Items) { $mi.Visible = ($mi.Tag -like 'Broker*' -and $isB) -or ($mi.Tag -like 'Host*' -and $isH) } })
+  foreach ($mi in $s.Items) { $mi.Visible = ($mi.Tag -like 'Broker*' -and $isB) -or ($mi.Tag -like 'Host*' -and $isH) -or ($mi.Tag -eq 'OpenHealth' -and $script:HealthLoaded) } })
 foreach ($mi in $vdiMenu.Items) { $mi.add_Click({ param($s, $e)
   $f = if ($gridVdi.CurrentRow) { $gridVdi.CurrentRow.Tag } else { $null }; if (-not $f) { return }
+  if ($s.Tag -eq 'OpenHealth') { Show-InHealth $(if (@($script:Vdi.Model.Hosts | Where-Object { $_.Name -eq $f.Where }).Count) { "host:$($f.Where)" } else { "broker:$($f.Where)" }); return }
   Invoke-VdiAction $s.Tag $f.Where $(if ($s.Tag -eq 'HostUnblock') { if ($f.Fix -eq 'HostUnblock' -and $f.FixArg) { $f.FixArg } else { 'VmHostAgent' } }) }) }
 $dskMenu.add_Opening({ param($s, $e)
   if (-not $script:DskRow) { $e.Cancel = $true; return }
-  foreach ($mi in $s.Items) { if ($mi.Tag) { $mi.Enabled = -not (Get-DskPlan $mi.Tag $script:DskRow).Blocked } } })
-foreach ($mi in $dskMenu.Items) { if ($mi.Tag) { $mi.add_Click({ param($s, $e) if ($script:DskRow) { Invoke-VdiAction $s.Tag $script:DskRow } }) } }
+  foreach ($mi in $s.Items) { if ($mi.Tag -eq 'OpenHealth') { $mi.Enabled = $script:HealthLoaded -and [bool]$script:DskRow.Vm } elseif ($mi.Tag) { $mi.Enabled = -not (Get-DskPlan $mi.Tag $script:DskRow).Blocked } } })
+foreach ($mi in $dskMenu.Items) { if ($mi.Tag) { $mi.add_Click({ param($s, $e) if (-not $script:DskRow) { return }
+  if ($s.Tag -eq 'OpenHealth') { Show-InHealth "vm:$(([string]$script:DskRow.Vm).ToUpper())"; return }
+  Invoke-VdiAction $s.Tag $script:DskRow }) } }
 $dskList.add_SelectedIndexChanged({ if (-not $script:DskListing -and $dskList.SelectedItems.Count -eq 1) { Show-DskRow $dskList.SelectedItems[0].Tag } })
 $txtDskSearch.add_TextChanged({ Update-DesktopsView })
 $cmbDskFilter.add_SelectedIndexChanged({ Update-DesktopsView })
@@ -4080,6 +4206,348 @@ function Show-VdiSettingsDialog {
 }
 $vdiTimer = New-Object System.Windows.Forms.Timer; $vdiTimer.Interval = $script:VdiRefreshSeconds * 1000
 $vdiTimer.add_Tick({ if (-not $env:OTR_MANAGER_VDI_DEMO) { Start-VdiRefresh } else { Update-VdiStamp } })
+
+# ---------------- Health Center ----------------
+# The probe reads the infrastructure in a runspace of its own every $script:HealthRefreshSeconds (OtrHealth.ps1). Its
+# model is built again when the Desktops page reads its servers (the findings of the brokers and hosts come from
+# there). In "diagnosis and repair" mode the safe repairs of the items in that mode run after each reading, one after
+# the other, each logged; the others wait for a click and a confirmation.
+$script:Health = @{ Model = $null; Raw = $null; Received = $null; Busy = $false; Error = $null; Action = $null; Again = $false
+  Recent = (New-Object Collections.ArrayList); Tried = @{}; Queue = (New-Object Collections.ArrayList); AutoLog = (New-Object Collections.ArrayList); Expanded = @{}; Selected = $null }
+function Get-HealthState {
+  @{ Model = $script:Health.Model; Vdi = $script:Vdi.Model; Received = $script:Health.Received; VdiReceived = $script:Vdi.Received
+     Running = $(if ($script:Vdi.Action) { $script:Vdi.Action } else { $script:Health.Action }); Recent = @($script:Health.Recent) }
+}
+function Start-HealthRefresh([switch]$Queue) {
+  if ($script:Health.Busy) { if ($Queue) { $script:Health.Again = $true }; return }
+  if (-not $script:HealthLoaded) { return }
+  $set = Get-HealthSettings
+  if ($env:OTR_MANAGER_HEALTH_DEMO) {
+    $raw = $null; try { $raw = Get-Content -LiteralPath $env:OTR_MANAGER_HEALTH_DEMO -Raw | ConvertFrom-Json } catch { $script:Health.Error = $_.Exception.Message }
+    Complete-HealthRefresh $raw; return
+  }
+  if (-not $set.Enabled) { Complete-HealthRefresh $null; return }
+  $cfg = Get-HealthProbeConfig $set $script:Vdi.Model
+  $ps = [powershell]::Create()
+  # the probe uses OtrHealthNet (the backup log, the shares): the type is loaded in this process, the runspace shares it
+  [void]$ps.AddScript($script:HealthProbe.ToString()).AddArgument($cfg)
+  $script:Health.Busy = $true; $script:Health.Error = $null; Update-HealthStamp
+  $t = New-Object System.Windows.Forms.Timer; $t.Interval = 500
+  $t.Tag = @{ PS = $ps; H = $ps.BeginInvoke(); Started = (Get-Date) }
+  $t.add_Tick({ param($s, $e)
+    $st = $s.Tag
+    if (-not $st.H.IsCompleted -and ((Get-Date) - $st.Started).TotalSeconds -lt 400) { return }
+    $s.Stop(); $s.Dispose(); $script:Health.Busy = $false
+    $raw = $null
+    try {
+      if (-not $st.H.IsCompleted) { [void]$st.PS.BeginStop($null, $null); throw (Get-Text 'VdiErrTimeout') }
+      $raw = @($st.PS.EndInvoke($st.H)) | Select-Object -Last 1
+    } catch { $script:Health.Error = $_.Exception.GetBaseException().Message }
+    finally { if ($st.H.IsCompleted) { $st.PS.Dispose() } }
+    if ($raw) { Complete-HealthRefresh $raw } else { Update-HealthStamp }
+    if ($script:Health.Again) { $script:Health.Again = $false; Start-HealthRefresh }
+  })
+  $t.Start()
+}
+function Complete-HealthRefresh($raw) {
+  $script:Health.Raw = $raw; $script:Health.Received = Get-Date
+  Update-HealthModel
+  Start-HealthAutoRepair
+}
+# the model from the last reading and the last model of the Desktops page
+function Update-HealthModel {
+  $raw = $script:Health.Raw
+  $now = if ($raw -and $raw.Taken) { ConvertFrom-VdiTime $raw.Taken } else { $null }
+  if (-not $now) { $now = Get-Date }
+  try { $script:Health.Model = ConvertTo-HealthModel $raw $script:Vdi.Model $now (Get-HealthSettings) }
+  catch { $script:Health.Error = "$($_.Exception.Message) (line $($_.InvocationInfo.ScriptLineNumber))" }
+  Update-HealthView; Update-HealthNav
+}
+function Update-HealthStamp {
+  $t = if ($script:Health.Busy) { Get-Text 'HcReading' } elseif ($script:Health.Received) { Get-Text 'VdiUpdatedAt' $script:Health.Received.ToString('HH:mm:ss') } else { '' }
+  if (-not $script:Health.Busy -and $script:Health.Received -and (Test-VdiStale $script:Health.Received (Get-Date)) -and -not $env:OTR_MANAGER_HEALTH_DEMO) { $t = Get-Text 'VdiStaleAt' $script:Health.Received.ToString('HH:mm:ss') }
+  if ($script:Health.Error -and -not $script:Health.Busy) { $t = Get-Text 'VdiReadFailed' $script:Health.Error }
+  $lblHcUpdated.Text = $t; $tips.SetToolTip($lblHcUpdated, $t)
+  $lblHcUpdated.ForeColor = if ($script:Health.Error) { $script:KindColor.warn } else { $Theme.Muted }
+  $btnHcRefresh.Enabled = -not $script:Health.Busy
+  $w = $hcTop.ClientSize.Width; $uw = [Math]::Min(320, [Math]::Max(120, (Get-TextWidth $t $fontSmall) + 10))
+  $lblHcUpdated.SetBounds(($w - $uw - 14), 52, $uw, 24); $lblHcHead.Width = [Math]::Max(80, $w - $uw - 40)
+}
+function Update-HealthNav {
+  $m = $script:Health.Model
+  $navHealth.Tag.Count = ''; $navHealth.Tag.CountColor = $null
+  if ($m -and $m.Access -eq 'ok') {
+    if ($m.Errors) { $navHealth.Tag.Count = "$($m.Errors)"; $navHealth.Tag.CountColor = New-Color '#f87171' }
+    elseif ($m.Warnings) { $navHealth.Tag.Count = "$($m.Warnings)"; $navHealth.Tag.CountColor = New-Color '#fbbf24' }
+  }
+  $navHealth.Invalidate()
+}
+# the words of a node in the tree: its name, and what is wrong (or its state) after it
+function Get-HcNodeText($n) { if ($n.Short -and $n.Short -ne (Get-Text 'HcStatusOk')) { "$($n.Name)   $([char]0x00B7)   $($n.Short)" } else { $n.Name } }
+function Update-HealthView {
+  Update-HealthStamp
+  $m = $script:Health.Model
+  $mode = (Get-HealthSettings).Mode
+  $script:HcSetting = $true; $cmbHcMode.SelectedIndex = $(if ($mode -eq 'repair') { 1 } else { 0 }); $script:HcSetting = $false
+  if (-not $m -or $m.Access -ne 'ok') {
+    $lblHcHead.Text = if (-not $script:HealthLoaded) { Get-Text 'HcNotLoaded' } elseif ($script:Health.Busy -and -not $m) { Get-Text 'HcReading' } elseif ($m) { Get-Text "HcAccess_$($m.Access)" } else { Get-Text 'HcNoData' }
+    $lblHcHead.ForeColor = $Theme.Muted; $tvHc.Nodes.Clear(); Show-HealthNode $null; return
+  }
+  $head = $m.Headline
+  if ($script:Health.AutoLog.Count) { $head += "   $([char]0x00B7)   " + (Get-Text 'HcRepairedNow' $script:Health.AutoLog[$script:Health.AutoLog.Count - 1].Time.ToString('HH:mm') $script:Health.AutoLog[$script:Health.AutoLog.Count - 1].Text) }
+  $lblHcHead.Text = $head; $lblHcHead.ForeColor = $script:KindColor[$m.HeadlineKind]; $tips.SetToolTip($lblHcHead, (@($head) + @($m.Problems | ForEach-Object { "$($_.Node.Name): $($_.Check.Title): $($_.Check.Text)" })) -join "`r`n")
+  # the tree again, the selection and what was open kept; a new problem opens its branch
+  $sel = if ($tvHc.SelectedNode) { [string]$tvHc.SelectedNode.Name } else { $script:Health.Selected }
+  foreach ($tn in @(Get-HcTreeNodes $tvHc.Nodes)) { $script:Health.Expanded[[string]$tn.Name] = $tn.IsExpanded }
+  $script:HcListing = $true
+  $tvHc.BeginUpdate()
+  try {
+    $tvHc.Nodes.Clear(); $map = @{}
+    foreach ($n in $m.Nodes) {
+      $tn = New-Object System.Windows.Forms.TreeNode((Get-HcNodeText $n))
+      $tn.Name = $n.Id; $tn.Tag = $n; $tn.ImageKey = $n.Status; $tn.SelectedImageKey = $n.Status
+      $tn.ToolTipText = "$(Get-Text "HcStatus_$($n.Status)"): $(Get-HcNodeText $n)"
+      if ($n.Status -eq 'off') { $tn.ForeColor = $Theme.Muted }
+      if ($n.Parent -and $map.ContainsKey($n.Parent)) { [void]$map[$n.Parent].Nodes.Add($tn) } else { [void]$tvHc.Nodes.Add($tn) }
+      $map[$n.Id] = $tn
+    }
+    foreach ($n in $m.Nodes) {
+      $tn = $map[$n.Id]; if (-not $tn.Nodes.Count) { continue }
+      $open = if ($script:Health.Expanded.ContainsKey($n.Id)) { $script:Health.Expanded[$n.Id] } else { -not $n.Parent -or $n.Status -in 'error', 'warn' }
+      if ($n.Status -in 'error', 'warn' -and $n.Kind -ne 'host') { $open = $true }
+      if ($open) { $tn.Expand() }
+    }
+    $pick = if ($sel -and $map.ContainsKey($sel)) { $map[$sel] } elseif ($m.Problems.Count -and $map.ContainsKey($m.Problems[0].Node.Id)) { $map[$m.Problems[0].Node.Id] } elseif ($tvHc.Nodes.Count) { $tvHc.Nodes[0] } else { $null }
+    if ($pick) { $tvHc.SelectedNode = $pick; $pick.EnsureVisible() }
+  } finally { $tvHc.EndUpdate(); $script:HcListing = $false }
+  Show-HealthNode $(if ($tvHc.SelectedNode) { $tvHc.SelectedNode.Tag } else { $null })
+}
+function Get-HcTreeNodes($nodes) { foreach ($x in $nodes) { $x; Get-HcTreeNodes $x.Nodes } }
+# the selected item: what is wrong, its mode, its facts, its checks with their fix, its actions
+function Show-HealthNode($n) {
+  $script:HcNode = $n
+  $lvHcFacts.BeginUpdate(); $lvHcFacts.Items.Clear(); $gridHc.Rows.Clear()
+  try {
+    if (-not $n) { $lblHcName.Text = Get-Text 'HcNoItem'; $lblHcState.Visible = $false; $lblHcWhy.Text = ''; $cmbHcItem.Enabled = $false; return }
+    $script:Health.Selected = $n.Id
+    $lblHcName.Text = $n.Name
+    # its own state; the state of what is under it when it has nothing of its own
+    $st = if ($n.Own -in 'error', 'warn', 'off') { $n.Own } else { $n.Status }
+    $lblHcState.Text = Get-Text "HcStatus_$st"; $lblHcState.ForeColor = $script:KindColor[$st]; $lblHcState.BackColor = $script:KindSoft[$st]; $lblHcState.Visible = $true
+    $lblHcState.Location = New-Object System.Drawing.Point(($lblHcName.Right + 10), ($lblHcName.Top + [int](($lblHcName.Height - $lblHcState.Height) / 2) + 1))
+    $first = @(Get-HcByKind $n.Checks | Where-Object { $_.Kind -in 'error', 'warn' }) | Select-Object -First 1
+    $lblHcWhy.Text = if ($first) { "$($first.Title): $($first.Text)" } elseif ($n.Problems) { Get-Text 'HcProblemsBelow' $n.Problems } else { Get-Text 'HcAllOkLine' }
+    $tips.SetToolTip($lblHcWhy, $(if ($first) { "$($first.Text) $($first.Why)" } else { $lblHcWhy.Text }))
+    # the mode of the item: its own, or the one of the page
+    $s = Get-HealthSettings; $own = Get-HealthItemMode $s $n.Id
+    $eff = Get-HealthEffectiveMode $script:Health.Model $s $(if ($n.Parent) { $n.Parent } else { $n.Id })
+    if (-not $n.Parent) { $eff = $s.Mode }
+    $script:HcSetting = $true; $cmbHcItem.Items.Clear()
+    [void]$cmbHcItem.Items.AddRange(@((Get-Text 'HcItemInherit' $(if ($eff -eq 'repair') { Get-Text 'HcModeRepair' } else { Get-Text 'HcModeDiagnose' })), (Get-Text 'HcModeDiagnose'), (Get-Text 'HcModeRepair')))
+    $cmbHcItem.SelectedIndex = switch ($own) { 'diagnose' { 1 } 'repair' { 2 } default { 0 } }; $cmbHcItem.Enabled = $true; $script:HcSetting = $false
+    $lvHcFacts.Columns[0].Width = Get-FitWidth 120 (@($n.Facts | ForEach-Object Label)) $fontBase 18
+    foreach ($f in $n.Facts) {
+      $it = New-Object System.Windows.Forms.ListViewItem($f.Label); $it.ForeColor = $Theme.Muted; $it.UseItemStyleForSubItems = $false
+      $sub = $it.SubItems.Add($f.Value); $sub.ForeColor = $Theme.Text; $it.ToolTipText = $f.Value; [void]$lvHcFacts.Items.Add($it)
+    }
+    $checks = @(Get-HcByKind $n.Checks)
+    $state = Get-HealthState; $now = Get-Date
+    foreach ($c in $checks) {
+      $fixText = ''
+      if ($c.Fix) { $p = Get-HealthCheckPlan $c $state $now; $fixText = if ($p.Safe) { Get-Text 'HcFixSafe' } else { Get-Text 'HcFix' } }
+      $i = $gridHc.Rows.Add((Get-Text "HcStatus_$($c.Kind)"), $c.Title, $(if ($c.Why) { "$($c.Text)`r`n$($c.Why)" } else { $c.Text }), $fixText)
+      $row = $gridHc.Rows[$i]; $row.Tag = $c
+      if (-not $c.Fix) { $row.Cells[3] = New-Object System.Windows.Forms.DataGridViewTextBoxCell }
+      else { $row.Cells[3].ToolTipText = $(if ($p.Blocked) { $p.Blocked } else { $p.Title }) }
+      $cc = $row.Cells[0]; $cc.Style.ForeColor = $script:KindColor[$c.Kind]; $cc.Style.BackColor = $script:KindSoft[$c.Kind]
+      $cc.Style.SelectionForeColor = $script:KindColor[$c.Kind]; $cc.Style.SelectionBackColor = $script:KindSoft[$c.Kind]; $cc.Style.Font = $fontSmallBold
+      $row.Cells[2].ToolTipText = "$($c.Text) $($c.Why)"
+      # the explanation in grey under the sentence: one cell, two lines
+      $row.Cells[2].Style.ForeColor = $Theme.Text
+    }
+    if (-not $checks.Count) { $i = $gridHc.Rows.Add((Get-Text 'HcStatus_ok'), '', (Get-Text 'HcNoChecks'), ''); $gridHc.Rows[$i].Cells[3] = New-Object System.Windows.Forms.DataGridViewTextBoxCell
+      $cc = $gridHc.Rows[$i].Cells[0]; $cc.Style.ForeColor = $script:KindColor.ok; $cc.Style.BackColor = $script:KindSoft.ok; $cc.Style.Font = $fontSmallBold }
+    $gridHc.CurrentCell = $null
+  } finally { $lvHcFacts.EndUpdate(); Update-HcButtons; Set-HcInnerFit }
+}
+# the buttons of the item: those it offers, each as its plan allows it now (the reason in the tooltip)
+function Update-HcButtons {
+  $n = $script:HcNode
+  $state = Get-HealthState; $now = Get-Date
+  foreach ($k in @($script:HcButtons.Keys)) {
+    $b = $script:HcButtons[$k]
+    $want = $n -and @($n.Actions) -contains $k
+    if ($k -eq 'TimeSync' -and $n) { $want = $n.Kind -in 'host', 'dc', 'broker', 'replica' -and $n.Data -and $n.Data.PSObject.Properties['Reachable'] -and $n.Data.Reachable }
+    $b.Visible = [bool]$want
+    if (-not $want) { continue }
+    if ($k -eq 'OpenDesktops') { Set-ActionEnabled $b ([bool]$script:VdiLoaded); $tips.SetToolTip($b, (Get-Text 'HcOpenDesktops')); continue }
+    $p = Get-HealthActionPlan $k $n.Id $state $now
+    Set-ActionEnabled $b (-not $p.Blocked)
+    $tips.SetToolTip($b, $(if ($p.Blocked) { $p.Blocked } else { $p.Title }))
+  }
+  $barHc.PerformLayout()
+}
+# An action by hand: a check's fix (its own plan, or the Desktops page's for its findings) or a button of the item.
+# Always confirmed, with what happens and to whom; a safe one says so.
+function Invoke-HealthAction([string]$kind, $n, $check = $null) {
+  if (-not $script:Health.Model -or -not $n) { return }
+  if ($kind -eq 'OpenDesktops') { Show-HealthInDesktops $n; return }
+  if ($check -and $check.Source -eq 'vdi') { Invoke-VdiAction $check.Fix $check.Where $check.FixArg; return }
+  $state = Get-HealthState; $now = Get-Date
+  $plan = if ($check) { Get-HealthCheckPlan $check $state $now } else { Get-HealthActionPlan $kind $n.Id $state $now }
+  if ($plan.Blocked) { Show-Message $plan.Title $plan.Blocked 'Information'; return }
+  $text = $plan.Text
+  if ($plan.Safe) { $text += "`r`n`r`n" + (Get-Text 'HcSafeNote') }
+  if (Test-VdiDryRun) { $text += "`r`n`r`n" + (Get-Text 'VdiDryRunNote') }
+  if (-not (Confirm-Action $plan.Title $text $(if ($plan.DefaultNo) { 'Button2' } else { 'Button1' }))) { return }
+  Start-HealthJob $plan $false
+}
+# Runs a plan in the background: the result in a message (by hand) or in the status bar (by itself), the line in
+# config\changes.log, the role remembered (never two servers of the same role in $script:HealthRoleMinutes)
+function Start-HealthJob($plan, [bool]$auto) {
+  $dry = Test-VdiDryRun
+  $ps = [powershell]::Create()
+  [void]$ps.AddScript($script:VdiJobRunner.ToString()).AddArgument(@($plan.Steps)).AddArgument($dry).AddArgument(8000).AddArgument(600000)
+  $script:Health.Action = $plan.Title
+  if ($plan.Role) { [void]$script:Health.Recent.Add([pscustomobject]@{ Role = $plan.Role; Target = $plan.Target; Name = $(if ($plan.PSObject.Properties['RoleName'] -and $plan.RoleName) { $plan.RoleName } elseif ($plan.Node) { $plan.Node.Name } else { "$($plan.Target)" }); Time = (Get-Date) }) }
+  $barText.Text = Get-Text $(if ($auto) { 'HcAutoRunning' } else { 'VdiActionRunning' }) $plan.Title; $form.Cursor = 'AppStarting'
+  Update-HcButtons
+  $t = New-Object System.Windows.Forms.Timer; $t.Interval = 400
+  $t.Tag = @{ PS = $ps; H = $ps.BeginInvoke(); Plan = $plan; Dry = $dry; Auto = $auto; Started = (Get-Date) }
+  $t.add_Tick({ param($s, $e)
+    $st = $s.Tag
+    if (-not $st.H.IsCompleted -and ((Get-Date) - $st.Started).TotalSeconds -lt 900) { return }
+    $s.Stop(); $s.Dispose()
+    $res = @()
+    try {
+      if (-not $st.H.IsCompleted) { [void]$st.PS.BeginStop($null, $null); throw (Get-Text 'VdiErrTimeout') }
+      $res = @($st.PS.EndInvoke($st.H) | ForEach-Object { $_ })
+    } catch { $res = @([pscustomobject]@{ Name = $st.Plan.Title; Computer = ''; Ok = $false; DryRun = $false; Data = $null; Error = $_.Exception.GetBaseException().Message }) }
+    finally { if ($st.H.IsCompleted) { $st.PS.Dispose() } }
+    $script:Health.Action = $null; $form.Cursor = 'Default'; $barText.Text = ''
+    Complete-HealthJob $st.Plan $res $st.Dry $st.Auto
+  })
+  $t.Start()
+}
+function Complete-HealthJob($plan, $res, [bool]$dry, [bool]$auto) {
+  $ok = @($res).Count -gt 0 -and -not @($res | Where-Object { -not $_.Ok }).Count
+  $why = (@($res | Where-Object { -not $_.Ok } | ForEach-Object { "$($_.Name): $($_.Error)" })) -join '; '
+  $prefix = if ($plan.Source -eq 'vdi') { 'desktops' } else { 'health' }
+  try { Add-ChangeLog ("{0}: {1}{2}: {3}{4}" -f $prefix, $(if ($auto) { 'automatic repair: ' } else { '' }), $plan.Log, $(if ($ok) { 'done' } else { "FAILED ($why)" }), $(if ($dry) { ' (dry run, nothing changed)' } else { '' })) } catch { }
+  $lines = @(foreach ($r in @($res)) { Format-HealthStepResult $r })
+  if ($auto) {
+    [void]$script:Health.AutoLog.Add([pscustomobject]@{ Time = (Get-Date); Text = $plan.Title + $(if ($plan.Node) { " ($($plan.Node.Name))" } elseif ($plan.Target -is [string]) { " ($($plan.Target))" }); Ok = $ok })
+    while ($script:Health.AutoLog.Count -gt 30) { $script:Health.AutoLog.RemoveAt(0) }
+    $barText.Text = Get-Text $(if ($ok) { 'HcAutoDone' } else { 'HcAutoFailed' }) ($plan.Title + $(if ($plan.Node) { " ($($plan.Node.Name))" }))
+    if ($script:Health.Queue.Count) { Start-HealthQueue; return }
+  } else {
+    Show-Message $plan.Title ((@($(if ($ok) { Get-Text 'VdiResDone' } else { Get-Text 'VdiResFailed' })) + '' + $lines) -join "`r`n") $(if ($ok) { 'Information' } else { 'Warning' })
+  }
+  Start-HealthRefresh -Queue
+  if ($plan.Source -eq 'vdi' -or $plan.Kind -like 'Vm*') { Start-VdiRefresh -Queue }
+}
+# the safe repairs of the items in repair mode, after each reading: one after the other, never while another action runs
+function Start-HealthAutoRepair {
+  if (-not $script:Health.Model -or $script:Health.Queue.Count -or $script:Health.Action -or $script:Vdi.Action) { return }
+  $plans = @(Get-HealthAutoPlans (Get-HealthState) (Get-HealthSettings) (Get-Date) $script:Health.Tried)
+  if (-not $plans.Count) { return }
+  foreach ($p in $plans) { [void]$script:Health.Queue.Add($p) }
+  Start-HealthQueue
+}
+function Start-HealthQueue {
+  if (-not $script:Health.Queue.Count) { return }
+  $p = $script:Health.Queue[0]; $script:Health.Queue.RemoveAt(0)
+  $script:Health.Tried[$p.Key] = Get-Date
+  Start-HealthJob $p $true
+}
+# from the Health Center to the Desktops page: the row of a personal desktop, or the brokers and hosts on top
+function Show-HealthInDesktops($n) {
+  Select-Page 6
+  if ($n -and $n.Kind -eq 'vm') { foreach ($it in $dskList.Items) { if ($it.Tag.Vm -ieq $n.Name) { $it.Selected = $true; $it.EnsureVisible(); break } } }
+}
+# from the Desktops page to the Health Center: a host, a broker or the VM of a row
+function Show-InHealth([string]$id) {
+  Select-Page 7
+  $script:Health.Selected = $id
+  $tn = @($tvHc.Nodes.Find($id, $true)) | Select-Object -First 1
+  if ($tn) { $tvHc.SelectedNode = $tn; $tn.EnsureVisible() }
+}
+$tvHc.add_AfterSelect({ param($s, $e) if (-not $script:HcListing) { Show-HealthNode $e.Node.Tag } })
+$cmbHcMode.add_SelectedIndexChanged({
+  if ($script:HcSetting) { return }
+  $s = Get-HealthSettings; $s.Mode = if ($cmbHcMode.SelectedIndex -eq 1) { 'repair' } else { 'diagnose' }
+  try { Save-HealthSettings $s; Add-ChangeLog "health: mode of the page: $($s.Mode)" } catch { }
+  if ($script:HcNode) { Show-HealthNode $script:HcNode }
+  Start-HealthAutoRepair })
+$cmbHcItem.add_SelectedIndexChanged({
+  if ($script:HcSetting -or -not $script:HcNode) { return }
+  $s = Get-HealthSettings; $mode = switch ($cmbHcItem.SelectedIndex) { 1 { 'diagnose' } 2 { 'repair' } default { '' } }
+  Set-HealthItemMode $s $script:HcNode.Id $mode
+  try { Save-HealthSettings $s; Add-ChangeLog "health: mode of $($script:HcNode.Name): $(if ($mode) { $mode } else { 'as the page' })" } catch { }
+  Start-HealthAutoRepair })
+$gridHc.add_CellContentClick({ param($s, $e)
+  if ($e.RowIndex -lt 0 -or $e.ColumnIndex -ne 3) { return }
+  $c = $s.Rows[$e.RowIndex].Tag; if ($c -and $c.Fix) { Invoke-HealthAction $c.Fix $script:Health.Model.Index[$c.Node] $c } })
+$gridHc.add_PreviewKeyDown({ param($s, $e) if ($e.KeyCode -eq 'Enter') { $e.IsInputKey = $true } })
+$gridHc.add_KeyDown({ param($s, $e)
+  if ($e.KeyCode -eq 'Enter' -and $s.CurrentRow -and $s.CurrentRow.Tag -and $s.CurrentRow.Tag.Fix) {
+    $e.Handled = $true; $e.SuppressKeyPress = $true; $c = $s.CurrentRow.Tag; Invoke-HealthAction $c.Fix $script:Health.Model.Index[$c.Node] $c } })
+foreach ($b in $script:HcButtons.Values) { $b.add_Click({ param($s, $e) if ($script:HcNode) { Invoke-HealthAction $s.Name $script:HcNode } }) }
+$btnHcRefresh.add_Click({ Start-HealthRefresh -Queue })
+$btnHcSettings.add_Click({ Show-HealthSettingsDialog })
+# the settings of the Health Center: in the manager's settings of this account, not in the folder
+function Show-HealthSettingsDialog {
+  $s = Get-HealthSettings
+  $W = 700; $X0 = 210
+  $dlg = New-Object System.Windows.Forms.Form; Set-WindowIcon $dlg
+  $dlg.Text = Get-Text 'HcSetTitle'; $dlg.Font = $fontBase; $dlg.FormBorderStyle = 'FixedDialog'; $dlg.MaximizeBox = $false; $dlg.MinimizeBox = $false; $dlg.StartPosition = 'CenterParent'
+  $pan = New-Object System.Windows.Forms.Panel; $pan.AutoScroll = $true; $pan.Dock = 'Fill'
+  $note = New-Object System.Windows.Forms.Label; $note.Text = Get-Text 'HcSetNote' $script:SettingsFile
+  $note.MaximumSize = New-Object System.Drawing.Size(($W - 40), 0); $note.AutoSize = $true; $note.Location = New-Object System.Drawing.Point(14, 12); $pan.Controls.Add($note)
+  $y = 12 + $note.GetPreferredSize((New-Object System.Drawing.Size(($W - 40), 0))).Height + 12
+  $chk = New-Object System.Windows.Forms.CheckBox; $chk.Text = Get-Text 'HcSetEnabled'; $chk.Checked = [bool]$s.Enabled; $chk.AutoSize = $true; $chk.Location = New-Object System.Drawing.Point(14, $y); $pan.Controls.Add($chk); $y += 34
+  $boxes = @{}
+  $fields = @(@('Hosts', 'HcSetHosts', 1), @('Cluster', 'HcSetCluster', 0), @('Devices', 'HcSetDevices', 4), @('DnsServers', 'HcSetDns', 1), @('BrokerName', 'HcSetBrokerName', 1),
+    @('SqlListener', 'HcSetSql', 1), @('BackupPath', 'HcSetBackup', 1), @('BackupText', 'HcSetBackupText', 1), @('BackupHours', 'HcSetBackupHours', 1))
+  foreach ($fd in $fields) {
+    $k = $fd[0]
+    $l = New-Object System.Windows.Forms.Label; $l.Text = Get-Text $fd[1]; $l.AutoSize = $true; $l.Location = New-Object System.Drawing.Point(14, ($y + 4)); $pan.Controls.Add($l)
+    if ($k -eq 'Cluster') {
+      $cb = New-Object System.Windows.Forms.ComboBox; $cb.DropDownStyle = 'DropDownList'; $cb.Font = $fontBase
+      foreach ($o in 'auto', 'yes', 'no') { [void]$cb.Items.Add((Get-Text "HcSetCluster_$o")) }
+      $cb.SelectedIndex = [Math]::Max(0, @('auto', 'yes', 'no').IndexOf([string]$s.Cluster)); $cb.SetBounds($X0, $y, 260, 26); $pan.Controls.Add($cb); $boxes[$k] = $cb; $y += 36; continue
+    }
+    $tb = New-Object System.Windows.Forms.TextBox
+    if ($fd[2] -gt 1) { $tb.Multiline = $true; $tb.ScrollBars = 'Vertical'; $tb.AcceptsReturn = $true; $tb.Font = $fontMono; $tb.SetBounds($X0, $y, ($W - $X0 - 30), 22 * $fd[2]); $tb.Text = ("$($s.$k)" -split "`r?`n") -join "`r`n"; $y += 22 * $fd[2] + 4 }
+    else { $tb.SetBounds($X0, $y, $(if ($k -eq 'BackupHours') { 80 } else { $W - $X0 - 30 }), 26); $tb.Text = [string]$s.$k; $y += 30 }
+    $pan.Controls.Add($tb); $boxes[$k] = $tb
+    $hk = "$($fd[1])Hint"
+    if ($script:Text.ContainsKey($hk)) {
+      $hint = New-Object System.Windows.Forms.Label; $hint.Text = Get-Text $hk; $hint.ForeColor = $Theme.Muted
+      $hint.MaximumSize = New-Object System.Drawing.Size(($W - $X0 - 30), 0); $hint.AutoSize = $true; $hint.Location = New-Object System.Drawing.Point($X0, $y); $pan.Controls.Add($hint)
+      $y += $hint.GetPreferredSize((New-Object System.Drawing.Size(($W - $X0 - 30), 0))).Height + 10
+    } else { $y += 6 }
+  }
+  $err = New-Object System.Windows.Forms.Label; $err.ForeColor = $script:KindColor.error; $err.SetBounds(14, $y, ($W - 40), 36); $pan.Controls.Add($err); $y += 40
+  $ok = New-Button 'BtnSave' 110 28; $cancel = New-Button 'BtnCancel' 100 28
+  $cancel.Location = New-Object System.Drawing.Point(($W - 30 - $cancel.Width), $y); $ok.Location = New-Object System.Drawing.Point(($cancel.Left - 8 - $ok.Width), $y)
+  $cancel.DialogResult = 'Cancel'; $dlg.AcceptButton = $null; $dlg.CancelButton = $cancel; $pan.Controls.AddRange(@($ok, $cancel)); $y += 42
+  $dlg.Controls.Add($pan)
+  # as high as its fields, at most the screen (its fields scroll)
+  $wa = [System.Windows.Forms.Screen]::FromControl($form).WorkingArea
+  $dlg.ClientSize = New-Object System.Drawing.Size($W, [Math]::Min($y + 6, $wa.Height - 80))
+  $ok.add_Click({
+    $n = Get-HealthSettings
+    $n.Enabled = $chk.Checked; $n.Cluster = @('auto', 'yes', 'no')[[Math]::Max(0, $boxes['Cluster'].SelectedIndex)]
+    foreach ($k in 'Hosts', 'Devices', 'DnsServers', 'BrokerName', 'SqlListener', 'BackupPath', 'BackupText', 'BackupHours') { $n.$k = $boxes[$k].Text }
+    $why = Test-HealthSettings $n
+    if ($why) { $err.Text = $why; return }
+    try { Save-HealthSettings $n } catch { $err.Text = $_.Exception.Message; return }
+    $dlg.DialogResult = 'OK' })
+  try { if ($dlg.ShowDialog($form) -eq 'OK') { $barText.Text = Get-Text 'HcSetSaved'; Start-HealthRefresh -Queue; Start-VdiRefresh -Queue } } finally { $dlg.Dispose() }
+}
+$hcTimer = New-Object System.Windows.Forms.Timer; $hcTimer.Interval = $script:HealthRefreshSeconds * 1000
+$hcTimer.add_Tick({ if (-not $env:OTR_MANAGER_HEALTH_DEMO) { Start-HealthRefresh } else { Update-HealthStamp } })
 # ---------------- remote screen ----------------
 # The screen of the device in the default browser: over SSH (the key of the manager in the vault, as otradmin) the
 # device starts x11vnc and the noVNC viewer on 127.0.0.1 with a one-time password (remote-screen.sh); an SSH tunnel
@@ -4302,6 +4770,8 @@ $form.add_Shown({
   Update-DeviceList; Update-CommonGrid; Update-KeysView
   # brokers and hosts in the background from the start: the menu shows who cannot sign in, on any page
   if ($script:VdiLoaded) { Start-VdiRefresh; $vdiTimer.Start() } else { $dskOuter.Panel1Collapsed = $true }
+  # the infrastructure too: the menu shows its problems on any page
+  if ($script:HealthLoaded) { Start-HealthRefresh; $hcTimer.Start() } else { Update-HealthView }
   if ($list.Items.Count) { $list.Items[0].Selected = $true } else { Show-Device $null }
   $timer.Start()
   # the access code at every start: the vault opened, or created the first time (both can be skipped)
@@ -4315,17 +4785,19 @@ if ($env:OTR_MANAGER_BRANDING_SHOT) {   # test: the logo dialog (of OTR_MANAGER_
   $form.add_Shown({ Show-BrandingDialog ($script:Devices | Where-Object Name -eq $env:OTR_MANAGER_BRANDING_HOST | Select-Object -First 1); $form.Close() })
 }
 if ($env:OTR_MANAGER_SCREENSHOT) {   # test: draws the window into a PNG instead of leaving it open
-  # OTR_MANAGER_TAB = page (0 devices, 1 common, 2 keys, 3 history, 4 vault, 5 updates, 6 desktops), OTR_MANAGER_DETAIL = tab of the selected device,
+  # OTR_MANAGER_TAB = page (0 devices, 1 common, 2 keys, 3 history, 4 vault, 5 updates, 6 desktops, 7 health center), OTR_MANAGER_DETAIL = tab of the selected device,
   # OTR_MANAGER_DEVICE = the device to select, OTR_MANAGER_ROW = the setting whose help shows
   # an error must close the window and be reported: nobody is there to close it
   $form.add_Shown({ try {
     if ($env:OTR_MANAGER_DEVICE) { foreach ($it in $list.Items) { if ($it.Text -eq $env:OTR_MANAGER_DEVICE) { $it.Selected = $true } } }
     # the servers read in the background (without OTR_MANAGER_VDI_DEMO): waited for, at most 120 s
     if ($script:VdiLoaded) { $t0 = Get-Date
-      while ($script:Vdi.Busy -and ((Get-Date) - $t0).TotalSeconds -lt 120) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 50 } }
+      while (($script:Vdi.Busy -or ($script:HealthLoaded -and $script:Health.Busy)) -and ((Get-Date) - $t0).TotalSeconds -lt 240) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 50 } }
     if ($env:OTR_MANAGER_TAB) { Select-Page ([int]$env:OTR_MANAGER_TAB) }
     # OTR_MANAGER_VDI_ROW = the user (or device) to select on the Desktops page
     if ($env:OTR_MANAGER_VDI_ROW) { foreach ($it in $dskList.Items) { if ($it.Text -eq $env:OTR_MANAGER_VDI_ROW -or ($it.Tag.Device -and $it.Tag.Device.Name -eq $env:OTR_MANAGER_VDI_ROW)) { $it.Selected = $true; break } } }
+    # OTR_MANAGER_HEALTH_ITEM = the item to select in the Health Center (its id: host:HV1, vm:VM-ALICE, dc:DC1...)
+    if ($env:OTR_MANAGER_HEALTH_ITEM -and $script:HealthLoaded) { $tn = @($tvHc.Nodes.Find($env:OTR_MANAGER_HEALTH_ITEM, $true)) | Select-Object -First 1; if ($tn) { $tvHc.SelectedNode = $tn; $tn.EnsureVisible() } }
     if ($env:OTR_MANAGER_DETAIL) { $detail.SelectedIndex = [int]$env:OTR_MANAGER_DETAIL }
     if ($env:OTR_MANAGER_ROW) {
       $g = if ($script:Page -eq 1) { $gridCom } else { $gridDev }
@@ -4342,6 +4814,7 @@ if ($env:OTR_MANAGER_SCREENSHOT) {   # test: draws the window into a PNG instead
     $root.Dock = 'None'; $root.SetBounds(0, 0, $w, $h)
     Set-SplitFit; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
     if ($script:VdiLoaded) { Set-VdiBrokFit; Set-DskSplitFit; if ($dskList.SelectedItems.Count) { $dskList.SelectedItems[0].EnsureVisible() }; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents() }
+    if ($script:HealthLoaded -and $script:Page -eq 7) { Set-HcSplitFit; Set-HcInnerFit; if ($tvHc.SelectedNode) { $tvHc.SelectedNode.EnsureVisible() }; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents() }
     $bmp = New-Object System.Drawing.Bitmap($w, $h)
     $root.DrawToBitmap($bmp, (New-Object System.Drawing.Rectangle(0, 0, $w, $h)))
     $bmp.Save($env:OTR_MANAGER_SCREENSHOT, [System.Drawing.Imaging.ImageFormat]::Png)

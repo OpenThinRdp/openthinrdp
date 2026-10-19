@@ -1,11 +1,12 @@
 <#
-  A demo of the Desktops page for screenshots: the recorded data of the tests (fixtures\vdi) moved to the present, so
-  that the devices report "now" and the sign-ins happened this morning. Writes <Out>\thinclients (a management folder)
-  and <Out>\vdi-demo.json (the answer of the probe), then, with -Shots, draws the pages into <Out>\*.png with the
-  screenshot mode of the manager:
+  A demo of the Desktops page and the Health Center for screenshots: the recorded data of the tests (fixtures\vdi,
+  fixtures\health) moved to the present, so that the devices report "now" and the sign-ins happened this morning.
+  Writes <Out>\thinclients (a management folder), <Out>\vdi-demo.json and <Out>\health-demo.json (the answers of the
+  probes), then, with -Shots, draws the pages into <Out>\*.png with the screenshot mode of the manager (with settings
+  of their own in <Out>\manager.json, never those of the account):
     make-vdi-demo.ps1 -Out C:\Users\Public\OpenThinRDP\demo-vdi -Shots
   By hand: OpenThinRDP-Manager.cmd -Folder <Out>\thinclients, with OTR_MANAGER_VDI_DEMO=<Out>\vdi-demo.json (and
-  OTR_MANAGER_VDI_DRYRUN=1: the actions only say what they would do).
+  OTR_MANAGER_HEALTH_DEMO=<Out>\health-demo.json, OTR_MANAGER_VDI_DRYRUN=1: the actions only say what they would do).
 #>
 param([Parameter(Mandatory = $true)][string]$Out, [switch]$Shots, [string]$Size = '1600x900')
 $ErrorActionPreference = 'Stop'
@@ -32,13 +33,19 @@ $hash = (Get-FileHash -LiteralPath (Join-Path $mw 'rds\Broker-SelfRepair.ps1') -
 $raw = $raw.Replace('"Hash":  "CURRENT"', "`"Hash`":  `"$hash`"")
 $json = Join-Path $Out 'vdi-demo.json'
 [IO.File]::WriteAllText($json, $raw, (New-Object Text.UTF8Encoding $false))
-"demo folder: $dest"; "probe answer: $json"
+$hjson = Join-Path $Out 'health-demo.json'
+[IO.File]::WriteAllText($hjson, (Move-Times ([IO.File]::ReadAllText((Join-Path $PSScriptRoot 'fixtures\health\raw.json')))), (New-Object Text.UTF8Encoding $false))
+"demo folder: $dest"; "probe answers: $json, $hjson"
 if (-not $Shots) { return }
-$env:OTR_MANAGER_VDI_DEMO = $json; $env:OTR_MANAGER_SIZE = $Size; $env:OTR_MANAGER_VAULT = Join-Path $Out 'no-vault.otr'
+$env:OTR_MANAGER_VDI_DEMO = $json; $env:OTR_MANAGER_HEALTH_DEMO = $hjson; $env:OTR_MANAGER_SIZE = $Size; $env:OTR_MANAGER_VAULT = Join-Path $Out 'no-vault.otr'
+$env:OTR_MANAGER_SETTINGS = Join-Path $Out 'manager.json'
 $mgr = (Resolve-Path (Join-Path $mw 'OpenThinRDP-Manager.ps1')).Path
 foreach ($s in @(@{ Name = 'manager-desktops'; Tab = 6; Row = 'bob'; Lang = 'en' }, @{ Name = 'manager-history'; Tab = 3; Row = ''; Lang = 'en' },
-  @{ Name = 'manager-desktops-it'; Tab = 6; Row = 'bob'; Lang = 'it' }, @{ Name = 'manager-history-it'; Tab = 3; Row = ''; Lang = 'it' })) {
-  $env:OTR_MANAGER_SCREENSHOT = Join-Path $Out "$($s.Name).png"; $env:OTR_MANAGER_TAB = "$($s.Tab)"; $env:OTR_MANAGER_VDI_ROW = $s.Row
+  @{ Name = 'manager-desktops-it'; Tab = 6; Row = 'bob'; Lang = 'it' }, @{ Name = 'manager-history-it'; Tab = 3; Row = ''; Lang = 'it' },
+  @{ Name = 'manager-health'; Tab = 7; Item = 'host:HV2'; Lang = 'en' }, @{ Name = 'manager-health-it'; Tab = 7; Item = 'host:HV2'; Lang = 'it' },
+  @{ Name = 'manager-health-cluster'; Tab = 7; Item = 'cluster:VDICL'; Lang = 'en' })) {
+  $env:OTR_MANAGER_SCREENSHOT = Join-Path $Out "$($s.Name).png"; $env:OTR_MANAGER_TAB = "$($s.Tab)"; $env:OTR_MANAGER_VDI_ROW = "$($s.Row)"
+  $env:OTR_MANAGER_HEALTH_ITEM = "$($s.Item)"
   & powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File $mgr -Folder $dest -Language $s.Lang
   $env:OTR_MANAGER_SCREENSHOT
 }
