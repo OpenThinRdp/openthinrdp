@@ -195,6 +195,10 @@ database: quello che vedete sono i file della cartella.
 - **Ritorno a una versione precedente se qualcosa non va**, per tutto il parco o per una postazione, FreeRDP
   compreso: un clic nella pagina Aggiornamenti.
 - **Schermo remoto** di qualsiasi postazione nel browser, solo via SSH, con un avviso sulla postazione.
+- **Il lato Windows dei desktop** (Servizi Desktop remoto con Hyper-V): chi non riesce a entrare adesso e perché, ogni
+  utente con la postazione, il desktop, il suo host, la sessione e l'ultimo accesso; broker e host controllati (un
+  broker che fa fallire ogni richiesta, un permesso mancante, un agente RDVH bloccato), ogni problema con la sua
+  correzione; azioni su VM e sessioni, sempre confermate e registrate.
 - **Problemi di tutto il parco** raggruppati da tutti i registri; una **cassaforte** per la chiave SSH e la chiave di
   firma; il parco sulla **sua chiave di firma**; logo e sfondo; e il gestore **si aggiorna da solo** dalle release
   firmate.

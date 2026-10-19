@@ -15,6 +15,7 @@ folder too, with a backup and a line in the change log.
 - [Updates: a few devices first, then all, and back when something breaks](#updates-a-few-devices-first-then-all-and-back-when-something-breaks)
 - [Remote screen](#remote-screen)
 - [Problems across the fleet](#problems-across-the-fleet)
+- [Desktops, brokers and Hyper-V hosts](#desktops-brokers-and-hyper-v-hosts)
 - [Vault, keys and the site key](#vault-keys-and-the-site-key)
 - [Logo, background, SSH keys, permissions](#logo-background-ssh-keys-permissions)
 - [The manager updates itself](#the-manager-updates-itself)
@@ -156,6 +157,87 @@ taken over, UDP blocked, failed updates, rejected settings. Each line says how m
 which users, first and last time. A line is orange when 3 or more devices had the same problem: that points at a
 server or the network, not at a device. "Six devices could not reach the broker this morning" is one line instead
 of six logs.
+
+## Desktops, brokers and Hyper-V hosts
+
+When a user cannot sign in, the cause is often on the Windows side: a broker that fails every request, a host whose
+RDVH agent is stuck, a desktop that is saved or off, a session left disconnected. The **Desktops** page shows that side
+next to the devices, for a deployment of Remote Desktop Services with Hyper-V (personal desktops, and session hosts when
+there are some).
+
+<p align="center">
+<img src="screenshots/manager-desktops.png" alt="Desktops page: who cannot sign in on top, each user with the device, the desktop, its host, the VM, the session and the last sign-in; the selected user with its actions" width="100%">
+</p>
+
+- **One row per user and device**: the device, the personal desktop (VM), its Hyper-V host, the state of the VM
+  (running, off, saved, not responding), the Windows session (active, idle for how long, disconnected since when) and
+  the last sign-in: when, through which broker, and whether it took a second try.
+- **Who cannot sign in now** is on top, in red, and named in one line above the list with what stops them. A colour
+  never comes alone: the state says it in words.
+- **Select a row**: one sentence says what is wrong, then the desktop, the session, the device and the last sign-ins,
+  each with the broker that served or refused it.
+- **Its actions**: *Shadow* (the screen of the session, with the user's consent unless the policy of the desktop says
+  otherwise), *Message...*, *Disconnect*, *Start VM*, *Restart VM*, *Desktop...* (the personal desktop of the user),
+  *Log off*, *Shut down VM*. The same on the row with a right click or the menu key. A button that cannot be used now
+  is grey, and its tooltip says why.
+- **Filters and search**: problems only, signed in, disconnected, VM off or saved; a user, device, desktop or host.
+- The brokers and hosts are read **in the background every 2 minutes** (and with *Refresh*); the page says when. A
+  host that does not answer never holds the window.
+
+### Brokers and hosts
+
+The **Problems** page starts with the brokers, the shared name the devices use, and the Hyper-V hosts: one line each,
+green when healthy, otherwise one sentence and, when a safe fix exists, its button. A right click on a broker or a host
+gives all its actions.
+
+<p align="center">
+<img src="screenshots/manager-brokers.png" alt="Problems page, Brokers and hosts: a host without the permission of a broker, a broker that fails every sign-in, VMs with a vTPM that the cluster would save, a broker without self-repair, each with its Fix button" width="100%">
+</p>
+
+| It checks | Fix |
+|---|---|
+| **Each broker**: sign-ins received and failed since midnight (or since its service started), and the last ones. A broker that fails every request it receives is an error even when it receives few: users get in at the second try, through another broker, and nobody reports it. Its known signature (it presents itself to itself without the `$` of its computer account, event 4648 of `tssdis.exe`) is named | **Restart**: Tssdis, TScPubRPC and RDMS stop and start again, Tssdis first, with time limits, a hanging process is ended; then its Kerberos tickets are purged |
+| Its services, also those stuck in *StopPending* | **Restart** |
+| Its database (events 2048, 2072) | |
+| The **self-repair** task (below) | **Install** |
+| The broker in the AD group of the settings | **Add** |
+| **The shared name** (`BROKER` of the devices): every broker behind it, every address answering on port 3389 | |
+| **Each host**: every broker in *RDS Endpoint Servers*, *RDS Management Servers* and *Hyper-V Administrators*, directly or through a group (nested groups too). The RDVH agent moves between brokers by itself: a missing permission breaks one broker at random | **Repair**: the AD group of the settings (or the broker's computer account) into the groups that miss it, then the tickets of the brokers |
+| *VmHostAgent* and *vmms* stuck, the RDVH agent attached to no broker or with no broker to attach to | **Unblock**: the service stops with a time limit, its process is ended if it hangs, it starts again |
+| VMs with a vTPM that the cluster would **save** when it stops them (`OfflineAction` 1): they may not start again | **Correct**: `OfflineAction` 2, shut down |
+
+### Safe by design
+
+- Every action asks first, saying exactly what will happen and to whom (*Signed in there: alice. Her open programs
+  close without saving*; for those, *No* is the default), and goes into `config\changes.log` like every other change.
+- A broker is restarted only while another one is healthy, and never two at once; one action at a time.
+- VMs are shut down (Windows closes inside them), **never saved** and never switched off; a VM of the cluster starts as
+  a cluster role.
+- What stops or ends something is not offered on data older than 5 minutes: *Refresh* first.
+- `OTR_MANAGER_VDI_DRYRUN=1`: every action says what it would run, and runs nothing.
+
+### What it needs
+
+- The manager started as an account that administers the brokers and the Hyper-V hosts, with **WinRM** (port 5985)
+  open from the PC to them. The sessions are read from the desktops as `quser` reads them (remote RPC, allowed on a
+  Windows 10/11 desktop by `AllowRemoteRPC`); log off, disconnect and message fall back to WinRM on the desktop.
+  Without the rights, the page says so in one sentence and the rest of the manager works as before.
+- Nothing to configure in most cases: the brokers come from `BROKER` and `BROKER_FALLBACK` of the devices, the active
+  management server of the deployment names the other brokers, the hosts and the desktops, the clusters name their
+  nodes. **Settings...** on the page (kept for your account on your PC, not in the folder): the **AD group of the
+  brokers** (the hosts give their permissions to it, never to single computers), more brokers or hosts if they are not
+  found, or the page turned off.
+- How it reads them, and why not the RemoteDesktop cmdlets (blind on any server but the active management server): the
+  comments at the top of `management/windows/OtrVdi.ps1`.
+
+### Broker self-repair
+
+A broker can start failing every sign-in after it leaves and joins the farm again: it presents itself without the `$`,
+falls back to NTLM, and every request ends with *access denied* (event 804, `0x80070005`) until its services start
+again. `management/windows/rds/Broker-SelfRepair.ps1` does that by itself, as a scheduled task started by the event
+of that fault, at most once every 15 minutes. **Install** in Brokers and hosts installs or updates it; by hand:
+`Install-BrokerSelfRepair.ps1 -Broker rdcb1.example.com, rdcb2.example.com` (`-Remove` takes it away). A broker that
+already has a self-repair task of its own is left as it is.
 
 ## Vault, keys and the site key
 

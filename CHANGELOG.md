@@ -5,6 +5,22 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
 
 ## Unreleased
 
+- **Manager: the Windows side of the desktops** ([#74](https://github.com/OpenThinRdp/openthinrdp/issues/74)).
+  For Remote Desktop Services with Hyper-V; details in [docs/manager.md](docs/manager.md#desktops-brokers-and-hyper-v-hosts).
+  - A **Desktops** page: each user with the device, the personal desktop, its Hyper-V host, the state of the VM, the
+    Windows session (active, idle, disconnected) and the last sign-in (which broker, ok or failed, second try). Who
+    cannot sign in now is on top. Read in the background every 2 minutes.
+  - **Brokers and hosts** at the top of Problems: sign-ins ok and failed per broker, a broker that fails every request
+    (with its known signature, event 4648 of `tssdis.exe` without the `$`), stuck services, the self-repair task, the
+    shared name answering on every address; on each host the brokers in the three local groups (through groups too),
+    a stuck RDVH agent or vmms, the broker the agent is attached to, VMs with a vTPM the cluster would save. Each
+    problem in one sentence, with a Fix button when a safe fix exists.
+  - Actions, each confirmed with what happens and to whom, and logged in `config\changes.log`: restart the broker
+    services (only while another broker is healthy, never two at once), purge its tickets, repair the host
+    permissions, install the broker self-repair (`management/windows/rds`), unblock the RDVH agent; start, restart
+    and shut down a VM (never saved); log off, disconnect, message, shadow; assign a personal desktop.
+  - No rights on the servers: one sentence, and the rest of the manager as before.
+  - Tests of the manager in Windows PowerShell 5.1 in CI, from recorded data (`tests/windows`).
 - **Raspberry Pi 4 (arm64), experimental** ([#61](https://github.com/OpenThinRdp/openthinrdp/issues/61)).
   - `image/build-rpi.sh` makes an SD card image: Debian 13 arm64 with Debian's kernel and `raspi-firmware`, the same
     kiosk, and a first boot that grows the root to the card. There is no installer.

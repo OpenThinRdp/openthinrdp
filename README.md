@@ -185,6 +185,10 @@ on the shared folder the devices report to. No server, no agent, no database: wh
 - **Back to an earlier version when something breaks**, for the whole fleet or one device, FreeRDP included: one
   click on the Updates page.
 - **Remote screen** of any device in your browser, over SSH only, with a notice on the device.
+- **The Windows side of the desktops** (Remote Desktop Services with Hyper-V): who cannot sign in now and why, each
+  user with the device, the desktop, its host, the session and the last sign-in; brokers and hosts checked (a broker
+  that fails every request, a missing permission, a stuck RDVH agent), each problem with its fix; actions on VMs and
+  sessions, always confirmed and logged.
 - **Problems across the fleet** grouped from every event log; a **vault** for the SSH key and the signing key; your
   fleet on **its own signing key**; logo and background; and the manager **updates itself** from the signed releases.
 
