@@ -59,9 +59,9 @@ try {
   ok 'remote Restart script: no Restart-Service/Stop-Service, time limits, ends a hanging process' {
     $a = [System.Management.Automation.Language.Parser]::ParseInput($script:VdiRemote.Restart.ToString(), [ref]$null, [ref]$null)
     -not @(Get-Commands $a | Where-Object { $_ -in 'Restart-Service', 'Stop-Service', 'Start-Service' }).Count -and $script:VdiRemote.Restart.ToString() -match 'WaitForStatus' -and $script:VdiRemote.Restart.ToString() -match 'Stop-Process' }
-  ok 'remote VmPower script: never saves, never switches off' {
+  ok 'remote VmPower script: never saves, never switches off, never takes the whole cluster group offline' {
     $s = $script:VdiRemote.VmPower.ToString(); $a = [System.Management.Automation.Language.Parser]::ParseInput($s, [ref]$null, [ref]$null)
-    -not @(Get-Commands $a | Where-Object { $_ -in 'Save-VM', 'Suspend-VM' }).Count -and $s -notmatch '-Save\b' -and $s -notmatch '-TurnOff' -and $s -match 'Stop-ClusterGroup' -and $s -match 'OfflineAction' }
+    -not @(Get-Commands $a | Where-Object { $_ -in 'Save-VM', 'Suspend-VM', 'Stop-ClusterGroup' }).Count -and $s -notmatch '-Save\b' -and $s -notmatch '-TurnOff' -and @(Get-Commands $a) -contains 'Stop-ClusterResource' -and $s -match 'OfflineAction' }
 
   # the time of the recorded data; the devices as old as they were then
   $now = [datetime]'2026-10-19T09:30:00'
@@ -169,6 +169,59 @@ try {
   # the runner in dry-run mode: says what it would run, runs nothing
   $res = @(& $script:VdiJobRunner (Get-VdiActionPlan 'HostPermissions' 'HV2' $st $now).Steps $true 1000 1000)
   ok 'dry run: every step said, none run' { $res.Count -eq 3 -and -not @($res | Where-Object { -not $_.DryRun -or -not $_.Ok }).Count }
+
+  # ---- a role of the cluster taken offline whole: Hyper-V forgets the VM, the probe lists it from the cluster
+  $rawO = Get-Content -LiteralPath (Join-Path $fx 'raw.json') -Raw | ConvertFrom-Json
+  $erin = @(($rawO.Hosts | Where-Object Name -eq 'HV2').Vms | Where-Object Name -eq 'VM-ERIN')[0]
+  $erin | Add-Member -NotePropertyName Registered -NotePropertyValue $false -Force; $erin | Add-Member -NotePropertyName ClusterState -NotePropertyValue 'Offline' -Force
+  $mO = ConvertTo-VdiModel $rawO $devs $now
+  $rO = @($mO.Rows | Where-Object UserKey -eq 'ERIN')[0]
+  ok 'a VM whose cluster role is offline: known, "off (cluster role offline)", it can be started' {
+    $rO.VmInfo -and $rO.VmText -eq (Get-Text 'VdiVmOffRole') -and -not (Get-VdiActionPlan 'VmStart' $rO @{ Model = $mO; Received = $now; Running = $null } $now).Blocked }
+
+  # ---- VmPower against a pretend cluster: the cmdlets of Hyper-V and of the cluster replaced by functions that keep
+  # the state of one VM role (its VM resource and its configuration resource), as the real ones behave
+  function New-Fake([string]$group = 'Online', [string]$vmRes = 'Online', [string]$cfg = 'Online', [string]$vm = 'Running', [int]$oa = 2) {
+    $script:Fake = @{ Group = $group; VmRes = $vmRes; Cfg = $cfg; Vm = $vm; Oa = $oa; Calls = New-Object Collections.ArrayList } }
+  function Get-VM { [CmdletBinding()] param([string]$Name)
+    # the configuration resource offline = the VM is not registered in Hyper-V
+    if ($script:Fake.Cfg -ne 'Online') { throw "Hyper-V cannot find a virtual machine named $Name" }
+    [pscustomobject]@{ Name = 'VM-T'; State = $script:Fake.Vm; Heartbeat = $(if ($script:Fake.Vm -eq 'Running') { 'OkApplicationsHealthy' } else { 'Disabled' }); Id = 'id-1' } }
+  function Get-ClusterResource { [CmdletBinding()] param([string]$Name)
+    $r = @([pscustomobject]@{ Name = 'Virtual Machine VM-T'; ResourceType = 'Virtual Machine'; OwnerGroup = 'VM-T'; State = $script:Fake.VmRes },
+      [pscustomobject]@{ Name = 'Virtual Machine Configuration VM-T'; ResourceType = 'Virtual Machine Configuration'; OwnerGroup = 'VM-T'; State = $script:Fake.Cfg })
+    if ($Name) { $r | Where-Object Name -eq $Name } else { $r } }
+  function Get-ClusterParameter { [CmdletBinding()] param([Parameter(ValueFromPipeline = $true)]$InputObject, [string]$Name)
+    process { [pscustomobject]@{ Value = $(if ($Name -eq 'VmID') { 'id-1' } else { $script:Fake.Oa }) } } }
+  function Get-ClusterGroup { [CmdletBinding()] param([string]$Name) [pscustomobject]@{ State = $script:Fake.Group } }
+  function Stop-ClusterResource { [CmdletBinding()] param([string]$Name, [int]$Wait) [void]$script:Fake.Calls.Add('Stop-ClusterResource')
+    $script:Fake.Vm = $(if ($script:Fake.Oa -eq 1) { 'Saved' } else { 'Off' }); $script:Fake.VmRes = 'Offline'; $script:Fake.Group = 'PartialOnline' }
+  function Stop-ClusterGroup { [CmdletBinding()] param([string]$Name, [int]$Wait) [void]$script:Fake.Calls.Add('Stop-ClusterGroup')
+    $script:Fake.Vm = 'Off'; $script:Fake.VmRes = 'Offline'; $script:Fake.Cfg = 'Offline'; $script:Fake.Group = 'Offline' }
+  function Start-ClusterGroup { [CmdletBinding()] param([string]$Name, [int]$Wait) [void]$script:Fake.Calls.Add('Start-ClusterGroup')
+    $script:Fake.Vm = 'Running'; $script:Fake.VmRes = 'Online'; $script:Fake.Cfg = 'Online'; $script:Fake.Group = 'Online' }
+  function Start-ClusterResource { [CmdletBinding()] param([string]$Name, [int]$Wait) [void]$script:Fake.Calls.Add('Start-ClusterResource')
+    if ($script:Fake.Cfg -ne 'Online') { throw 'the configuration is offline' }; $script:Fake.Vm = 'Running'; $script:Fake.VmRes = 'Online'; $script:Fake.Group = 'Online' }
+  function Stop-VM { [CmdletBinding()] param($VM, [switch]$Force, [switch]$AsJob) [void]$script:Fake.Calls.Add('Stop-VM'); $script:Fake.Vm = 'Off'; $script:Fake.VmRes = 'Offline'; 'job' }
+  function Start-VM { [CmdletBinding()] param($VM) [void]$script:Fake.Calls.Add('Start-VM'); $script:Fake.Vm = 'Running' }
+  function Wait-Job { param($Job, $Timeout) $Job }
+  function Remove-Job { param($Job, [switch]$Force) }
+  function Stop-Job { param($Job) }
+  $power = { param($a) & $script:VdiRemote.VmPower 'VM-T' $a 60 }
+  New-Fake; $x = & $power 'shutdown'
+  ok 'shut down a cluster VM: only its VM resource (OfflineAction 2), the configuration stays online, Get-VM says Off' {
+    $x.Ok -and $x.After -eq 'Off' -and $x.ResourceState -eq 'Offline' -and $script:Fake.Cfg -eq 'Online' -and @($script:Fake.Calls) -contains 'Stop-ClusterResource' -and @($script:Fake.Calls) -notcontains 'Stop-ClusterGroup' }
+  $x = & $power 'start'
+  ok 'start it again: its VM resource, running with a heartbeat' { $x.Ok -and $x.After -eq 'Running' -and $x.Heartbeat -like 'Ok*' -and @($script:Fake.Calls)[-1] -eq 'Start-ClusterResource' }
+  New-Fake 'Offline' 'Offline' 'Offline' 'Off'; $x = & $power 'start'
+  ok 'start a VM whose whole role is offline (not registered in Hyper-V): the group' { $x.Ok -and $x.Before -eq 'Off' -and @($script:Fake.Calls) -contains 'Start-ClusterGroup' -and $x.After -eq 'Running' }
+  New-Fake; $x = & $power 'restart'
+  ok 'restart a cluster VM: VM resource off, then on, configuration always online' { $x.Ok -and (@($script:Fake.Calls) -join ',') -eq 'Stop-ClusterResource,Start-ClusterResource' -and $script:Fake.Cfg -eq 'Online' }
+  New-Fake -oa 1; $x = & $power 'shutdown'
+  ok 'OfflineAction 1 (save): never through the cluster, a shutdown of Windows (Stop-VM)' { $x.Ok -and @($script:Fake.Calls) -contains 'Stop-VM' -and @($script:Fake.Calls) -notcontains 'Stop-ClusterResource' -and $script:Fake.Vm -eq 'Off' }
+  New-Fake 'Offline' 'Offline' 'Offline' 'Off'; $x = & $power 'shutdown'
+  ok 'a shutdown that leaves the VM unknown to Hyper-V is a failure, said so' { -not $x.Ok -and $x.Error }
+  foreach ($n in 'Get-VM', 'Get-ClusterResource', 'Get-ClusterParameter', 'Get-ClusterGroup', 'Stop-ClusterResource', 'Stop-ClusterGroup', 'Start-ClusterGroup', 'Start-ClusterResource', 'Stop-VM', 'Start-VM', 'Wait-Job', 'Remove-Job', 'Stop-Job') { Remove-Item "function:$n" }
 
   # ---- the probe without servers (no broker named): only the event logs of the devices
   $cfg = Get-VdiProbeConfig $devs ([pscustomobject]@{ Enabled = $true; BrokerGroup = ''; Brokers = ''; Hosts = '' })

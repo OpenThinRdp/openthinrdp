@@ -812,6 +812,7 @@
   VdiVmRunning           = 'running'
   VdiVmHung              = 'not responding'
   VdiVmOff               = 'off'
+  VdiVmOffRole           = 'off (cluster role offline)'
   VdiVmSaved             = 'saved'
   VdiVmPaused            = 'paused'
   VdiVmUnknown           = 'host not read'

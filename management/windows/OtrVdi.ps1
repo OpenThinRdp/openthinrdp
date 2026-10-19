@@ -297,16 +297,25 @@ $script:VdiProbe = {
     $vms = @(); $cluster = ''; $cnodes = @()
     if (Get-Command Get-VM) {
       # the cluster stops a VM role as OfflineAction says: 1 = save, which a VM with a vTPM may not come back from
-      $oa = @{}
+      $oa = @{}; $cres = @()
       try {
         $cluster = [string](Get-Cluster -ErrorAction Stop).Name
         $cnodes = @(Get-ClusterNode | ForEach-Object { "$($_.Name)" })
-        foreach ($r in @(Get-ClusterResource | Where-Object { "$($_.ResourceType)" -eq 'Virtual Machine' })) { $oa["$($r.OwnerGroup)"] = [int]($r | Get-ClusterParameter -Name OfflineAction).Value }
+        $cres = @(Get-ClusterResource | Where-Object { "$($_.ResourceType)" -eq 'Virtual Machine' })
+        foreach ($r in $cres) { $oa["$($r.OwnerGroup)"] = [int]($r | Get-ClusterParameter -Name OfflineAction).Value }
       } catch { }
+      $rstate = @{}; foreach ($r in $cres) { $rstate["$($r.OwnerGroup)"] = "$($r.State)" }
       $vms = @(Get-VM | ForEach-Object {
         $tpm = $false; try { $tpm = [bool](Get-VMSecurity -VM $_ -ErrorAction Stop).TpmEnabled } catch { }
         [pscustomobject]@{ Name = $_.Name; State = "$($_.State)"; Heartbeat = "$($_.Heartbeat)"; UptimeMin = [int]$_.Uptime.TotalMinutes; Clustered = [bool]$_.IsClustered; Tpm = $tpm
-          OfflineAction = $(if ($oa.ContainsKey($_.Name)) { $oa[$_.Name] } else { $null }) } })
+          OfflineAction = $(if ($oa.ContainsKey($_.Name)) { $oa[$_.Name] } else { $null }); Registered = $true; ClusterState = $(if ($rstate.ContainsKey($_.Name)) { $rstate[$_.Name] } else { '' }) } })
+      # A role taken offline whole (group, configuration) is unregistered from Hyper-V: Get-VM lists it on no host. The
+      # cluster still knows it, on the node that owns it: listed here as off, so that it can be started again.
+      $known = @($vms | ForEach-Object Name)
+      foreach ($r in @($cres | Where-Object { "$($_.OwnerNode)" -ieq $env:COMPUTERNAME -and $known -notcontains "$($_.OwnerGroup)" })) {
+        $vms += [pscustomobject]@{ Name = "$($r.OwnerGroup)"; State = 'Off'; Heartbeat = ''; UptimeMin = 0; Clustered = $true; Tpm = $null
+          OfflineAction = $oa["$($r.OwnerGroup)"]; Registered = $false; ClusterState = "$($r.State)" }
+      }
     }
     $fqdn = try { [Net.Dns]::GetHostEntry($env:COMPUTERNAME).HostName } catch { $env:COMPUTERNAME }
     [pscustomobject]@{ Fqdn = $fqdn; Services = $svc; AgentBrokers = $tss; AgentLinks = $links; AgentLast = $last; Groups = $groups; Vms = $vms; Cluster = $cluster; ClusterNodes = $cnodes }
@@ -677,7 +686,7 @@ function Set-VdiRowState($r, $m, [datetime]$now, $hosts) {
   $r.VmText = if ($vi) {
       switch ([string]$vi.State) {
         'Running' { if ($hung) { Get-Text 'VdiVmHung' } else { Get-Text 'VdiVmRunning' } }
-        'Off' { Get-Text 'VdiVmOff' }
+        'Off' { if ($vi.PSObject.Properties['Registered'] -and $vi.Registered -eq $false) { Get-Text 'VdiVmOffRole' } else { Get-Text 'VdiVmOff' } }
         'Saved' { Get-Text 'VdiVmSaved' }
         'Paused' { Get-Text 'VdiVmPaused' }
         default { [string]$vi.State }
@@ -904,44 +913,68 @@ $script:VdiRemote = @{
       catch { [pscustomobject]@{ Vm = $v; Value = $null; Error = $_.Exception.Message } } })
     [pscustomobject]@{ Ok = (@($res | Where-Object { $_.Value -ne 2 }).Count -eq 0); Results = $res }
   }
-  # Start, shut down, restart a VM, NEVER saved. A VM of the cluster is started as a cluster role (Start-VM would leave
-  # the role offline: running, but not watched nor moved if the host fails). Shut down: through the cluster only when
-  # its OfflineAction is a shutdown (2, 3), else Stop-VM (a shutdown of Windows inside, never -Save nor -TurnOff). A VM
-  # that does not shut down in time is left running and said so: power is never cut from here.
+  # Start, shut down, restart a VM, NEVER saved. A VM of the cluster is driven through its cluster resource of type
+  # "Virtual Machine", never through the whole group: taking the group offline also takes the configuration resource
+  # offline, and then Hyper-V unregisters the VM (Get-VM no longer finds it, on any host). Shut down: Stop-ClusterResource
+  # when its OfflineAction is a shutdown (2, 3), else Stop-VM (a shutdown of Windows inside, never -Save nor -TurnOff).
+  # Start: the group when it (or its configuration) is offline, else the VM resource; Start-VM only for a VM outside
+  # the cluster (Start-VM would leave a cluster role offline: running, but not watched nor moved if the host fails).
+  # A VM that does not shut down in time is left running and said so: power is never cut from here. Started = running
+  # with a heartbeat.
   VmPower = {
     param([string]$vm, [string]$action, [int]$wait)
     $ErrorActionPreference = 'Stop'
-    $v = Get-VM -Name $vm
-    $before = "$($v.State)"
-    $grp = $null; $oa = $null
-    if ($v.IsClustered) {
-      try {
-        $res = @(Get-ClusterResource | Where-Object { "$($_.ResourceType)" -eq 'Virtual Machine' } | Where-Object { "$(($_ | Get-ClusterParameter -Name VmID).Value)" -eq "$($v.Id)" }) | Select-Object -First 1
-        if ($res) { $grp = "$($res.OwnerGroup)"; $oa = [int]($res | Get-ClusterParameter -Name OfflineAction).Value }
-      } catch { }
-    }
+    $hv = { try { Get-VM -Name $vm -ErrorAction Stop } catch { $null } }
+    $v = & $hv
+    # the cluster resource: by the VM id when Hyper-V knows the VM, by its group otherwise (a role taken offline whole)
+    $res = $null; $grp = $null; $oa = $null
+    try {
+      $all = @(Get-ClusterResource -ErrorAction Stop | Where-Object { "$($_.ResourceType)" -eq 'Virtual Machine' })
+      if ($v) { $res = @($all | Where-Object { "$(($_ | Get-ClusterParameter -Name VmID).Value)" -eq "$($v.Id)" }) | Select-Object -First 1 }
+      if (-not $res) { $res = @($all | Where-Object { "$($_.OwnerGroup)" -eq $vm }) | Select-Object -First 1 }
+      if ($res) { $grp = "$($res.OwnerGroup)"; $oa = [int]($res | Get-ClusterParameter -Name OfflineAction).Value }
+    } catch { }
+    $resState = { if ($res) { "$((Get-ClusterResource -Name $res.Name).State)" } else { '' } }
+    $cfgOff = { if ($grp) { @(Get-ClusterResource | Where-Object { "$($_.OwnerGroup)" -eq $grp -and $_.Name -ne $res.Name -and "$($_.State)" -ne 'Online' }).Count } else { 0 } }
+    $before = if ($v) { "$($v.State)" } else { 'Off' }
     $stopIt = {
-      if ($grp -and $oa -in 2, 3) { Stop-ClusterGroup -Name $grp -Wait $wait | Out-Null }
-      else { $j = Stop-VM -VM $v -Force -AsJob; if (-not (Wait-Job $j -Timeout $wait)) { Stop-Job $j }; Remove-Job $j -Force -ErrorAction SilentlyContinue }
+      if ($res -and $oa -in 2, 3) { Stop-ClusterResource -Name $res.Name -Wait $wait | Out-Null }
+      else { $x = & $hv; $j = Stop-VM -VM $x -Force -AsJob; if (-not (Wait-Job $j -Timeout $wait)) { Stop-Job $j }; Remove-Job $j -Force -ErrorAction SilentlyContinue }
     }
-    $startIt = { if ($grp) { Start-ClusterGroup -Name $grp -Wait 120 | Out-Null } else { Start-VM -VM $v } }
+    $startIt = {
+      if ($res) {
+        if ("$((Get-ClusterGroup -Name $grp).State)" -eq 'Offline' -or (& $cfgOff)) { Start-ClusterGroup -Name $grp -Wait 120 | Out-Null }
+        else { Start-ClusterResource -Name $res.Name -Wait 120 | Out-Null }
+      } else { Start-VM -VM (& $hv) }
+      # running is not enough: Windows answers its heartbeat once it has started
+      $t0 = Get-Date
+      do { $x = & $hv; if ($x -and "$($x.State)" -eq 'Running' -and "$($x.Heartbeat)" -like 'Ok*') { return }; Start-Sleep -Seconds 3 } while (((Get-Date) - $t0).TotalSeconds -lt 240)
+    }
     $err = $null
     try {
+      if (-not $v -and -not $res) { throw "$vm not found on this host nor in its cluster" }
       switch ($action) {
         'start' { & $startIt }
         'shutdown' { & $stopIt }
         'restart' {
           & $stopIt
-          $v = Get-VM -Name $vm
-          if ("$($v.State)" -ne 'Off') { throw "still $($v.State) after $wait s: not started again" }
+          $x = & $hv
+          if (-not $x -or "$($x.State)" -ne 'Off') { throw "$(if ($x) { "still $($x.State)" } else { 'not registered' }) after the shutdown: not started again" }
           & $startIt
         }
       }
     } catch { $err = $_.Exception.Message }
-    $v = Get-VM -Name $vm
-    $after = "$($v.State)"
-    $want = switch ($action) { 'shutdown' { 'Off' } default { 'Running' } }
-    [pscustomobject]@{ Ok = (-not $err -and $after -eq $want); Vm = $vm; Before = $before; After = $after; Cluster = [bool]$grp; OfflineAction = $oa; Error = $err }
+    $v = & $hv
+    $after = if ($v) { "$($v.State)" } else { 'NotRegistered' }
+    $hb = if ($v) { "$($v.Heartbeat)" } else { '' }
+    $rs = & $resState
+    $ok = switch ($action) {
+      # off, still known to Hyper-V, and (in the cluster) only its VM resource offline
+      'shutdown' { $after -eq 'Off' -and (-not $res -or ($rs -eq 'Offline' -and -not (& $cfgOff))) }
+      default { $after -eq 'Running' -and $hb -like 'Ok*' -and (-not $res -or $rs -eq 'Online') }
+    }
+    if (-not $ok -and -not $err) { $err = "now $after$(if ($hb) { ", heartbeat $hb" })$(if ($res) { ", cluster resource $rs" })" }
+    [pscustomobject]@{ Ok = [bool]$ok; Vm = $vm; Before = $before; After = $after; Heartbeat = $hb; Cluster = [bool]$res; Resource = $(if ($res) { $res.Name }); ResourceState = $rs; OfflineAction = $oa; Error = $err }
   }
   # the shadow policy of a desktop: 0 none, 1 control with consent, 2 control without, 3 view with consent, 4 view without
   ShadowPolicy = {

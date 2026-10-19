@@ -804,6 +804,7 @@
   VdiVmRunning           = 'accesa'
   VdiVmHung              = 'non risponde'
   VdiVmOff               = 'spenta'
+  VdiVmOffRole           = 'spenta (ruolo del cluster offline)'
   VdiVmSaved             = 'salvata'
   VdiVmPaused            = 'in pausa'
   VdiVmUnknown           = 'host non letto'
