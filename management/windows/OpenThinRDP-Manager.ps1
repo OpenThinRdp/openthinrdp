@@ -27,6 +27,11 @@
           the PNG instead of showing it, then exits
           $env:OTR_MANAGER_RELEASES = <folder or URL>: where the manager looks for its own updates (instead of the
           latest GitHub release)
+          $env:OTR_MANAGER_VDI_DEMO = <file.json>: the Desktops page and Brokers and hosts from that answer of the probe
+          instead of the servers (tests\windows\make-vdi-demo.ps1); $env:OTR_MANAGER_VDI_DRYRUN = 1: their actions
+          say what they would do and change nothing; $env:OTR_MANAGER_VDI_ROW = the user selected in a screenshot
+          tests\windows\manager-tests.ps1: the tests of the manager in Windows PowerShell 5.1 (CI)
+  Desktops: OtrVdi.ps1 next to this file (brokers, Hyper-V hosts, desktops, sessions; rds\ = the broker self-repair)
 #>
 param(
   [string]$Folder,
@@ -1768,9 +1773,13 @@ function Get-LastFolder {
 }
 function Save-LastFolder($path) {
   try {
+    # the other settings of the file (the Desktops page) stay
+    $s = New-Object psobject
+    try { if (Test-Path -LiteralPath $script:SettingsFile) { $j = Get-Content -LiteralPath $script:SettingsFile -Raw | ConvertFrom-Json; if ($j) { $s = $j } } } catch { }
+    if ($s.PSObject.Properties['Folder']) { $s.Folder = $path } else { $s | Add-Member -NotePropertyName Folder -NotePropertyValue $path }
     $d = Split-Path $script:SettingsFile
     if (-not (Test-Path -LiteralPath $d)) { New-Item -ItemType Directory -Path $d | Out-Null }
-    [IO.File]::WriteAllText($script:SettingsFile, (@{ Folder = $path } | ConvertTo-Json), $script:Utf8)
+    [IO.File]::WriteAllText($script:SettingsFile, ($s | ConvertTo-Json -Depth 5), $script:Utf8)
   } catch { }
 }
 
@@ -1801,6 +1810,10 @@ if ($UpdateManager) {
   } catch { $rc = 1; [Console]::Error.WriteLine($_.Exception.Message) }
   exit $rc
 }
+# The Windows side of the VDI (Desktops page, brokers and hosts in Problems): OtrVdi.ps1 next to this file. Loaded after
+# -UpdateManager, so that a broken copy of it can still be replaced by an update; without it the rest works as before.
+$script:VdiLoaded = $false
+try { . (Join-Path $PSScriptRoot 'OtrVdi.ps1'); $script:VdiLoaded = $true } catch { Write-Warning "OtrVdi.ps1: $($_.Exception.Message)" }
 if ($FunctionsOnly) { return }
 # files of an update of the manager that were in use (Install-ManagerFile)
 try { Remove-OldManagerFiles } catch { }
@@ -1983,7 +1996,8 @@ $script:KindSoft = @{ ok = New-Color '#dcfce7'; off = New-Color '#f1f2f4'; error
 $script:IconFont = @('Segoe Fluent Icons', 'Segoe MDL2 Assets') | Where-Object { $n = $_; @([System.Drawing.FontFamily]::Families | Where-Object Name -eq $n).Count } | Select-Object -First 1
 $script:Glyph = @{ Refresh = 'E72C'; Folder = 'E838'; Download = 'E896'; Shield = 'EA18'; Devices = 'E977'; Settings = 'E713'; Key = 'E8D7'; Warning = 'E7BA'
   Screen = 'E7F4'; Picture = 'E91B'; Save = 'E74E'; Undo = 'E7A7'; Delete = 'E74D'; Add = 'E710'; Search = 'E721'; Document = 'E8A5'
-  Lock = 'E72E'; Unlock = 'E785'; Certificate = 'EB95'; Vpn = 'E705' }
+  Lock = 'E72E'; Unlock = 'E785'; Certificate = 'EB95'; Vpn = 'E705'
+  Desktop = 'E770'; Play = 'E768'; Power = 'E7E8'; Message = 'E8BD'; Contact = 'E77B'; Repair = 'E90F'; Unplug = 'E8CD'; Cancel = 'E711' }
 function New-Glyph([string]$name, $color, [int]$size = 16) {
   if (-not $script:IconFont -or -not $script:Glyph.ContainsKey($name)) { return $null }
   $bmp = New-Object System.Drawing.Bitmap($size, $size)
@@ -2275,7 +2289,9 @@ function New-NavButton([string]$textKey, [string]$glyph, [int]$index) {
     if ($s.Tag.Index -eq $script:Page) { $br = New-Object System.Drawing.SolidBrush($Theme.Accent); $e.Graphics.FillRectangle($br, 0, 8, 4, $s.Height - 16); $br.Dispose() }
     if ($s.Tag.Count) {
       $r = New-Object System.Drawing.Rectangle(0, 0, ($s.Width - 16), $s.Height)
-      [System.Windows.Forms.TextRenderer]::DrawText($e.Graphics, [string]$s.Tag.Count, $fontSmall, $r, $Theme.ShellMuted, [System.Windows.Forms.TextFormatFlags]'Right, VerticalCenter')
+      # a count in a colour of its own: who cannot sign in now, problems of the servers
+      $cc = if ($s.Tag.ContainsKey('CountColor') -and $s.Tag.CountColor) { $s.Tag.CountColor } else { $Theme.ShellMuted }
+      [System.Windows.Forms.TextRenderer]::DrawText($e.Graphics, [string]$s.Tag.Count, $fontSmall, $r, $cc, [System.Windows.Forms.TextFormatFlags]'Right, VerticalCenter')
     } })
   $b.add_Click({ param($s, $e) Select-Page $s.Tag.Index })
   $b
@@ -2286,9 +2302,12 @@ $navKeys = New-NavButton 'NavKeys' 'Key' 2
 $navProblems = New-NavButton 'NavProblems' 'Warning' 3
 $navVault = New-NavButton 'NavVault' 'Lock' 4
 $navUpdates = New-NavButton 'NavUpdates' 'Download' 5
-$script:NavButtons = @($navDevices, $navCommon, $navKeys, $navProblems, $navVault, $navUpdates)
-# Dock Top stacks the last added on top; the vault next to the SSH keys, the versions after the settings
-foreach ($b in @($navProblems, $navVault, $navKeys, $navUpdates, $navCommon, $navDevices)) { $nav.Controls.Add($b) }
+# the Windows side of the desktops: index 6, so the other pages keep theirs (OTR_MANAGER_TAB of the screenshots)
+$navDesktops = New-NavButton 'NavDesktops' 'Desktop' 6
+$script:NavButtons = @($navDevices, $navCommon, $navKeys, $navProblems, $navVault, $navUpdates, $navDesktops)
+# Dock Top stacks the last added on top; the desktops under the devices, the vault next to the SSH keys, the versions
+# after the settings
+foreach ($b in @($navProblems, $navVault, $navKeys, $navUpdates, $navCommon, $navDesktops, $navDevices)) { $nav.Controls.Add($b) }
 
 # ---------------- Devices page: list | selected device ----------------
 $pageDevices = New-Panel 'Fill' $Theme.Page
@@ -2550,7 +2569,158 @@ $probPad = New-Panel 'Fill' $Theme.Card; $probPad.Padding = New-Object System.Wi
 $probSplit.Panel1.Controls.Add($probList); $probSplit.Panel2.Controls.Add($probPad)
 $probCard.Controls.Add($probSplit); $probCard.Controls.Add($probTop)
 $probWrap.Controls.Add($probCard)
-$pageProblems.Controls.Add($probWrap); $pageProblems.Controls.Add((New-PageHeader (Get-Text 'NavProblems') (Get-Text 'ProbNote')))
+# Brokers and hosts, on top of the problems of the devices: one line per finding, with its Fix button when a safe fix
+# exists. Hidden when the Desktops page is turned off or no broker is known.
+$probOuter = New-Object System.Windows.Forms.SplitContainer; $probOuter.Dock = 'Fill'; $probOuter.Orientation = 'Horizontal'
+$probOuter.BackColor = $Theme.Page; $probOuter.SplitterWidth = 8; $probOuter.FixedPanel = 'Panel1'
+$vdiPWrap = New-Panel 'Fill' $Theme.Page; $vdiPWrap.Padding = New-Object System.Windows.Forms.Padding(12, 0, 12, 0)
+$vdiPCard = New-Panel 'Fill' $Theme.Card; Add-Line $vdiPCard 'Box'; $vdiPCard.Padding = New-Object System.Windows.Forms.Padding(1)
+$vdiPTop = New-Panel 'Top' $Theme.Card 42; Add-Line $vdiPTop 'Bottom'
+$lblVdiPTitle = New-Label (Get-Text 'VdiProbTitle') $fontBold; $lblVdiPTitle.Location = New-Object System.Drawing.Point(14, 11)
+$lblVdiPUpdated = New-Label '' $fontSmall $Theme.Muted; $lblVdiPUpdated.AutoSize = $false; $lblVdiPUpdated.TextAlign = 'MiddleRight'; $lblVdiPUpdated.Height = 22
+$vdiPTop.Controls.AddRange(@($lblVdiPTitle, $lblVdiPUpdated))
+$vdiPTop.add_Resize({ param($s, $e) $lblVdiPUpdated.SetBounds(($lblVdiPTitle.Right + 12), 10, [Math]::Max(60, $s.ClientSize.Width - $lblVdiPTitle.Right - 26), 22) })
+$gridVdi = New-Grid
+$gridVdi.ReadOnly = $true; $gridVdi.SelectionMode = 'FullRowSelect'; $gridVdi.MultiSelect = $false; $gridVdi.EditMode = 'EditProgrammatically'; $gridVdi.ShowCellToolTips = $true
+$gridVdi.RowTemplate.Height = 30
+$vdiKindTexts = @('VdiKind_error', 'VdiKind_warn', 'VdiKind_info', 'VdiKind_ok') | ForEach-Object { Get-Text $_ }
+Add-TextColumn $gridVdi 'VdiColKind' 70 $true @() $vdiKindTexts
+Add-TextColumn $gridVdi 'VdiColWhere' 120 $true @('SERVER-BROKER2')
+Add-TextColumn $gridVdi 'VdiColFinding' $null $true
+$gridVdi.Columns[2].FillWeight = 520
+# the shares of the width: the grid changes them by itself when a column reaches its minimum on a narrow window, and
+# Set-ProbOuterFit puts them back
+$script:VdiGridWeights = @($gridVdi.Columns[0].FillWeight, $gridVdi.Columns[1].FillWeight, $gridVdi.Columns[2].FillWeight)
+$gridVdi.Columns[0].MinimumWidth = Get-FitWidth 50 $vdiKindTexts $fontSmallBold 18
+# a long finding wraps on two lines instead of ending with ...
+$gridVdi.Columns[2].DefaultCellStyle.WrapMode = 'True'; $gridVdi.Columns[2].DefaultCellStyle.Padding = New-Object System.Windows.Forms.Padding(6, 6, 6, 6)
+$gridVdi.AutoSizeRowsMode = 'AllCells'
+$vdiFixCol = New-Object System.Windows.Forms.DataGridViewButtonColumn; $vdiFixCol.HeaderText = ''; $vdiFixCol.FlatStyle = 'Flat'; $vdiFixCol.AutoSizeMode = 'None'
+$vdiFixCol.Width = Get-FitWidth 90 (@('BrokerRestart', 'BrokerSelfRepair', 'BrokerAddToGroup', 'HostPermissions', 'HostUnblock', 'HostOfflineAction') | ForEach-Object { Get-Text "VdiFix_$_" }) $fontBase 26
+[void]$gridVdi.Columns.Add($vdiFixCol)
+# right click (or the menu key) on a broker or a host: all its actions, not only the fix of the line
+$vdiMenu = New-Object System.Windows.Forms.ContextMenuStrip; $vdiMenu.Font = $fontBase
+foreach ($k in 'BrokerRestart', 'BrokerPurge', 'BrokerSelfRepair', 'HostUnblock', 'HostPermissions') {
+  $mi = New-Object System.Windows.Forms.ToolStripMenuItem (Get-Text "VdiAct_$k"); $mi.Tag = $k; [void]$vdiMenu.Items.Add($mi) }
+$gridVdi.ContextMenuStrip = $vdiMenu
+$vdiPCard.Controls.Add($gridVdi); $vdiPCard.Controls.Add($vdiPTop)
+$vdiPWrap.Controls.Add($vdiPCard)
+$probOuter.Panel1.Controls.Add($vdiPWrap); $probOuter.Panel2.Controls.Add($probWrap)
+$pageProblems.Controls.Add($probOuter); $pageProblems.Controls.Add((New-PageHeader (Get-Text 'NavProblems') (Get-Text 'ProbNote')))
+
+# ---------------- Desktops page: device -> user -> desktop -> host -> VM -> session -> last sign-in ----------------
+# top: search, filter, refresh, settings, then who cannot sign in now and when the data was read; the list; under it
+# the selected row: what is wrong in one sentence, its desktop and session, its last sign-ins, and its actions
+$pageDesktops = New-Panel 'Fill' $Theme.Page
+$dskWrap = New-Panel 'Fill' $Theme.Page; $dskWrap.Padding = New-Object System.Windows.Forms.Padding(12, 0, 12, 12)
+$dskCard = New-Panel 'Fill' $Theme.Card; Add-Line $dskCard 'Box'; $dskCard.Padding = New-Object System.Windows.Forms.Padding(1)
+$dskTop = New-Panel 'Top' $Theme.Card 84; Add-Line $dskTop 'Bottom'
+$script:DskSearchWidth = Get-FitWidth 230 (Get-Text 'VdiSearch') $fontBase 16; $script:DskTopCompact = $false
+$txtDskSearch = New-SearchBox 'VdiSearch' $script:DskSearchWidth; $txtDskSearch.Location = New-Object System.Drawing.Point(14, 13)
+$cmbDskFilter = New-Object System.Windows.Forms.ComboBox; $cmbDskFilter.DropDownStyle = 'DropDownList'; $cmbDskFilter.Font = $fontBase
+$dskFilterTexts = @('VdiFilterAll', 'VdiFilterProblems', 'VdiFilterActive', 'VdiFilterDisc', 'VdiFilterVmOff') | ForEach-Object { Get-Text $_ }
+[void]$cmbDskFilter.Items.AddRange($dskFilterTexts); $cmbDskFilter.SelectedIndex = 0
+$cmbDskFilter.Width = Get-FitWidth 140 $dskFilterTexts $fontBase 40; $cmbDskFilter.Location = New-Object System.Drawing.Point(($txtDskSearch.Right + 10), 12)
+$btnDskRefresh = New-ActionButton 'BtnRefresh' 'Refresh' 'secondary'; $btnDskRefresh.Location = New-Object System.Drawing.Point(($cmbDskFilter.Right + 10), 9)
+$btnDskSettings = New-ActionButton 'VdiBtnSettings' 'Settings' 'secondary'; $btnDskSettings.Location = New-Object System.Drawing.Point(($btnDskRefresh.Right + 8), 9)
+$lblDskHead = New-Label '' $fontBold; $lblDskHead.AutoSize = $false; $lblDskHead.AutoEllipsis = $true; $lblDskHead.Height = 24; $lblDskHead.Location = New-Object System.Drawing.Point(14, 52)
+$lblDskUpdated = New-Label '' $fontSmall $Theme.Muted; $lblDskUpdated.AutoSize = $false; $lblDskUpdated.TextAlign = 'MiddleRight'; $lblDskUpdated.Height = 24
+$dskTop.Controls.AddRange(@($txtDskSearch, $cmbDskFilter, $btnDskRefresh, $btnDskSettings, $lblDskHead, $lblDskUpdated))
+$dskTop.add_Resize({ param($s, $e)
+  $w = $s.ClientSize.Width
+  # on a narrow window the search box gives up its room first, then the buttons keep only their icons
+  $full = (Get-FullWidth @($btnDskRefresh, $btnDskSettings)) + 10
+  $txtDskSearch.Width = [Math]::Max(140, [Math]::Min($script:DskSearchWidth, $w - 28 - $cmbDskFilter.Width - 10 - $full - 10))
+  $cmbDskFilter.Left = $txtDskSearch.Right + 10
+  $compact = ($cmbDskFilter.Right + 10 + $full) -gt ($w - 14)
+  if ($compact -ne [bool]$script:DskTopCompact) { $script:DskTopCompact = $compact; Set-CompactButtons @($btnDskRefresh, $btnDskSettings) $compact }
+  $btnDskRefresh.Left = $cmbDskFilter.Right + 10; $btnDskSettings.Left = $btnDskRefresh.Right + 8
+  $uw = [Math]::Min(300, [Math]::Max(120, (Get-TextWidth $lblDskUpdated.Text $fontSmall) + 10))
+  $lblDskUpdated.SetBounds(($w - $uw - 14), 52, $uw, 24); $lblDskHead.Width = [Math]::Max(80, $w - $uw - 40) })
+$tips.SetToolTip($btnDskRefresh, (Get-Text 'VdiTipRefresh'))
+
+$dskSplit = New-Object System.Windows.Forms.SplitContainer; $dskSplit.Dock = 'Fill'; $dskSplit.Orientation = 'Horizontal'; $dskSplit.BackColor = $Theme.Line
+$dskSplit.SplitterWidth = 4; $dskSplit.FixedPanel = 'Panel2'; $dskSplit.Panel1.BackColor = $Theme.Card; $dskSplit.Panel2.BackColor = $Theme.Card
+$dskList = New-Object System.Windows.Forms.ListView
+$dskList.Dock = 'Fill'; $dskList.View = 'Details'; $dskList.FullRowSelect = $true; $dskList.MultiSelect = $false; $dskList.HideSelection = $false
+$dskList.BorderStyle = 'None'; $dskList.SmallImageList = $imgDots; $dskList.ShowItemToolTips = $true; $dskList.Font = $fontBase
+$dskList.Tag = @{ Ideal = @() }
+foreach ($c in @(@('VdiColUser', 100, @('FRANCESCA-VPN')), @('VdiColState', 120, @((Get-Text 'VdiStCannot'), (Get-Text 'VdiStSavedTpm'))), @('VdiColDevice', 100, @('thinclient12')),
+  @('VdiColDesktop', 110, @('VM-FRANCESCA')), @('VdiColHost', 90, @('SERVER-VDI2')), @('VdiColVm', 80, @((Get-Text 'VdiVmRunning'))), @('VdiColSession', 110, @((Get-Text 'VdiSessIdle' (Get-Text 'DurMinutes' 118)), (Get-Text 'VdiSessDiscSince' '18:45'))),
+  @('VdiColSignIn', 150, @((Get-Text 'VdiSignOk' '08:41' 'SERVER-BROKER'))))) {
+  $title = Get-Text $c[0]; $w = Get-FitWidth (Get-FitWidth $c[1] "$title $([char]0x25B2)" -pad 14) $c[2] -pad 14
+  [void]$dskList.Columns.Add($title, $w); $dskList.Tag.Ideal += $w
+}
+$dskList.add_Resize({ param($s, $e) Set-ListFit $s })
+# no sorter until a title is clicked: the rows come with whoever cannot sign in on top
+$script:DskSorter = New-Object OtrColumnSorter; $script:DskSorter.Column = -1; $script:DskSorter.NameColumn = 0
+$script:DskTitles = @($dskList.Columns | ForEach-Object { $_.Text })
+$dskList.add_ColumnClick({ param($s, $e)
+  if ($script:DskSorter.Column -eq $e.Column) { $script:DskSorter.Descending = -not $script:DskSorter.Descending } else { $script:DskSorter.Column = $e.Column; $script:DskSorter.Descending = $false }
+  if (-not $dskList.ListViewItemSorter) { $dskList.ListViewItemSorter = $script:DskSorter }
+  $dskList.Sort()
+  for ($k = 0; $k -lt $dskList.Columns.Count; $k++) { $dskList.Columns[$k].Text = if ($k -eq $script:DskSorter.Column) { $script:DskTitles[$k] + ' ' + $(if ($script:DskSorter.Descending) { [char]0x25BC } else { [char]0x25B2 }) } else { $script:DskTitles[$k] } }
+  if ($dskList.SelectedItems.Count) { $dskList.SelectedItems[0].EnsureVisible() } })
+$dskSplit.Panel1.Controls.Add($dskList)
+
+# the selected row
+$dskDetail = New-Panel 'Fill' $Theme.Card
+$dskHead = New-Panel 'Top' $Theme.Card 58; Add-Line $dskHead 'Bottom'
+$lblDskName = New-Label '' $fontPageTitle; $lblDskName.Location = New-Object System.Drawing.Point(16, 6)
+$lblDskState = New-Label '' $fontSmallBold; $lblDskState.Padding = New-Object System.Windows.Forms.Padding(8, 3, 8, 3); $lblDskState.Visible = $false
+$lblDskWhy = New-Label '' $fontBase $Theme.Muted; $lblDskWhy.AutoSize = $false; $lblDskWhy.AutoEllipsis = $true; $lblDskWhy.Height = 22; $lblDskWhy.Location = New-Object System.Drawing.Point(18, 33)
+$dskHead.Controls.AddRange(@($lblDskName, $lblDskState, $lblDskWhy))
+$dskHead.add_Resize({ param($s, $e) $lblDskWhy.Width = [Math]::Max(80, $s.ClientSize.Width - 34) })
+# left: the desktop, the session, the device; right: the last sign-ins
+$dskInfoTable = New-Object System.Windows.Forms.TableLayoutPanel; $dskInfoTable.Dock = 'Fill'; $dskInfoTable.ColumnCount = 2; $dskInfoTable.RowCount = 1; $dskInfoTable.BackColor = $Theme.Card
+[void]$dskInfoTable.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle('Percent', 55))); [void]$dskInfoTable.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle('Percent', 45)))
+[void]$dskInfoTable.RowStyles.Add((New-Object System.Windows.Forms.RowStyle('Percent', 100)))
+$lvDskInfo = New-Object System.Windows.Forms.ListView; $lvDskInfo.Dock = 'Fill'; $lvDskInfo.View = 'Details'; $lvDskInfo.HeaderStyle = 'None'; $lvDskInfo.BorderStyle = 'None'
+$lvDskInfo.FullRowSelect = $true; $lvDskInfo.Font = $fontBase; $lvDskInfo.ShowItemToolTips = $true
+[void]$lvDskInfo.Columns.Add('', (Get-FitWidth 120 (@('VdiInfoDesktop', 'VdiInfoHost', 'VdiInfoVm', 'VdiInfoSession', 'VdiInfoDevice') | ForEach-Object { Get-Text $_ }) $fontBase 18)); [void]$lvDskInfo.Columns.Add('', 300)
+$lvDskInfo.add_Resize({ param($s, $e) $s.Columns[1].Width = [Math]::Max(120, $s.ClientSize.Width - $s.Columns[0].Width - 4) })
+$lvDskSign = New-Object System.Windows.Forms.ListView; $lvDskSign.Dock = 'Fill'; $lvDskSign.View = 'Details'; $lvDskSign.BorderStyle = 'None'; $lvDskSign.FullRowSelect = $true
+$lvDskSign.Font = $fontBase; $lvDskSign.SmallImageList = $imgDots; $lvDskSign.ShowItemToolTips = $true; $lvDskSign.HeaderStyle = 'Nonclickable'
+foreach ($c in @(@('VdiColWhen', 90, '18/10 08:41'), @('VdiColOutcome', 70, (Get-Text 'VdiOutFail')), @('VdiColBroker', 120, ''))) { [void]$lvDskSign.Columns.Add((Get-Text $c[0]), (Get-FitWidth $c[1] @((Get-Text $c[0]), $c[2]) -pad 34)) }
+$lvDskSign.add_Resize({ param($s, $e) $s.Columns[2].Width = [Math]::Max(80, $s.ClientSize.Width - $s.Columns[0].Width - $s.Columns[1].Width - 4) })
+$dskInfoPad = New-Panel 'Fill' $Theme.Card; $dskInfoPad.Padding = New-Object System.Windows.Forms.Padding(10, 6, 6, 0); $dskInfoPad.Controls.Add($lvDskInfo)
+$dskSignPad = New-Panel 'Fill' $Theme.Card; $dskSignPad.Padding = New-Object System.Windows.Forms.Padding(6, 6, 10, 0); $dskSignPad.Controls.Add($lvDskSign)
+$dskInfoTable.Controls.Add($dskInfoPad, 0, 0); $dskInfoTable.Controls.Add($dskSignPad, 1, 0)
+# the actions of the row; the two that end something on the right, in red
+$btnDskShadow = New-ActionButton 'VdiBtnShadow' 'Screen' 'primary'
+$btnDskMessage = New-ActionButton 'VdiBtnMessage' 'Message' 'secondary'
+$btnDskDisconnect = New-ActionButton 'VdiBtnDisconnect' 'Unplug' 'secondary'
+$btnDskStart = New-ActionButton 'VdiBtnStart' 'Play' 'secondary'
+$btnDskRestart = New-ActionButton 'VdiBtnRestart' 'Refresh' 'secondary'
+$btnDskAssign = New-ActionButton 'VdiBtnAssign' 'Contact' 'secondary'
+$btnDskLogoff = New-ActionButton 'VdiBtnLogoff' 'Cancel' 'danger'
+$btnDskShutdown = New-ActionButton 'VdiBtnShutdown' 'Power' 'danger'
+$script:DskButtons = @($btnDskShadow, $btnDskMessage, $btnDskDisconnect, $btnDskStart, $btnDskRestart, $btnDskAssign, $btnDskLogoff, $btnDskShutdown)
+$barDsk = New-ActionBar @($btnDskShadow, $btnDskMessage, $btnDskDisconnect, $btnDskStart, $btnDskRestart, $btnDskAssign) @($btnDskShutdown, $btnDskLogoff)
+# the actions keep only their icons (their words in the tooltip) rather than taking a second row from the details
+$script:DskCompact = $false
+$barDsk.add_Resize({ param($s, $e)
+  $left = @($btnDskShadow, $btnDskMessage, $btnDskDisconnect, $btnDskStart, $btnDskRestart, $btnDskAssign)
+  $compact = (Get-FullWidth $left) + (Get-FullWidth @($btnDskShutdown, $btnDskLogoff)) + 40 -gt $s.ClientSize.Width
+  if ($compact -ne $script:DskCompact) { $script:DskCompact = $compact; Set-CompactButtons $left $compact } })
+$dskDetail.Controls.Add($dskInfoTable); $dskDetail.Controls.Add($dskHead); $dskDetail.Controls.Add($barDsk)
+$dskSplit.Panel2.Controls.Add($dskDetail)
+# the same actions on the row itself: right click, or the menu key
+$dskMenu = New-Object System.Windows.Forms.ContextMenuStrip; $dskMenu.Font = $fontBase
+foreach ($k in 'SessionShadow', 'SessionMessage', 'SessionDisconnect', 'SessionLogoff', '-', 'VmStart', 'VmRestart', 'VmShutdown', '-', 'AssignDesktop') {
+  if ($k -eq '-') { [void]$dskMenu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator)); continue }
+  $mi = New-Object System.Windows.Forms.ToolStripMenuItem (Get-Text "VdiAct_$k"); $mi.Tag = $k; [void]$dskMenu.Items.Add($mi) }
+$dskList.ContextMenuStrip = $dskMenu
+$dskCard.Controls.Add($dskSplit); $dskCard.Controls.Add($dskTop)
+$dskWrap.Controls.Add($dskCard)
+$pageDesktops.Controls.Add($dskWrap); $pageDesktops.Controls.Add((New-PageHeader (Get-Text 'NavDesktops') (Get-Text 'VdiPageNote')))
+# the details keep about 250 points (less on a low window), the list the rest
+function Set-DskSplitFit {
+  $h = $dskSplit.Height; if ($h -lt 200) { return }
+  $want = [Math]::Max(90, $h - [Math]::Max(200, [Math]::Min(290, [int]($h * 0.52))))
+  if ([Math]::Abs($dskSplit.SplitterDistance - $want) -gt 2) { try { $dskSplit.SplitterDistance = $want } catch { } }
+}
+$dskSplit.add_SizeChanged({ Set-DskSplitFit })
 
 # ---------------- Vault page ----------------
 # three blocks: the vault (open, close, code), the SSH key of the manager, the key that signs the updates
@@ -2622,7 +2792,7 @@ $updWrap.Controls.Add($updCard)
 $pageUpdates.Controls.Add($updWrap); $pageUpdates.Controls.Add((New-PageHeader (Get-Text 'NavUpdates') (Get-Text 'PageUpdatesNote')))
 $updCard.add_Resize({ Set-BlockHeights $updCard @($blkFleet, $blkManager) })
 
-$script:Pages = @($pageDevices, $pageCommon, $pageKeys, $pageProblems, $pageVault, $pageUpdates)
+$script:Pages = @($pageDevices, $pageCommon, $pageKeys, $pageProblems, $pageVault, $pageUpdates, $pageDesktops)
 foreach ($p in $script:Pages) { $p.Visible = $false; $content.Controls.Add($p) }
 # Fill first, then the edges: the last one added takes its side first
 $root.Controls.Add($content); $root.Controls.Add($nav); $root.Controls.Add($header); $root.Controls.Add($bar)
@@ -2642,6 +2812,7 @@ function Select-Page([int]$i) {
   if ($i -eq 3) { Update-ProblemView }
   if ($i -eq 4) { Update-VaultView }
   if ($i -eq 5) { Update-UpdatesView }
+  if ($i -eq 6) { Set-DskSplitFit; Update-DesktopsView; if (-not $script:Vdi.Model) { Start-VdiRefresh } }
 }
 
 function Set-Cell($row, $col, $s, $value) {
@@ -3219,7 +3390,8 @@ $txtDevSearch.add_TextChanged({ Update-DeviceList })
 $btnRefresh.add_Click({
   Update-DeviceList
   if ($script:Selected) { $n = $script:Selected.File; $q = $script:Devices | Where-Object File -eq $n | Select-Object -First 1; if ($q) { Show-Device $q } }
-  if ($script:Page -eq 3) { Update-ProblemView } })
+  if ($script:Page -eq 3) { Update-ProblemView }
+  if ($script:Page -in 3, 6) { Start-VdiRefresh } })
 $btnOpen.add_Click({ Start-Process explorer.exe $script:Folder })
 # ---------------- releases and versions ----------------
 # The signature a checked release goes in with: the site key signs it again (the vault opened for it when there is
@@ -3512,6 +3684,381 @@ $probList.add_SelectedIndexChanged({
   $probText.Text = (@($probList.SelectedItems[0].Tag.Events | ForEach-Object { '{0:dd/MM HH:mm:ss}  {1,-14} {2}' -f $_.Time, $_.Device, $_.Text }) -join "`r`n")
 })
 $cmbPeriod.add_SelectedIndexChanged({ if ($script:Page -eq 3) { Update-ProblemView } })
+
+# ---------------- Desktops, brokers and hosts ----------------
+# The probe reads the servers in a runspace of its own, every $script:VdiRefreshSeconds while the window is open: a
+# host that does not answer holds nothing in the window. What it found is shown with the time it was read; the actions
+# that stop or end something are not offered on data older than $script:VdiStaleMinutes (OtrVdi.ps1).
+$script:Vdi = @{ Model = $null; Received = $null; Busy = $false; Error = $null; Action = $null; Again = $false }
+function Get-VdiState { @{ Model = $script:Vdi.Model; Received = $script:Vdi.Received; Running = $script:Vdi.Action } }
+function Start-VdiRefresh([switch]$Queue) {
+  # asked while reading (after an action, Refresh): read again as soon as this reading ends; the timer only skips
+  if ($script:Vdi.Busy) { if ($Queue) { $script:Vdi.Again = $true }; return }
+  if (-not $script:VdiLoaded) { return }
+  $set = Get-VdiSettings
+  if ($env:OTR_MANAGER_VDI_DEMO) {
+    # demo and screenshots: the answer of a probe from a file, at once
+    $raw = $null; try { $raw = Get-Content -LiteralPath $env:OTR_MANAGER_VDI_DEMO -Raw | ConvertFrom-Json } catch { $script:Vdi.Error = $_.Exception.Message }
+    Complete-VdiRefresh $raw; return
+  }
+  $cfg = Get-VdiProbeConfig $script:Devices $set
+  if (-not $set.Enabled -or -not @($cfg.BrokerNames).Count) { Complete-VdiRefresh $null; return }
+  $ps = [powershell]::Create()
+  [void]$ps.AddScript($script:VdiProbe.ToString()).AddArgument($cfg)
+  $script:Vdi.Busy = $true; $script:Vdi.Error = $null; Update-VdiStamp
+  $t = New-Object System.Windows.Forms.Timer; $t.Interval = 500
+  $t.Tag = @{ PS = $ps; H = $ps.BeginInvoke(); Started = (Get-Date) }
+  $t.add_Tick({ param($s, $e)
+    $st = $s.Tag
+    if (-not $st.H.IsCompleted -and ((Get-Date) - $st.Started).TotalSeconds -lt 300) { return }
+    $s.Stop(); $s.Dispose(); $script:Vdi.Busy = $false
+    $raw = $null
+    try {
+      if (-not $st.H.IsCompleted) { [void]$st.PS.BeginStop($null, $null); throw (Get-Text 'VdiErrTimeout') }
+      $raw = @($st.PS.EndInvoke($st.H)) | Select-Object -Last 1
+    } catch { $script:Vdi.Error = $_.Exception.GetBaseException().Message }
+    finally { if ($st.H.IsCompleted) { $st.PS.Dispose() } }
+    if ($raw) { Complete-VdiRefresh $raw } else { Update-VdiStamp }
+    if ($script:Vdi.Again) { $script:Vdi.Again = $false; Start-VdiRefresh }
+  })
+  $t.Start()
+}
+function Complete-VdiRefresh($raw) {
+  $now = if ($raw -and $raw.Taken) { ConvertFrom-VdiTime $raw.Taken } else { $null }
+  if (-not $now) { $now = Get-Date }
+  try { $script:Vdi.Model = ConvertTo-VdiModel $raw $script:Devices $now (Get-VdiSettings); $script:Vdi.Received = Get-Date }
+  catch { $script:Vdi.Error = "$($_.Exception.Message) (line $($_.InvocationInfo.ScriptLineNumber))" }
+  Update-DesktopsView; Update-VdiProblemsView; Update-VdiNav
+}
+# "updated at 10:42:05", "reading the servers...", and why the last reading failed
+function Update-VdiStamp {
+  $t = if ($script:Vdi.Busy) { Get-Text 'VdiReading' } elseif ($script:Vdi.Received) { Get-Text 'VdiUpdatedAt' $script:Vdi.Received.ToString('HH:mm:ss') } else { '' }
+  if (-not $script:Vdi.Busy -and $script:Vdi.Received -and (Test-VdiStale $script:Vdi.Received (Get-Date))) { $t = Get-Text 'VdiStaleAt' $script:Vdi.Received.ToString('HH:mm:ss') }
+  if ($script:Vdi.Error -and -not $script:Vdi.Busy) { $t = Get-Text 'VdiReadFailed' $script:Vdi.Error }
+  $lblDskUpdated.Text = $t; $lblVdiPUpdated.Text = $t
+  $tips.SetToolTip($lblDskUpdated, $t); $tips.SetToolTip($lblVdiPUpdated, $t)
+  $lblDskUpdated.ForeColor = if ($script:Vdi.Error) { $script:KindColor.warn } else { $Theme.Muted }
+  $btnDskRefresh.Enabled = -not $script:Vdi.Busy
+  $dskTop.PerformLayout(); $dskTop.Invalidate()
+  # the label is laid out by the resize of its bar
+  $w = $dskTop.ClientSize.Width; $uw = [Math]::Min(300, [Math]::Max(120, (Get-TextWidth $t $fontSmall) + 10))
+  $lblDskUpdated.SetBounds(($w - $uw - 14), 52, $uw, 24); $lblDskHead.Width = [Math]::Max(80, $w - $uw - 40)
+}
+function Update-VdiNav {
+  $m = $script:Vdi.Model
+  $navDesktops.Tag.Count = ''; $navDesktops.Tag.CountColor = $null
+  if ($m -and $m.Access -ne 'off') {
+    if ($m.CannotSignIn) { $navDesktops.Tag.Count = "$($m.CannotSignIn)"; $navDesktops.Tag.CountColor = New-Color '#f87171' }
+    else { $navDesktops.Tag.Count = "$(@($m.Rows).Count)" }
+  }
+  $err = if ($m) { @($m.Findings | Where-Object { $_.Kind -eq 'error' }).Count } else { 0 }
+  $navProblems.Tag.Count = $(if ($err) { "$err" } else { '' }); $navProblems.Tag.CountColor = $(if ($err) { New-Color '#f87171' } else { $null })
+  $navDesktops.Invalidate(); $navProblems.Invalidate()
+}
+# the list, with the search and the filter of the page; the selected row stays selected
+function Update-DesktopsView {
+  Update-VdiStamp
+  $m = $script:Vdi.Model
+  if (-not $m) {
+    $lblDskHead.Text = if (-not $script:VdiLoaded) { Get-Text 'VdiNotLoaded' } elseif ($script:Vdi.Busy) { Get-Text 'VdiReading' } else { Get-Text 'VdiNoData' }
+    $lblDskHead.ForeColor = $Theme.Muted; $dskList.Items.Clear(); Show-DskRow $null; return
+  }
+  if ($m.Access -ne 'ok') { $lblDskHead.Text = Get-Text "VdiAccess_$($m.Access)" $m.AccessText; $lblDskHead.ForeColor = $(if ($m.Access -eq 'off') { $Theme.Muted } else { $script:KindColor.warn }) }
+  else { $lblDskHead.Text = $m.Headline; $lblDskHead.ForeColor = $script:KindColor[$m.HeadlineKind] }
+  $tips.SetToolTip($lblDskHead, $lblDskHead.Text)
+  $sel = if ($dskList.SelectedItems.Count) { $dskList.SelectedItems[0].Tag.Key } else { $null }
+  $f = [System.Management.Automation.WildcardPattern]::Escape($txtDskSearch.Text.Trim())
+  $dash = [string][char]0x2014
+  $script:DskListing = $true
+  $dskList.BeginUpdate(); $dskList.Items.Clear()
+  foreach ($r in $m.Rows) {
+    $show = switch ($cmbDskFilter.SelectedIndex) {
+      1 { $r.Kind -in 'error', 'warn' }
+      2 { $r.Session -and $r.Session.State -eq 'active' }
+      3 { $r.Session -and $r.Session.State -eq 'disconnected' }
+      4 { $r.VmInfo -and $r.VmInfo.State -in 'Off', 'Saved' }
+      default { $true }
+    }
+    if (-not $show) { continue }
+    $ip = if ($r.Device) { ([string]$r.Device.S['IP']) -replace '/.*$', '' } else { '' }
+    if ($f -and -not (@($r.User, $r.State, $r.DeviceText, $ip, $r.Vm, $r.Host, $r.VmText, $r.SessionText, $r.SignInText) | Where-Object { "$_" -like "*$f*" })) { continue }
+    $it = New-Object System.Windows.Forms.ListViewItem($(if ($r.User) { $r.User } else { $dash }))
+    $it.ImageKey = $r.Kind; $it.UseItemStyleForSubItems = $false
+    foreach ($v in @($r.State, $r.DeviceText, $r.Vm, $r.Host, $r.VmText, $r.SessionText, $r.SignInText)) { [void]$it.SubItems.Add([string]$v) }
+    foreach ($x in $it.SubItems) { $x.BackColor = $Theme.Card; $x.ForeColor = $Theme.Text }
+    # the state in the colour of its kind, with its words: never the colour alone
+    $it.SubItems[1].ForeColor = if ($r.Kind -eq 'ok') { $script:KindColor.ok } elseif ($r.Kind -eq 'off') { $Theme.Muted } else { $script:KindColor[$r.Kind] }
+    if ($r.Device -and $r.Device.Minutes -gt $script:StaleMinutes) { $it.SubItems[2].ForeColor = $Theme.Muted }
+    if ($r.SignIn -and $r.SignIn.Last -and -not $r.SignIn.Last.Ok) { $it.SubItems[7].ForeColor = $script:KindColor.error }
+    $it.ToolTipText = $r.Why
+    $it.Tag = $r
+    [void]$dskList.Items.Add($it)
+    if ($sel -and $r.Key -eq $sel) { $it.Selected = $true }
+  }
+  if ($dskList.ListViewItemSorter) { $dskList.Sort() }
+  $dskList.EndUpdate()
+  $script:DskListing = $false
+  if (-not $dskList.SelectedItems.Count -and $dskList.Items.Count) { $dskList.Items[0].Selected = $true }
+  if ($dskList.SelectedItems.Count) { $dskList.SelectedItems[0].EnsureVisible(); Show-DskRow $dskList.SelectedItems[0].Tag } else { Show-DskRow $null }
+}
+# the selected row: what is wrong, its desktop and session, its last sign-ins, the actions it allows now
+function Show-DskRow($r) {
+  $script:DskRow = $r
+  $lvDskInfo.BeginUpdate(); $lvDskInfo.Items.Clear(); $lvDskSign.BeginUpdate(); $lvDskSign.Items.Clear()
+  try {
+    if (-not $r) { $lblDskName.Text = Get-Text 'VdiNoRow'; $lblDskState.Visible = $false; $lblDskWhy.Text = ''; return }
+    $now = $script:Vdi.Model.Taken; $dash = [string][char]0x2014; $dot = "   $([char]0x00B7)   "
+    $lblDskName.Text = if ($r.User) { $r.User } elseif ($r.Device) { $r.Device.Name } else { $dash }
+    $lblDskState.Text = $r.State; $lblDskState.ForeColor = $script:KindColor[$r.Kind]; $lblDskState.BackColor = $script:KindSoft[$r.Kind]; $lblDskState.Visible = [bool]$r.State
+    $lblDskState.Location = New-Object System.Drawing.Point(($lblDskName.Right + 10), ($lblDskName.Top + [int](($lblDskName.Height - $lblDskState.Height) / 2) + 1))
+    $lblDskWhy.Text = $r.Why; $tips.SetToolTip($lblDskWhy, $r.Why)
+    $add = { param($k, $v) $it = New-Object System.Windows.Forms.ListViewItem((Get-Text $k)); $it.ForeColor = $Theme.Muted; $it.UseItemStyleForSubItems = $false
+      $sub = $it.SubItems.Add($(if ($v) { [string]$v } else { $dash })); $sub.ForeColor = $Theme.Text; $it.ToolTipText = [string]$v; [void]$lvDskInfo.Items.Add($it) }
+    $vi = $r.VmInfo
+    & $add 'VdiInfoDesktop' $(if ($r.Vm) { $r.Vm + $(if ($r.Collection) { $dot + $r.Collection } else { '' }) + $(if ($r.Rdsh) { $dot + (Get-Text 'VdiInfoRdsh') } else { '' }) })
+    & $add 'VdiInfoHost' $r.Host
+    & $add 'VdiInfoVm' $(if ($vi) { (@($r.VmText, $(if ($vi.State -eq 'Running') { Get-Text 'VdiInfoHeartbeat' $(if ("$($vi.Heartbeat)" -like 'Ok*') { 'OK' } else { $vi.Heartbeat }) }), $(if ($vi.Tpm) { 'vTPM' }),
+        $(if ($vi.State -eq 'Running' -and $vi.UptimeMin) { Get-Text 'VdiInfoUptime' (Format-Minutes ([int]$vi.UptimeMin)) })) | Where-Object { $_ }) -join $dot })
+    $s = $r.Session
+    & $add 'VdiInfoSession' $(if ($s) { (@($r.SessionText, $(if ($s.Logon) { Get-Text 'VdiInfoLogon' (Format-VdiClock $s.Logon $now) }), "id $($s.Id)") | Where-Object { $_ }) -join $dot } else { Get-Text 'VdiInfoNoSession' })
+    & $add 'VdiInfoDevice' $(if ($r.Device) { (@($r.Device.Name, (([string]$r.Device.S['IP']) -replace '/.*$', ''), (Get-Text 'DevLastReport' (Get-Seen $r.Device))) | Where-Object { $_ }) -join $dot })
+    foreach ($e in @($r.SignIn.Recent | Sort-Object Time -Descending)) {
+      $it = New-Object System.Windows.Forms.ListViewItem((Format-VdiClock $e.Time $now)); $it.ImageKey = $(if ($e.Ok) { 'ok' } else { 'error' })
+      [void]$it.SubItems.Add($(if ($e.Ok) { Get-Text 'VdiOutOk' } else { Get-Text 'VdiOutFail' }))
+      $by = if ($e.Source -eq 'device') { Get-Text 'VdiBySource' $(if ($e.Broker) { $e.Broker } else { '?' }) $e.Device } else { $e.Broker }
+      [void]$it.SubItems.Add($by)
+      $it.ToolTipText = (@($e.Kind, $e.Why) | Where-Object { $_ }) -join ': '
+      [void]$lvDskSign.Items.Add($it)
+    }
+  } finally { $lvDskInfo.EndUpdate(); $lvDskSign.EndUpdate(); Update-DskButtons }
+}
+# each button as the plan of its action allows it now; the reason it does not in its tooltip
+$script:DskActions = @{ SessionShadow = $btnDskShadow; SessionMessage = $btnDskMessage; SessionDisconnect = $btnDskDisconnect; VmStart = $btnDskStart
+  VmRestart = $btnDskRestart; AssignDesktop = $btnDskAssign; SessionLogoff = $btnDskLogoff; VmShutdown = $btnDskShutdown }
+function Get-DskPlan([string]$kind, $r) { Get-VdiActionPlan $kind $r (Get-VdiState) (Get-Date) $(if ($kind -in 'SessionMessage', 'AssignDesktop') { '*' } else { $null }) }
+# A flat button with colours of its own does not look disabled by itself: grey when it cannot be used now, so that a
+# blue or red button never invites a click that does nothing
+$script:BtnLook = @{}
+function Set-ActionEnabled($b, [bool]$on) {
+  if (-not $script:BtnLook.ContainsKey($b)) { $script:BtnLook[$b] = @{ Back = $b.BackColor; Fore = $b.ForeColor; Border = $b.FlatAppearance.BorderColor } }
+  $l = $script:BtnLook[$b]; $b.Enabled = $on
+  if ($on) { $b.BackColor = $l.Back; $b.ForeColor = $l.Fore; $b.FlatAppearance.BorderColor = $l.Border }
+  else { $b.BackColor = $Theme.Card; $b.ForeColor = $Theme.Muted; $b.FlatAppearance.BorderColor = $Theme.Line }
+}
+function Update-DskButtons {
+  $r = $script:DskRow
+  foreach ($k in $script:DskActions.Keys) {
+    $b = $script:DskActions[$k]
+    if (-not $r -or -not $script:Vdi.Model) { Set-ActionEnabled $b $false; continue }
+    $p = Get-DskPlan $k $r
+    Set-ActionEnabled $b (-not $p.Blocked)
+    $tip = if ($p.Blocked) { $p.Blocked } else { $p.Title }
+    # a button that shows only its icon keeps this text for its tooltip (Set-CompactButtons)
+    if ($b.Tag -is [hashtable] -and $b.Tag.ContainsKey('Full')) { $b.Tag.Tip = $tip; if (-not $b.Text) { $tip = "$($b.Tag.Full): $tip" } }
+    $tips.SetToolTip($b, $tip)
+  }
+}
+# The action, after its confirmation: what will happen and to whom, in the plan's words. Runs in the background;
+# the result in a message, the line in config\changes.log, and the page read again.
+function Invoke-VdiAction([string]$kind, $target, $arg = $null) {
+  if (-not $script:Vdi.Model) { return }
+  $title = Get-Text "VdiAct_$kind"
+  if ($kind -eq 'SessionMessage' -and -not $arg) {
+    $pre = Get-VdiActionPlan $kind $target (Get-VdiState) (Get-Date) '*'
+    if ($pre.Blocked) { Show-Message $title $pre.Blocked 'Information'; return }
+    Add-Type -AssemblyName Microsoft.VisualBasic
+    $arg = [Microsoft.VisualBasic.Interaction]::InputBox((Get-Text 'VdiMessageAsk' $target.User), $title, '').Trim()
+    if (-not $arg) { return }
+  }
+  if ($kind -eq 'AssignDesktop' -and $null -eq $arg) {
+    $pre = Get-VdiActionPlan $kind $target (Get-VdiState) (Get-Date) '*'
+    if ($pre.Blocked) { Show-Message $title $pre.Blocked 'Information'; return }
+    $arg = Show-AssignDialog $target; if ($null -eq $arg) { return }
+  }
+  $plan = Get-VdiActionPlan $kind $target (Get-VdiState) (Get-Date) $arg
+  if ($plan.Blocked) { Show-Message $plan.Title $plan.Blocked 'Information'; return }
+  $text = $plan.Text; if (Test-VdiDryRun) { $text += "`r`n`r`n" + (Get-Text 'VdiDryRunNote') }
+  if (-not (Confirm-Action $plan.Title $text $(if ($plan.DefaultNo) { 'Button2' } else { 'Button1' }))) { return }
+  Start-VdiJob $plan
+}
+function Start-VdiJob($plan) {
+  $dry = Test-VdiDryRun
+  $ps = [powershell]::Create()
+  [void]$ps.AddScript($script:VdiJobRunner.ToString()).AddArgument(@($plan.Steps)).AddArgument($dry).AddArgument(8000).AddArgument(420000)
+  $script:Vdi.Action = $plan.Title
+  $barText.Text = Get-Text 'VdiActionRunning' $plan.Title; $form.Cursor = 'AppStarting'
+  Update-DskButtons
+  $t = New-Object System.Windows.Forms.Timer; $t.Interval = 400
+  $t.Tag = @{ PS = $ps; H = $ps.BeginInvoke(); Plan = $plan; Dry = $dry; Started = (Get-Date) }
+  $t.add_Tick({ param($s, $e)
+    $st = $s.Tag
+    if (-not $st.H.IsCompleted -and ((Get-Date) - $st.Started).TotalSeconds -lt 900) { return }
+    $s.Stop(); $s.Dispose()
+    $res = @()
+    try {
+      if (-not $st.H.IsCompleted) { [void]$st.PS.BeginStop($null, $null); throw (Get-Text 'VdiErrTimeout') }
+      $res = @($st.PS.EndInvoke($st.H) | ForEach-Object { $_ })
+    } catch { $res = @([pscustomobject]@{ Name = $st.Plan.Title; Computer = ''; Ok = $false; DryRun = $false; Data = $null; Error = $_.Exception.GetBaseException().Message }) }
+    finally { if ($st.H.IsCompleted) { $st.PS.Dispose() } }
+    $script:Vdi.Action = $null; $form.Cursor = 'Default'; $barText.Text = ''
+    Complete-VdiJob $st.Plan $res $st.Dry
+  })
+  $t.Start()
+}
+function Complete-VdiJob($plan, $res, [bool]$dry) {
+  # shadow: a policy that cannot be read (no WinRM to the desktop) = with the user's consent, the safe way
+  $shadowBlind = $plan.Kind -eq 'SessionShadow' -and -not $dry -and -not @($res)[0].Ok
+  $ok = $shadowBlind -or (@($res).Count -gt 0 -and -not @($res | Where-Object { -not $_.Ok }).Count)
+  $why = (@($res | Where-Object { -not $_.Ok } | ForEach-Object { "$($_.Name): $($_.Error)" })) -join '; '
+  try { Add-ChangeLog ("desktops: {0}: {1}{2}" -f $plan.Log, $(if ($ok) { 'done' } else { "FAILED ($why)" }), $(if ($dry) { ' (dry run, nothing changed)' } else { '' })) } catch { }
+  $lines = @(foreach ($r in @($res)) { Format-VdiStepResult $r })
+  if ($plan.Kind -eq 'SessionShadow' -and $ok) {
+    # the policy of the desktop says how: with the user's consent, or without
+    $pol = if ($dry -or $shadowBlind) { 1 } else { [int](@($res)[0].Data.Policy) }
+    $lines += Start-VdiShadow $plan.Target $pol $dry
+  }
+  Show-Message $plan.Title ((@($(if ($ok) { Get-Text 'VdiResDone' } else { Get-Text 'VdiResFailed' })) + '' + $lines) -join "`r`n") $(if ($ok) { 'Information' } else { 'Warning' })
+  Start-VdiRefresh -Queue
+}
+# a step in words, with what the server answered (service states, members, the VM before and after)
+function Format-VdiStepResult($r) {
+  $where = if ($r.Computer) { Get-VdiShort $r.Computer } else { Get-Text 'VdiHere' }
+  $n = if ($r.PSObject.Properties['Label'] -and $r.Label) { $r.Label } else { $r.Name }
+  if ($r.DryRun) { return (Get-Text 'VdiResDry' $n $where) }
+  $l = @($(if ($r.Ok) { Get-Text 'VdiResOk' $n $where } else { Get-Text 'VdiResFail' $n $where $(if ($r.Error) { $r.Error } else { '?' }) }))
+  $d = $r.Data
+  if ($d) {
+    $has = { param($n) [bool]$d.PSObject.Properties[$n] }
+    if ((& $has 'Steps') -and (& $has 'After')) {
+      foreach ($x in @($d.Steps)) { $l += "   $($x.Name): $($x.Before) -> $($x.Stopped)" + $(if ([int]$x.Killed) { '  ' + (Get-Text 'VdiResKilled' $x.Killed) } else { '' }) }
+      foreach ($x in @($d.After)) { $l += "   $($x.Name): $($x.State)" }
+    } elseif ((& $has 'Vm') -and (& $has 'Before')) { $l += "   $($d.Vm): $($d.Before) -> $($d.After)" }
+    elseif (& $has 'Results') {
+      foreach ($x in @($d.Results)) { $l += '   ' + ((@($x.PSObject.Properties | Where-Object { $_.Name -notmatch '^(PS|RunspaceId)' -and "$($_.Value)" -ne '' } | ForEach-Object { "$($_.Value)" })) -join '  ') }
+    } elseif ((& $has 'Now')) { $l += '   ' + (Get-Text 'VdiResAssigned' $(if (@($d.Now).Count) { @($d.Now) -join ', ' } else { [string][char]0x2014 })) }
+  }
+  $l
+}
+function Start-VdiShadow($r, [int]$policy, [bool]$dry) {
+  $s = $r.Session
+  if ($policy -eq 0) { return (Get-Text 'VdiShadowOff' $s.Vm) }
+  $a = @("/v:$($s.Vm)", "/shadow:$($s.Id)")
+  switch ($policy) { 1 { $a += '/control' } 2 { $a += '/control', '/noConsentPrompt' } 4 { $a += '/noConsentPrompt' } }
+  if ($dry) { return (Get-Text 'VdiShadowDry' ("mstsc.exe " + ($a -join ' '))) }
+  try { Start-Process mstsc.exe -ArgumentList $a } catch { return $_.Exception.Message }
+  Get-Text $(if ($policy -in 1, 3) { 'VdiShadowConsent' } else { 'VdiShadowStarted' }) $r.User
+}
+# the personal desktop for a user: none, or one of the collection that nobody else has
+function Show-AssignDialog($r) {
+  $m = $script:Vdi.Model
+  $coll = if ($r.Collection) { $r.Collection } else { (@($m.Collections | Where-Object { $_.Kind -eq 'vm' }) | Select-Object -First 1).Alias }
+  $free = @($m.Desktops | Where-Object { $_.Collection -ieq $coll -and (-not $_.User -or (Get-VdiUserKey $_.User) -eq $r.UserKey) } | ForEach-Object Name | Sort-Object)
+  $opts = @((Get-Text 'VdiAssignNone'), (Get-Text 'VdiAssignPick' $coll))
+  $pick = Show-PickDialog (Get-Text 'VdiAct_AssignDesktop') (Get-Text 'VdiAssignText' $r.User $(if ($r.Vm) { $r.Vm } else { [string][char]0x2014 })) $opts 1 $free $r.Vm $null 'BtnApply'
+  if (-not $pick) { return $null }
+  if ($pick.Option -eq 0) { return '' }
+  [string]$pick.Version
+}
+# Brokers and hosts in the Problems page
+function Update-VdiProblemsView {
+  $m = $script:Vdi.Model
+  $show = $script:VdiLoaded -and $m -and $m.Access -notin 'off', 'nobroker'
+  $probOuter.Panel1Collapsed = -not $show
+  Update-VdiStamp
+  if (-not $show) { return }
+  $gridVdi.Rows.Clear()
+  foreach ($f in @($m.Findings)) {
+    $i = $gridVdi.Rows.Add((Get-Text "VdiKind_$($f.Kind)"), $f.Where, $f.Text, $(if ($f.Fix) { Get-Text "VdiFix_$($f.Fix)" } else { '' }))
+    $row = $gridVdi.Rows[$i]; $row.Tag = $f
+    if (-not $f.Fix) { $row.Cells[3] = New-Object System.Windows.Forms.DataGridViewTextBoxCell }
+    $c = $row.Cells[0]; $c.Style.ForeColor = $script:KindColor[$f.Kind]; $c.Style.BackColor = $script:KindSoft[$f.Kind]
+    $c.Style.SelectionForeColor = $script:KindColor[$f.Kind]; $c.Style.SelectionBackColor = $script:KindSoft[$f.Kind]; $c.Style.Font = $fontSmallBold
+    $row.Cells[2].ToolTipText = $f.Text
+  }
+  $gridVdi.CurrentCell = $null
+  Set-ProbOuterFit
+}
+# the brokers and hosts as high as their lines, at most a little more than half of the page
+function Set-ProbOuterFit {
+  if ($probOuter.Panel1Collapsed) { return }
+  for ($k = 0; $k -lt 3; $k++) { if ($gridVdi.Columns[$k].FillWeight -ne $script:VdiGridWeights[$k]) { $gridVdi.Columns[$k].FillWeight = $script:VdiGridWeights[$k] } }
+  $h = $probOuter.Height; if ($h -lt 200) { return }
+  $rowsH = 0; foreach ($r in $gridVdi.Rows) { $rowsH += $r.Height }
+  $need = 42 + 4 + $gridVdi.ColumnHeadersHeight + [Math]::Max($gridVdi.RowTemplate.Height, $rowsH) + 4
+  $d = [Math]::Max(110, [Math]::Min($need, [int]($h * 0.55)))
+  if ($probOuter.SplitterDistance -ne $d) { try { $probOuter.SplitterDistance = $d } catch { } }
+}
+$probOuter.add_SizeChanged({ Set-ProbOuterFit })
+$gridVdi.add_CellContentClick({ param($s, $e)
+  if ($e.RowIndex -lt 0 -or $e.ColumnIndex -ne 3) { return }
+  $f = $s.Rows[$e.RowIndex].Tag; if ($f -and $f.Fix) { Invoke-VdiAction $f.Fix $f.Where $f.FixArg } })
+# Enter = the fix of the line. The grid takes Enter for itself (it moves to the next row) unless told it is input.
+$gridVdi.add_PreviewKeyDown({ param($s, $e) if ($e.KeyCode -eq 'Enter') { $e.IsInputKey = $true } })
+$gridVdi.add_KeyDown({ param($s, $e)
+  if ($e.KeyCode -eq 'Enter' -and $s.CurrentRow -and $s.CurrentRow.Tag -and $s.CurrentRow.Tag.Fix) {
+    $e.Handled = $true; $e.SuppressKeyPress = $true; $f = $s.CurrentRow.Tag; Invoke-VdiAction $f.Fix $f.Where $f.FixArg } })
+$gridVdi.add_CellMouseDown({ param($s, $e) if ($e.Button -eq 'Right' -and $e.RowIndex -ge 0) { $s.CurrentCell = $s.Rows[$e.RowIndex].Cells[[Math]::Max(0, $e.ColumnIndex)] } })
+$vdiMenu.add_Opening({ param($s, $e)
+  $f = if ($gridVdi.CurrentRow) { $gridVdi.CurrentRow.Tag } else { $null }
+  $m = $script:Vdi.Model
+  $isB = $f -and $m -and @($m.Brokers | Where-Object { $_.Name -eq $f.Where }).Count
+  $isH = $f -and $m -and @($m.Hosts | Where-Object { $_.Name -eq $f.Where }).Count
+  if (-not ($isB -or $isH)) { $e.Cancel = $true; return }
+  foreach ($mi in $s.Items) { $mi.Visible = ($mi.Tag -like 'Broker*' -and $isB) -or ($mi.Tag -like 'Host*' -and $isH) } })
+foreach ($mi in $vdiMenu.Items) { $mi.add_Click({ param($s, $e)
+  $f = if ($gridVdi.CurrentRow) { $gridVdi.CurrentRow.Tag } else { $null }; if (-not $f) { return }
+  Invoke-VdiAction $s.Tag $f.Where $(if ($s.Tag -eq 'HostUnblock') { if ($f.Fix -eq 'HostUnblock' -and $f.FixArg) { $f.FixArg } else { 'VmHostAgent' } }) }) }
+$dskMenu.add_Opening({ param($s, $e)
+  if (-not $script:DskRow) { $e.Cancel = $true; return }
+  foreach ($mi in $s.Items) { if ($mi.Tag) { $mi.Enabled = -not (Get-DskPlan $mi.Tag $script:DskRow).Blocked } } })
+foreach ($mi in $dskMenu.Items) { if ($mi.Tag) { $mi.add_Click({ param($s, $e) if ($script:DskRow) { Invoke-VdiAction $s.Tag $script:DskRow } }) } }
+$dskList.add_SelectedIndexChanged({ if (-not $script:DskListing -and $dskList.SelectedItems.Count -eq 1) { Show-DskRow $dskList.SelectedItems[0].Tag } })
+$txtDskSearch.add_TextChanged({ Update-DesktopsView })
+$cmbDskFilter.add_SelectedIndexChanged({ Update-DesktopsView })
+$btnDskRefresh.add_Click({ Update-DeviceList; Start-VdiRefresh -Queue })
+$btnDskSettings.add_Click({ Show-VdiSettingsDialog })
+$btnDskShadow.add_Click({ if ($script:DskRow) { Invoke-VdiAction 'SessionShadow' $script:DskRow } })
+$btnDskMessage.add_Click({ if ($script:DskRow) { Invoke-VdiAction 'SessionMessage' $script:DskRow } })
+$btnDskDisconnect.add_Click({ if ($script:DskRow) { Invoke-VdiAction 'SessionDisconnect' $script:DskRow } })
+$btnDskStart.add_Click({ if ($script:DskRow) { Invoke-VdiAction 'VmStart' $script:DskRow } })
+$btnDskRestart.add_Click({ if ($script:DskRow) { Invoke-VdiAction 'VmRestart' $script:DskRow } })
+$btnDskAssign.add_Click({ if ($script:DskRow) { Invoke-VdiAction 'AssignDesktop' $script:DskRow } })
+$btnDskLogoff.add_Click({ if ($script:DskRow) { Invoke-VdiAction 'SessionLogoff' $script:DskRow } })
+$btnDskShutdown.add_Click({ if ($script:DskRow) { Invoke-VdiAction 'VmShutdown' $script:DskRow } })
+# the settings of the page: in the manager's settings of this account, not in the folder
+function Show-VdiSettingsDialog {
+  $s = Get-VdiSettings
+  $W = 600; $X0 = 200
+  $dlg = New-Object System.Windows.Forms.Form; Set-WindowIcon $dlg
+  $dlg.Text = Get-Text 'VdiSetTitle'; $dlg.Font = $fontBase; $dlg.FormBorderStyle = 'FixedDialog'; $dlg.MaximizeBox = $false; $dlg.MinimizeBox = $false; $dlg.StartPosition = 'CenterParent'
+  $note = New-Object System.Windows.Forms.Label; $note.Text = Get-Text 'VdiSetNote' $script:SettingsFile
+  $note.MaximumSize = New-Object System.Drawing.Size(($W - 28), 0); $note.AutoSize = $true; $note.Location = New-Object System.Drawing.Point(14, 12); $dlg.Controls.Add($note)
+  $y = 12 + $note.GetPreferredSize((New-Object System.Drawing.Size(($W - 28), 0))).Height + 12
+  $chk = New-Object System.Windows.Forms.CheckBox; $chk.Text = Get-Text 'VdiSetEnabled'; $chk.Checked = [bool]$s.Enabled; $chk.AutoSize = $true; $chk.Location = New-Object System.Drawing.Point(14, $y); $dlg.Controls.Add($chk); $y += 34
+  $boxes = @{}
+  foreach ($k in 'BrokerGroup', 'Brokers', 'Hosts') {
+    $l = New-Object System.Windows.Forms.Label; $l.Text = Get-Text "VdiSet$k"; $l.AutoSize = $true; $l.Location = New-Object System.Drawing.Point(14, ($y + 4))
+    $tb = New-Object System.Windows.Forms.TextBox; $tb.SetBounds($X0, $y, ($W - $X0 - 14), 26); $tb.Text = [string]$s.$k; $y += 30
+    $hint = New-Object System.Windows.Forms.Label; $hint.Text = Get-Text "VdiSet${k}Hint"; $hint.ForeColor = $Theme.Muted
+    $hint.MaximumSize = New-Object System.Drawing.Size(($W - $X0 - 14), 0); $hint.AutoSize = $true; $hint.Location = New-Object System.Drawing.Point($X0, $y)
+    $y += $hint.GetPreferredSize((New-Object System.Drawing.Size(($W - $X0 - 14), 0))).Height + 12
+    $dlg.Controls.AddRange(@($l, $tb, $hint)); $boxes[$k] = $tb
+  }
+  $err = New-Object System.Windows.Forms.Label; $err.ForeColor = $script:KindColor.error; $err.SetBounds(14, $y, ($W - 28), 36); $dlg.Controls.Add($err); $y += 40
+  $ok = New-Button 'BtnSave' 110 28; $cancel = New-Button 'BtnCancel' 100 28
+  $cancel.Location = New-Object System.Drawing.Point(($W - 14 - $cancel.Width), $y); $ok.Location = New-Object System.Drawing.Point(($cancel.Left - 8 - $ok.Width), $y)
+  $cancel.DialogResult = 'Cancel'; $dlg.AcceptButton = $ok; $dlg.CancelButton = $cancel; $dlg.Controls.AddRange(@($ok, $cancel))
+  $dlg.ClientSize = New-Object System.Drawing.Size($W, ($y + 42))
+  $ok.add_Click({
+    $n = [pscustomobject]@{ Enabled = $chk.Checked; BrokerGroup = $boxes['BrokerGroup'].Text.Trim(); Brokers = $boxes['Brokers'].Text; Hosts = $boxes['Hosts'].Text }
+    $why = Test-VdiSettings $n
+    if ($why) { $err.Text = $why; return }
+    try { Save-VdiSettings $n } catch { $err.Text = $_.Exception.Message; return }
+    $dlg.DialogResult = 'OK' })
+  try { if ($dlg.ShowDialog($form) -eq 'OK') { $barText.Text = Get-Text 'VdiSetSaved'; Start-VdiRefresh } } finally { $dlg.Dispose() }
+}
+$vdiTimer = New-Object System.Windows.Forms.Timer; $vdiTimer.Interval = $script:VdiRefreshSeconds * 1000
+$vdiTimer.add_Tick({ if (-not $env:OTR_MANAGER_VDI_DEMO) { Start-VdiRefresh } else { Update-VdiStamp } })
 # ---------------- remote screen ----------------
 # The screen of the device in the default browser: over SSH (the key of the manager in the vault, as otradmin) the
 # device starts x11vnc and the noVNC viewer on 127.0.0.1 with a one-time password (remote-screen.sh); an SSH tunnel
@@ -3732,6 +4279,8 @@ $form.add_Shown({
   Set-SplitFit
   Select-Page 0
   Update-DeviceList; Update-CommonGrid; Update-KeysView
+  # brokers and hosts in the background from the start: the menu shows who cannot sign in, on any page
+  if ($script:VdiLoaded) { Start-VdiRefresh; $vdiTimer.Start() } else { $probOuter.Panel1Collapsed = $true }
   if ($list.Items.Count) { $list.Items[0].Selected = $true } else { Show-Device $null }
   $timer.Start()
   # the access code at every start: the vault opened, or created the first time (both can be skipped)
@@ -3745,12 +4294,17 @@ if ($env:OTR_MANAGER_BRANDING_SHOT) {   # test: the logo dialog (of OTR_MANAGER_
   $form.add_Shown({ Show-BrandingDialog ($script:Devices | Where-Object Name -eq $env:OTR_MANAGER_BRANDING_HOST | Select-Object -First 1); $form.Close() })
 }
 if ($env:OTR_MANAGER_SCREENSHOT) {   # test: draws the window into a PNG instead of leaving it open
-  # OTR_MANAGER_TAB = page (0 devices, 1 common, 2 keys, 3 problems, 4 vault, 5 updates), OTR_MANAGER_DETAIL = tab of the selected device,
+  # OTR_MANAGER_TAB = page (0 devices, 1 common, 2 keys, 3 problems, 4 vault, 5 updates, 6 desktops), OTR_MANAGER_DETAIL = tab of the selected device,
   # OTR_MANAGER_DEVICE = the device to select, OTR_MANAGER_ROW = the setting whose help shows
   # an error must close the window and be reported: nobody is there to close it
   $form.add_Shown({ try {
     if ($env:OTR_MANAGER_DEVICE) { foreach ($it in $list.Items) { if ($it.Text -eq $env:OTR_MANAGER_DEVICE) { $it.Selected = $true } } }
+    # the servers read in the background (without OTR_MANAGER_VDI_DEMO): waited for, at most 120 s
+    if ($script:VdiLoaded) { $t0 = Get-Date
+      while ($script:Vdi.Busy -and ((Get-Date) - $t0).TotalSeconds -lt 120) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 50 } }
     if ($env:OTR_MANAGER_TAB) { Select-Page ([int]$env:OTR_MANAGER_TAB) }
+    # OTR_MANAGER_VDI_ROW = the user (or device) to select on the Desktops page
+    if ($env:OTR_MANAGER_VDI_ROW) { foreach ($it in $dskList.Items) { if ($it.Text -eq $env:OTR_MANAGER_VDI_ROW -or ($it.Tag.Device -and $it.Tag.Device.Name -eq $env:OTR_MANAGER_VDI_ROW)) { $it.Selected = $true; break } } }
     if ($env:OTR_MANAGER_DETAIL) { $detail.SelectedIndex = [int]$env:OTR_MANAGER_DETAIL }
     if ($env:OTR_MANAGER_ROW) {
       $g = if ($script:Page -eq 1) { $gridCom } else { $gridDev }
@@ -3766,6 +4320,7 @@ if ($env:OTR_MANAGER_SCREENSHOT) {   # test: draws the window into a PNG instead
     if ($env:OTR_MANAGER_SIZE -match '^(\d{3,4})x(\d{3,4})$') { $w = [int]$Matches[1]; $h = [int]$Matches[2] }
     $root.Dock = 'None'; $root.SetBounds(0, 0, $w, $h)
     Set-SplitFit; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
+    if ($script:VdiLoaded) { Set-DskSplitFit; Set-ProbOuterFit; if ($dskList.SelectedItems.Count) { $dskList.SelectedItems[0].EnsureVisible() }; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents() }
     $bmp = New-Object System.Drawing.Bitmap($w, $h)
     $root.DrawToBitmap($bmp, (New-Object System.Drawing.Rectangle(0, 0, $w, $h)))
     $bmp.Save($env:OTR_MANAGER_SCREENSHOT, [System.Drawing.Imaging.ImageFormat]::Png)
