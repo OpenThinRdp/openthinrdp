@@ -1,0 +1,4 @@
+2026-10-19 07:00:02 kiosk started
+2026-10-19 08:05:01 broker rdbroker.example.com: connecting to rdcb1.example.com (Kerberos)
+2026-10-19 08:05:12 session of dave opened (broker rdbroker.example.com)
+2026-10-19 08:51:02 session of dave disconnected after 46 min while its VM still runs (code 1): taken over by another device or disconnected on the server, no reconnection
