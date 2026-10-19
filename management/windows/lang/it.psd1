@@ -1563,4 +1563,7 @@
   HcErrHours             = 'Non è un numero di ore: {0}'
   HcT_VdiName            = 'Nome condiviso {0}'
   HcW_Reboot_sql         = 'Gli aggiornamenti valgono dal prossimo riavvio: prima la replica secondaria, mai due repliche insieme.'
+  HcT_NoCluster          = 'Cluster di failover'
+  HcX_NoCluster          = '{0} non è un nodo di un cluster di failover, o il suo servizio cluster non risponde.'
+  HcW_NoCluster          = 'Le impostazioni dicono che gli host formano un cluster: le VM di questo host non sono protette da un failover.'
 }

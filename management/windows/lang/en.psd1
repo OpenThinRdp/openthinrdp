@@ -1571,4 +1571,7 @@
   HcErrHours             = 'Not a number of hours: {0}'
   HcT_VdiName            = 'Shared name {0}'
   HcW_Reboot_sql         = 'The updates take effect at the next restart: restart the secondary replica first, never two replicas at once.'
+  HcT_NoCluster          = 'Failover cluster'
+  HcX_NoCluster          = '{0} is not a node of a failover cluster, or its cluster service does not answer.'
+  HcW_NoCluster          = 'The settings say the hosts form a cluster: the VMs of this host are not protected by a failover.'
 }

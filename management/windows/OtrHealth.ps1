@@ -613,6 +613,8 @@ function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
   # the domain controllers by name and by address (a time source is named either way)
   $dcShort = @(@($raw.Dcs) | Where-Object { $_ } | ForEach-Object { $_.Name }) + @(@($domain.Dcs) | Where-Object { $_ -and $_.Ip } | ForEach-Object { $_.Ip })
   $hostsAll = @($raw.Hosts | Where-Object { $_ })
+  # Cluster = no in the settings: single hosts, whatever they say (their VMs judged as outside a cluster)
+  $useCl = $settings.Cluster -ne 'no'
   # the rows of the Desktops page by VM: who uses it
   $desk = @{}; if ($vdi) { foreach ($r in @($vdi.Rows)) { if ($r -and $r.Vm) { $k = ([string]$r.Vm).ToUpper(); if (-not $desk.ContainsKey($k)) { $desk[$k] = @() }; $desk[$k] += $r } } }
   # the findings of the Desktops page on brokers and hosts: shown where they belong, never read twice
@@ -698,6 +700,7 @@ function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
       continue
     }
     Add-HcBasics $hn $h 'host' $now $pdc $dcShort
+    if ($settings.Cluster -eq 'yes' -and -not $h.Cluster) { [void](Add-HcCheck $hn 'warn' 'NoCluster' @($h.Name)) }
     # the services of Hyper-V; the RDVH agent only when the Desktops page does not watch this host already
     $vdiHost = $vdi -and @($vdi.Hosts | Where-Object { $_ -and $_.Name -eq $h.Name -and $_.Reachable }).Count
     $need = @('vmms'); if ($h.Cluster) { $need += 'ClusSvc' }
@@ -747,14 +750,14 @@ function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
         default { if ([string]$v.State -notin 'Off', 'Running') { [void](Add-HcCheck $vn 'warn' 'VmState' @($v.State, $v.Status)) } }
       }
       if ($v.Clustered -and $v.GroupState -eq 'Failed') { [void](Add-HcCheck $vn 'error' 'RoleFailed' @() 'VmStart') }
-      if ($h.Cluster -and -not $v.Clustered) { [void](Add-HcCheck $vn 'info' 'NotClustered' @($h.Name)) }
+      if ($useCl -and $h.Cluster -and -not $v.Clustered) { [void](Add-HcCheck $vn 'info' 'NotClustered' @($h.Name)) }
       if ([int]$v.Checkpoints -gt 0) {
         $old = ConvertFrom-VdiTime $v.CheckpointOldest; $days = if ($old) { [int][math]::Floor(($now - $old).TotalDays) } else { 0 }
         Add-HcFact $vn 'HcFCheckpoints' (Get-Text 'HcCheckpointsIs' $v.Checkpoints $(if ($old) { Format-VdiClock $old $now } else { '?' }))
         if ($days -ge $L.CheckpointDays) { [void](Add-HcCheck $vn 'warn' 'Checkpoints' @($v.Checkpoints, $days) 'VmRemoveCheckpoints') }
       }
       # how the host stops it when it shuts down (a VM of the cluster is drained instead)
-      if (-not $v.Clustered) {
+      if (-not $v.Clustered -or -not $useCl) {
         if ($v.StopAction -eq 'Save' -and $v.Tpm) { [void](Add-HcCheck $vn 'warn' 'StopSave' @() 'VmStopAction') }
         elseif ($v.StopAction -eq 'TurnOff') { [void](Add-HcCheck $vn 'warn' 'StopOff' @() 'VmStopAction') }
       }

@@ -2599,7 +2599,7 @@ $gridVdi.RowTemplate.Height = 30
 $gridVdi.ColumnHeadersVisible = $false
 $vdiKindTexts = @('VdiKind_error', 'VdiKind_warn', 'VdiKind_info', 'VdiKind_ok') | ForEach-Object { Get-Text $_ }
 Add-TextColumn $gridVdi 'VdiColKind' 70 $true @() $vdiKindTexts
-Add-TextColumn $gridVdi 'VdiColWhere' 120 $true @('SERVER-BROKER2')
+Add-TextColumn $gridVdi 'VdiColWhere' 120 $true @('RDS-BROKER-02')
 Add-TextColumn $gridVdi 'VdiColFinding' $null $true
 $gridVdi.Columns[2].FillWeight = 520
 # the shares of the width: the grid changes them by itself when a column reaches its minimum on a narrow window, and
@@ -2657,9 +2657,9 @@ $dskList = New-Object System.Windows.Forms.ListView
 $dskList.Dock = 'Fill'; $dskList.View = 'Details'; $dskList.FullRowSelect = $true; $dskList.MultiSelect = $false; $dskList.HideSelection = $false
 $dskList.BorderStyle = 'None'; $dskList.SmallImageList = $imgDots; $dskList.ShowItemToolTips = $true; $dskList.Font = $fontBase
 $dskList.Tag = @{ Ideal = @() }
-foreach ($c in @(@('VdiColUser', 100, @('FRANCESCA-VPN')), @('VdiColState', 120, @((Get-Text 'VdiStCannot'), (Get-Text 'VdiStSavedTpm'))), @('VdiColDevice', 100, @('thinclient12')),
-  @('VdiColDesktop', 110, @('VM-FRANCESCA')), @('VdiColHost', 90, @('SERVER-VDI2')), @('VdiColVm', 80, @((Get-Text 'VdiVmRunning'))), @('VdiColSession', 110, @((Get-Text 'VdiSessIdle' (Get-Text 'DurMinutes' 118)), (Get-Text 'VdiSessDiscSince' '18:45'))),
-  @('VdiColSignIn', 150, @((Get-Text 'VdiSignOk' '08:41' 'SERVER-BROKER'))))) {
+foreach ($c in @(@('VdiColUser', 100, @('ALEXANDRA.K')), @('VdiColState', 120, @((Get-Text 'VdiStCannot'), (Get-Text 'VdiStSavedTpm'))), @('VdiColDevice', 100, @('thinclient12')),
+  @('VdiColDesktop', 110, @('VM-ALEXANDRA')), @('VdiColHost', 90, @('HYPERV-02')), @('VdiColVm', 80, @((Get-Text 'VdiVmRunning'))), @('VdiColSession', 110, @((Get-Text 'VdiSessIdle' (Get-Text 'DurMinutes' 118)), (Get-Text 'VdiSessDiscSince' '18:45'))),
+  @('VdiColSignIn', 150, @((Get-Text 'VdiSignOk' '08:41' 'RDS-BROKER-02'))))) {
   $title = Get-Text $c[0]; $w = Get-FitWidth (Get-FitWidth $c[1] "$title $([char]0x25B2)" -pad 14) $c[2] -pad 14
   [void]$dskList.Columns.Add($title, $w); $dskList.Tag.Ideal += $w
 }

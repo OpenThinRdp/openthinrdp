@@ -107,6 +107,11 @@ try {
   ok 'a single host: no drain, no witness' { $st = @{ Model = $ms; Received = $now }; (Get-HealthActionPlan 'HostDrain' 'host:HV1' $st $now).Blocked -eq (Get-Text 'HcBlkNoCluster' 'HV1') -and -not $ms.Index['cluster:VDICL'] }
   ok 'a single host: set the stop action of a VM to a shutdown (asks)' { $x = Get-HealthActionPlan 'VmStopAction' 'vm:VM-ALICE' @{ Model = $ms; Received = $now } $now; -not $x.Blocked -and -not $x.Safe -and $x.Steps[0].Computer -eq 'hv1.example.com' }
 
+  $yes = Get-HealthDefaults; $yes.Cluster = 'yes'
+  ok 'Cluster = yes: a single host is said not to be in a cluster' { @((ConvertTo-HealthModel $rs $null $now $yes).Index['host:HV1'].Checks | Where-Object Id -eq 'NoCluster').Count -eq 1 -and -not @($ms.Index['host:HV1'].Checks | Where-Object Id -eq 'NoCluster').Count }
+  $no = Get-HealthDefaults; $no.Cluster = 'no'; $rc = Copy-Raw; $rc.Clusters = @()
+  ok 'Cluster = no: hosts on their own, the stop action of every VM judged' { $mn = ConvertTo-HealthModel $rc $null $now $no; $mn.Index['host:HV1'].Parent -eq 'hyperv' -and @($mn.Index['vm:VM-ALICE'].Checks | Where-Object Id -eq 'StopSave').Count -and -not @($mn.Index['vm:VM-ALICE'].Checks | Where-Object Id -eq 'NotClustered').Count }
+
   # ---- variants: the cluster
   $rw = Copy-Raw; $rw.Clusters[0].Witness.State = 'Failed'
   $mw2 = ConvertTo-HealthModel $rw $null $now $set; $sw = @{ Model = $mw2; Received = $now }
