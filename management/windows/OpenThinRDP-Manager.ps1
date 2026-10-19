@@ -1810,7 +1810,7 @@ if ($UpdateManager) {
   } catch { $rc = 1; [Console]::Error.WriteLine($_.Exception.Message) }
   exit $rc
 }
-# The Windows side of the VDI (Desktops page, brokers and hosts in Problems): OtrVdi.ps1 next to this file. Loaded after
+# The Windows side of the VDI (Desktops page: brokers, hosts, desktops, sessions): OtrVdi.ps1 next to this file. Loaded after
 # -UpdateManager, so that a broken copy of it can still be replaced by an update; without it the rest works as before.
 $script:VdiLoaded = $false
 try { . (Join-Path $PSScriptRoot 'OtrVdi.ps1'); $script:VdiLoaded = $true } catch { Write-Warning "OtrVdi.ps1: $($_.Exception.Message)" }
@@ -1820,7 +1820,7 @@ try { Remove-OldManagerFiles } catch { }
 
 # =============================================================================================
 # Window
-#   left: the pages (Devices, Common settings, SSH keys, Problems); top: the actions on the folder.
+#   left: the pages (Devices, Desktops, Common settings, Updates, SSH keys, Vault, History); top: the actions on the folder.
 #   Devices: the list on the left, the selected device on the right (header with its actions, then Settings,
 #   Summary, Events and the full report). The settings grids show the help of the selected setting in full
 #   under the grid instead of a column cut after a few words.
@@ -1997,7 +1997,7 @@ $script:IconFont = @('Segoe Fluent Icons', 'Segoe MDL2 Assets') | Where-Object {
 $script:Glyph = @{ Refresh = 'E72C'; Folder = 'E838'; Download = 'E896'; Shield = 'EA18'; Devices = 'E977'; Settings = 'E713'; Key = 'E8D7'; Warning = 'E7BA'
   Screen = 'E7F4'; Picture = 'E91B'; Save = 'E74E'; Undo = 'E7A7'; Delete = 'E74D'; Add = 'E710'; Search = 'E721'; Document = 'E8A5'
   Lock = 'E72E'; Unlock = 'E785'; Certificate = 'EB95'; Vpn = 'E705'
-  Desktop = 'E770'; Play = 'E768'; Power = 'E7E8'; Message = 'E8BD'; Contact = 'E77B'; Repair = 'E90F'; Unplug = 'E8CD'; Cancel = 'E711' }
+  History = 'E81C'; Desktop = 'E770'; Play = 'E768'; Power = 'E7E8'; Message = 'E8BD'; Contact = 'E77B'; Repair = 'E90F'; Unplug = 'E8CD'; Cancel = 'E711' }
 function New-Glyph([string]$name, $color, [int]$size = 16) {
   if (-not $script:IconFont -or -not $script:Glyph.ContainsKey($name)) { return $null }
   $bmp = New-Object System.Drawing.Bitmap($size, $size)
@@ -2299,7 +2299,7 @@ function New-NavButton([string]$textKey, [string]$glyph, [int]$index) {
 $navDevices = New-NavButton 'NavDevices' 'Devices' 0
 $navCommon = New-NavButton 'NavCommon' 'Settings' 1
 $navKeys = New-NavButton 'NavKeys' 'Key' 2
-$navProblems = New-NavButton 'NavProblems' 'Warning' 3
+$navProblems = New-NavButton 'NavProblems' 'History' 3
 $navVault = New-NavButton 'NavVault' 'Lock' 4
 $navUpdates = New-NavButton 'NavUpdates' 'Download' 5
 # the Windows side of the desktops: index 6, so the other pages keep theirs (OTR_MANAGER_TAB of the screenshots)
@@ -2541,7 +2541,7 @@ $keysCard.Controls.Add($keysPad); $keysCard.Controls.Add($barKeys)
 $keysWrap.Controls.Add($keysCard)
 $pageKeys.Controls.Add($keysWrap); $pageKeys.Controls.Add((New-PageHeader (Get-Text 'PageKeysTitle') (Get-Text 'NoteKeys')))
 
-# ---------------- Problems page ----------------
+# ---------------- History page (the past problems of the devices; the code calls it Problems) ----------------
 $pageProblems = New-Panel 'Fill' $Theme.Page
 $probWrap = New-Panel 'Fill' $Theme.Page; $probWrap.Padding = New-Object System.Windows.Forms.Padding(12, 0, 12, 12)
 $probCard = New-Panel 'Fill' $Theme.Card; Add-Line $probCard 'Box'; $probCard.Padding = New-Object System.Windows.Forms.Padding(1)
@@ -2569,27 +2569,33 @@ $probPad = New-Panel 'Fill' $Theme.Card; $probPad.Padding = New-Object System.Wi
 $probSplit.Panel1.Controls.Add($probList); $probSplit.Panel2.Controls.Add($probPad)
 $probCard.Controls.Add($probSplit); $probCard.Controls.Add($probTop)
 $probWrap.Controls.Add($probCard)
-# Brokers and hosts, on top of the problems of the devices: one line per finding, with its Fix button when a safe fix
-# exists. Hidden when the Desktops page is turned off or no broker is known.
-$probOuter = New-Object System.Windows.Forms.SplitContainer; $probOuter.Dock = 'Fill'; $probOuter.Orientation = 'Horizontal'
-$probOuter.BackColor = $Theme.Page; $probOuter.SplitterWidth = 8; $probOuter.FixedPanel = 'Panel1'
+$pageProblems.Controls.Add($probWrap); $pageProblems.Controls.Add((New-PageHeader (Get-Text 'NavProblems') (Get-Text 'ProbNote')))
+
+# Brokers and hosts, on top of the Desktops page: the problems of now with their Fix buttons. One green line when all is
+# well (the lines of each broker and host one click away); hidden when the page is turned off or no broker is known.
 $vdiPWrap = New-Panel 'Fill' $Theme.Page; $vdiPWrap.Padding = New-Object System.Windows.Forms.Padding(12, 0, 12, 0)
 $vdiPCard = New-Panel 'Fill' $Theme.Card; Add-Line $vdiPCard 'Box'; $vdiPCard.Padding = New-Object System.Windows.Forms.Padding(1)
 $vdiPTop = New-Panel 'Top' $Theme.Card 42; Add-Line $vdiPTop 'Bottom'
 $lblVdiPTitle = New-Label (Get-Text 'VdiProbTitle') $fontBold; $lblVdiPTitle.Location = New-Object System.Drawing.Point(14, 11)
-$lblVdiPUpdated = New-Label '' $fontSmall $Theme.Muted; $lblVdiPUpdated.AutoSize = $false; $lblVdiPUpdated.TextAlign = 'MiddleRight'; $lblVdiPUpdated.Height = 22
-$vdiPTop.Controls.AddRange(@($lblVdiPTitle, $lblVdiPUpdated))
-$vdiPTop.add_Resize({ param($s, $e) $lblVdiPUpdated.SetBounds(($lblVdiPTitle.Right + 12), 10, [Math]::Max(60, $s.ClientSize.Width - $lblVdiPTitle.Right - 26), 22) })
+# what the lines say in a few words (green: all OK), and the button that shows every line or only the problems
+$lblVdiPSum = New-Label '' $fontBold; $lblVdiPSum.AutoSize = $false; $lblVdiPSum.AutoEllipsis = $true; $lblVdiPSum.Height = 22
+$btnVdiPAll = New-ActionButton 'VdiBrokHide' '' 'secondary'; $btnVdiPAll.Height = 28
+$btnVdiPAll.Width = (@((Get-Text 'VdiBrokShowAll' 99), (Get-Text 'VdiBrokShowProblems'), (Get-Text 'VdiBrokShow' 99), (Get-Text 'VdiBrokHide')) | ForEach-Object { Get-TextWidth $_ } | Measure-Object -Maximum).Maximum + 30
+$vdiPTop.Controls.AddRange(@($lblVdiPTitle, $lblVdiPSum, $btnVdiPAll))
+$vdiPTop.add_Resize({ param($s, $e) $btnVdiPAll.Location = New-Object System.Drawing.Point(($s.ClientSize.Width - $btnVdiPAll.Width - 10), 7)
+  $lblVdiPSum.SetBounds(($lblVdiPTitle.Right + 10), 11, [Math]::Max(60, $btnVdiPAll.Left - $lblVdiPTitle.Right - 20), 22) })
 $gridVdi = New-Grid
 $gridVdi.ReadOnly = $true; $gridVdi.SelectionMode = 'FullRowSelect'; $gridVdi.MultiSelect = $false; $gridVdi.EditMode = 'EditProgrammatically'; $gridVdi.ShowCellToolTips = $true
 $gridVdi.RowTemplate.Height = 30
+# no titles: a state, a place, a sentence and a button say themselves, and the room goes to the users below
+$gridVdi.ColumnHeadersVisible = $false
 $vdiKindTexts = @('VdiKind_error', 'VdiKind_warn', 'VdiKind_info', 'VdiKind_ok') | ForEach-Object { Get-Text $_ }
 Add-TextColumn $gridVdi 'VdiColKind' 70 $true @() $vdiKindTexts
 Add-TextColumn $gridVdi 'VdiColWhere' 120 $true @('SERVER-BROKER2')
 Add-TextColumn $gridVdi 'VdiColFinding' $null $true
 $gridVdi.Columns[2].FillWeight = 520
 # the shares of the width: the grid changes them by itself when a column reaches its minimum on a narrow window, and
-# Set-ProbOuterFit puts them back
+# Set-VdiBrokFit puts them back
 $script:VdiGridWeights = @($gridVdi.Columns[0].FillWeight, $gridVdi.Columns[1].FillWeight, $gridVdi.Columns[2].FillWeight)
 $gridVdi.Columns[0].MinimumWidth = Get-FitWidth 50 $vdiKindTexts $fontSmallBold 18
 # a long finding wraps on two lines instead of ending with ...
@@ -2605,8 +2611,6 @@ foreach ($k in 'BrokerRestart', 'BrokerPurge', 'BrokerSelfRepair', 'HostUnblock'
 $gridVdi.ContextMenuStrip = $vdiMenu
 $vdiPCard.Controls.Add($gridVdi); $vdiPCard.Controls.Add($vdiPTop)
 $vdiPWrap.Controls.Add($vdiPCard)
-$probOuter.Panel1.Controls.Add($vdiPWrap); $probOuter.Panel2.Controls.Add($probWrap)
-$pageProblems.Controls.Add($probOuter); $pageProblems.Controls.Add((New-PageHeader (Get-Text 'NavProblems') (Get-Text 'ProbNote')))
 
 # ---------------- Desktops page: device -> user -> desktop -> host -> VM -> session -> last sign-in ----------------
 # top: search, filter, refresh, settings, then who cannot sign in now and when the data was read; the list; under it
@@ -2713,11 +2717,15 @@ foreach ($k in 'SessionShadow', 'SessionMessage', 'SessionDisconnect', 'SessionL
 $dskList.ContextMenuStrip = $dskMenu
 $dskCard.Controls.Add($dskSplit); $dskCard.Controls.Add($dskTop)
 $dskWrap.Controls.Add($dskCard)
-$pageDesktops.Controls.Add($dskWrap); $pageDesktops.Controls.Add((New-PageHeader (Get-Text 'NavDesktops') (Get-Text 'VdiPageNote')))
+# brokers and hosts on top, the users under them
+$dskOuter = New-Object System.Windows.Forms.SplitContainer; $dskOuter.Dock = 'Fill'; $dskOuter.Orientation = 'Horizontal'
+$dskOuter.BackColor = $Theme.Page; $dskOuter.SplitterWidth = 8; $dskOuter.FixedPanel = 'Panel1'; $dskOuter.Panel1MinSize = 40
+$dskOuter.Panel1.Controls.Add($vdiPWrap); $dskOuter.Panel2.Controls.Add($dskWrap)
+$pageDesktops.Controls.Add($dskOuter); $pageDesktops.Controls.Add((New-PageHeader (Get-Text 'NavDesktops') (Get-Text 'VdiPageNote')))
 # the details keep about 250 points (less on a low window), the list the rest
 function Set-DskSplitFit {
   $h = $dskSplit.Height; if ($h -lt 200) { return }
-  $want = [Math]::Max(90, $h - [Math]::Max(200, [Math]::Min(290, [int]($h * 0.52))))
+  $want = [Math]::Max(90, $h - [Math]::Max(165, [Math]::Min(290, [int]($h * 0.45))))
   if ([Math]::Abs($dskSplit.SplitterDistance - $want) -gt 2) { try { $dskSplit.SplitterDistance = $want } catch { } }
 }
 $dskSplit.add_SizeChanged({ Set-DskSplitFit })
@@ -3391,7 +3399,7 @@ $btnRefresh.add_Click({
   Update-DeviceList
   if ($script:Selected) { $n = $script:Selected.File; $q = $script:Devices | Where-Object File -eq $n | Select-Object -First 1; if ($q) { Show-Device $q } }
   if ($script:Page -eq 3) { Update-ProblemView }
-  if ($script:Page -in 3, 6) { Start-VdiRefresh } })
+  if ($script:Page -eq 6) { Start-VdiRefresh -Queue } })
 $btnOpen.add_Click({ Start-Process explorer.exe $script:Folder })
 # ---------------- releases and versions ----------------
 # The signature a checked release goes in with: the site key signs it again (the vault opened for it when there is
@@ -3728,15 +3736,14 @@ function Complete-VdiRefresh($raw) {
   if (-not $now) { $now = Get-Date }
   try { $script:Vdi.Model = ConvertTo-VdiModel $raw $script:Devices $now (Get-VdiSettings); $script:Vdi.Received = Get-Date }
   catch { $script:Vdi.Error = "$($_.Exception.Message) (line $($_.InvocationInfo.ScriptLineNumber))" }
-  Update-DesktopsView; Update-VdiProblemsView; Update-VdiNav
+  Update-DesktopsView; Update-VdiBrokersView; Update-VdiNav
 }
 # "updated at 10:42:05", "reading the servers...", and why the last reading failed
 function Update-VdiStamp {
   $t = if ($script:Vdi.Busy) { Get-Text 'VdiReading' } elseif ($script:Vdi.Received) { Get-Text 'VdiUpdatedAt' $script:Vdi.Received.ToString('HH:mm:ss') } else { '' }
   if (-not $script:Vdi.Busy -and $script:Vdi.Received -and (Test-VdiStale $script:Vdi.Received (Get-Date))) { $t = Get-Text 'VdiStaleAt' $script:Vdi.Received.ToString('HH:mm:ss') }
   if ($script:Vdi.Error -and -not $script:Vdi.Busy) { $t = Get-Text 'VdiReadFailed' $script:Vdi.Error }
-  $lblDskUpdated.Text = $t; $lblVdiPUpdated.Text = $t
-  $tips.SetToolTip($lblDskUpdated, $t); $tips.SetToolTip($lblVdiPUpdated, $t)
+  $lblDskUpdated.Text = $t; $tips.SetToolTip($lblDskUpdated, $t)
   $lblDskUpdated.ForeColor = if ($script:Vdi.Error) { $script:KindColor.warn } else { $Theme.Muted }
   $btnDskRefresh.Enabled = -not $script:Vdi.Busy
   $dskTop.PerformLayout(); $dskTop.Invalidate()
@@ -3744,16 +3751,16 @@ function Update-VdiStamp {
   $w = $dskTop.ClientSize.Width; $uw = [Math]::Min(300, [Math]::Max(120, (Get-TextWidth $t $fontSmall) + 10))
   $lblDskUpdated.SetBounds(($w - $uw - 14), 52, $uw, 24); $lblDskHead.Width = [Math]::Max(80, $w - $uw - 40)
 }
+# the menu: in red what needs a person now (who cannot sign in, and the problems of brokers and hosts), else the rows
 function Update-VdiNav {
   $m = $script:Vdi.Model
   $navDesktops.Tag.Count = ''; $navDesktops.Tag.CountColor = $null
   if ($m -and $m.Access -ne 'off') {
-    if ($m.CannotSignIn) { $navDesktops.Tag.Count = "$($m.CannotSignIn)"; $navDesktops.Tag.CountColor = New-Color '#f87171' }
+    $now = [int]$m.CannotSignIn + @($m.Findings | Where-Object { $_.Kind -eq 'error' }).Count
+    if ($now) { $navDesktops.Tag.Count = "$now"; $navDesktops.Tag.CountColor = New-Color '#f87171' }
     else { $navDesktops.Tag.Count = "$(@($m.Rows).Count)" }
   }
-  $err = if ($m) { @($m.Findings | Where-Object { $_.Kind -eq 'error' }).Count } else { 0 }
-  $navProblems.Tag.Count = $(if ($err) { "$err" } else { '' }); $navProblems.Tag.CountColor = $(if ($err) { New-Color '#f87171' } else { $null })
-  $navDesktops.Invalidate(); $navProblems.Invalidate()
+  $navDesktops.Invalidate()
 }
 # the list, with the search and the filter of the page; the selected row stays selected
 function Update-DesktopsView {
@@ -3959,15 +3966,27 @@ function Show-AssignDialog($r) {
   if ($pick.Option -eq 0) { return '' }
   [string]$pick.Version
 }
-# Brokers and hosts in the Problems page
-function Update-VdiProblemsView {
+# Brokers and hosts on top of the Desktops page: the problems (errors, warnings, notes) with their buttons; the healthy
+# lines only when asked (Show all). All healthy: one green line, the card no higher than its title.
+$script:VdiShowAll = $false
+function Update-VdiBrokersView {
   $m = $script:Vdi.Model
   $show = $script:VdiLoaded -and $m -and $m.Access -notin 'off', 'nobroker'
-  $probOuter.Panel1Collapsed = -not $show
-  Update-VdiStamp
+  $dskOuter.Panel1Collapsed = -not $show
   if (-not $show) { return }
+  $all = @($m.Findings); $bad = @($all | Where-Object { $_.Kind -ne 'ok' })
+  if ($bad.Count) {
+    $parts = foreach ($k in 'error', 'warn', 'info') { $n = @($bad | Where-Object Kind -eq $k).Count; if ($n) { "$(Get-Text "VdiKind_$k"): $n" } }
+    $lblVdiPSum.Text = ($parts -join "   $([char]0x00B7)   "); $lblVdiPSum.ForeColor = $script:KindColor[$bad[0].Kind]
+    $btnVdiPAll.Text = if ($script:VdiShowAll) { Get-Text 'VdiBrokShowProblems' } else { Get-Text 'VdiBrokShowAll' $all.Count }
+  } else {
+    $lblVdiPSum.Text = Get-Text 'VdiBrokAllOk' $all.Count; $lblVdiPSum.ForeColor = $script:KindColor.ok
+    $btnVdiPAll.Text = if ($script:VdiShowAll) { Get-Text 'VdiBrokHide' } else { Get-Text 'VdiBrokShow' $all.Count }
+  }
+  $btnVdiPAll.Visible = $all.Count -gt $bad.Count -or $script:VdiShowAll
+  $lines = if ($script:VdiShowAll) { $all } else { $bad }
   $gridVdi.Rows.Clear()
-  foreach ($f in @($m.Findings)) {
+  foreach ($f in @($lines)) {
     $i = $gridVdi.Rows.Add((Get-Text "VdiKind_$($f.Kind)"), $f.Where, $f.Text, $(if ($f.Fix) { Get-Text "VdiFix_$($f.Fix)" } else { '' }))
     $row = $gridVdi.Rows[$i]; $row.Tag = $f
     if (-not $f.Fix) { $row.Cells[3] = New-Object System.Windows.Forms.DataGridViewTextBoxCell }
@@ -3975,20 +3994,22 @@ function Update-VdiProblemsView {
     $c.Style.SelectionForeColor = $script:KindColor[$f.Kind]; $c.Style.SelectionBackColor = $script:KindSoft[$f.Kind]; $c.Style.Font = $fontSmallBold
     $row.Cells[2].ToolTipText = $f.Text
   }
+  $gridVdi.Visible = @($lines).Count -gt 0
   $gridVdi.CurrentCell = $null
-  Set-ProbOuterFit
+  Set-VdiBrokFit
 }
-# the brokers and hosts as high as their lines, at most a little more than half of the page
-function Set-ProbOuterFit {
-  if ($probOuter.Panel1Collapsed) { return }
+# the card as high as its lines, at most 30% of the page (its lines scroll): the users keep their room: the users keep their room
+function Set-VdiBrokFit {
+  if ($dskOuter.Panel1Collapsed) { return }
   for ($k = 0; $k -lt 3; $k++) { if ($gridVdi.Columns[$k].FillWeight -ne $script:VdiGridWeights[$k]) { $gridVdi.Columns[$k].FillWeight = $script:VdiGridWeights[$k] } }
-  $h = $probOuter.Height; if ($h -lt 200) { return }
-  $rowsH = 0; foreach ($r in $gridVdi.Rows) { $rowsH += $r.Height }
-  $need = 42 + 4 + $gridVdi.ColumnHeadersHeight + [Math]::Max($gridVdi.RowTemplate.Height, $rowsH) + 4
-  $d = [Math]::Max(110, [Math]::Min($need, [int]($h * 0.55)))
-  if ($probOuter.SplitterDistance -ne $d) { try { $probOuter.SplitterDistance = $d } catch { } }
+  $h = $dskOuter.Height; if ($h -lt 200) { return }
+  $rowsH = 0; if ($gridVdi.Visible) { foreach ($r in $gridVdi.Rows) { $rowsH += $r.Height } }
+  $need = 42 + 2 + $(if ($gridVdi.Visible) { $rowsH + 4 } else { 0 })
+  $d = [Math]::Max(44, [Math]::Min($need, [int]($h * 0.30)))
+  if ($dskOuter.SplitterDistance -ne $d) { try { $dskOuter.SplitterDistance = $d } catch { } }
 }
-$probOuter.add_SizeChanged({ Set-ProbOuterFit })
+$btnVdiPAll.add_Click({ $script:VdiShowAll = -not $script:VdiShowAll; Update-VdiBrokersView })
+$dskOuter.add_SizeChanged({ Set-VdiBrokFit })
 $gridVdi.add_CellContentClick({ param($s, $e)
   if ($e.RowIndex -lt 0 -or $e.ColumnIndex -ne 3) { return }
   $f = $s.Rows[$e.RowIndex].Tag; if ($f -and $f.Fix) { Invoke-VdiAction $f.Fix $f.Where $f.FixArg } })
@@ -4280,7 +4301,7 @@ $form.add_Shown({
   Select-Page 0
   Update-DeviceList; Update-CommonGrid; Update-KeysView
   # brokers and hosts in the background from the start: the menu shows who cannot sign in, on any page
-  if ($script:VdiLoaded) { Start-VdiRefresh; $vdiTimer.Start() } else { $probOuter.Panel1Collapsed = $true }
+  if ($script:VdiLoaded) { Start-VdiRefresh; $vdiTimer.Start() } else { $dskOuter.Panel1Collapsed = $true }
   if ($list.Items.Count) { $list.Items[0].Selected = $true } else { Show-Device $null }
   $timer.Start()
   # the access code at every start: the vault opened, or created the first time (both can be skipped)
@@ -4294,7 +4315,7 @@ if ($env:OTR_MANAGER_BRANDING_SHOT) {   # test: the logo dialog (of OTR_MANAGER_
   $form.add_Shown({ Show-BrandingDialog ($script:Devices | Where-Object Name -eq $env:OTR_MANAGER_BRANDING_HOST | Select-Object -First 1); $form.Close() })
 }
 if ($env:OTR_MANAGER_SCREENSHOT) {   # test: draws the window into a PNG instead of leaving it open
-  # OTR_MANAGER_TAB = page (0 devices, 1 common, 2 keys, 3 problems, 4 vault, 5 updates, 6 desktops), OTR_MANAGER_DETAIL = tab of the selected device,
+  # OTR_MANAGER_TAB = page (0 devices, 1 common, 2 keys, 3 history, 4 vault, 5 updates, 6 desktops), OTR_MANAGER_DETAIL = tab of the selected device,
   # OTR_MANAGER_DEVICE = the device to select, OTR_MANAGER_ROW = the setting whose help shows
   # an error must close the window and be reported: nobody is there to close it
   $form.add_Shown({ try {
@@ -4320,7 +4341,7 @@ if ($env:OTR_MANAGER_SCREENSHOT) {   # test: draws the window into a PNG instead
     if ($env:OTR_MANAGER_SIZE -match '^(\d{3,4})x(\d{3,4})$') { $w = [int]$Matches[1]; $h = [int]$Matches[2] }
     $root.Dock = 'None'; $root.SetBounds(0, 0, $w, $h)
     Set-SplitFit; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
-    if ($script:VdiLoaded) { Set-DskSplitFit; Set-ProbOuterFit; if ($dskList.SelectedItems.Count) { $dskList.SelectedItems[0].EnsureVisible() }; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents() }
+    if ($script:VdiLoaded) { Set-VdiBrokFit; Set-DskSplitFit; if ($dskList.SelectedItems.Count) { $dskList.SelectedItems[0].EnsureVisible() }; $form.Refresh(); [System.Windows.Forms.Application]::DoEvents() }
     $bmp = New-Object System.Drawing.Bitmap($w, $h)
     $root.DrawToBitmap($bmp, (New-Object System.Drawing.Rectangle(0, 0, $w, $h)))
     $bmp.Save($env:OTR_MANAGER_SCREENSHOT, [System.Drawing.Imaging.ImageFormat]::Png)

@@ -14,7 +14,7 @@ folder too, with a backup and a line in the change log.
 - [Settings for all devices or one](#settings-for-all-devices-or-one)
 - [Updates: a few devices first, then all, and back when something breaks](#updates-a-few-devices-first-then-all-and-back-when-something-breaks)
 - [Remote screen](#remote-screen)
-- [Problems across the fleet](#problems-across-the-fleet)
+- [History: problems across the fleet](#history-problems-across-the-fleet)
 - [Desktops, brokers and Hyper-V hosts](#desktops-brokers-and-hyper-v-hosts)
 - [Vault, keys and the site key](#vault-keys-and-the-site-key)
 - [Logo, background, SSH keys, permissions](#logo-background-ssh-keys-permissions)
@@ -107,7 +107,7 @@ applied when the session is over.
    the latest release, checks its project signature and hash, and asks: *all devices* or ***pilot devices only***.
    With pilot only, all the other devices are first kept on the version they have (`UPDATE_TO=<that version>` in
    `common.conf`), and only then the new version goes into the folder.
-3. **Watch the pilots** for a few days: their **Summary** and **Events**, and the **Problems** page.
+3. **Watch the pilots** for a few days: their **Summary** and **Events**, and the **History** page.
 
 ### Release it to the whole fleet
 
@@ -149,9 +149,9 @@ the network, and nothing is installed on your PC. The device shows *Remote assis
 records it in its events; it ends when you close the small window, or by itself after 2 hours. `REMOTE_SCREEN=off`
 turns it off. How it works: [management.md](management.md#remote-screen).
 
-## Problems across the fleet
+## History: problems across the fleet
 
-The **Problems** page reads the event logs of every device together, for today, 24 hours, 7 or 30 days, and groups
+The **History** page reads the event logs of every device together, for today, 24 hours, 7 or 30 days, and groups
 what went wrong: failed sign-ins (by broker), desktops that did not start, sessions dropped (by cause), sessions
 taken over, UDP blocked, failed updates, rejected settings. Each line says how many times, on which devices, for
 which users, first and last time. A line is orange when 3 or more devices had the same problem: that points at a
@@ -166,7 +166,7 @@ next to the devices, for a deployment of Remote Desktop Services with Hyper-V (p
 there are some).
 
 <p align="center">
-<img src="screenshots/manager-desktops.png" alt="Desktops page: who cannot sign in on top, each user with the device, the desktop, its host, the VM, the session and the last sign-in; the selected user with its actions" width="100%">
+<img src="screenshots/manager-desktops.png" alt="Desktops page: on top the problems of brokers and hosts with their Fix buttons and who cannot sign in, then each user with the device, the desktop, its host, the VM, the session and the last sign-in; the selected user with its actions" width="100%">
 </p>
 
 - **One row per user and device**: the device, the personal desktop (VM), its Hyper-V host, the state of the VM
@@ -186,13 +186,9 @@ there are some).
 
 ### Brokers and hosts
 
-The **Problems** page starts with the brokers, the shared name the devices use, and the Hyper-V hosts: one line each,
-green when healthy, otherwise one sentence and, when a safe fix exists, its button. A right click on a broker or a host
-gives all its actions.
-
-<p align="center">
-<img src="screenshots/manager-brokers.png" alt="Problems page, Brokers and hosts: a host without the permission of a broker, a broker that fails every sign-in, VMs with a vTPM that the cluster would save, a broker without self-repair, each with its Fix button" width="100%">
-</p>
+On top of the **Desktops** page, the brokers, the shared name the devices use, and the Hyper-V hosts: one line per
+problem, in one sentence and, when a safe fix exists, with its button; **Show all** adds the healthy ones. When all is
+well it is one green line, *Brokers and hosts: all OK*. A right click on a broker or a host gives all its actions.
 
 | It checks | Fix |
 |---|---|
@@ -235,7 +231,7 @@ gives all its actions.
 A broker can start failing every sign-in after it leaves and joins the farm again: it presents itself without the `$`,
 falls back to NTLM, and every request ends with *access denied* (event 804, `0x80070005`) until its services start
 again. `management/windows/rds/Broker-SelfRepair.ps1` does that by itself, as a scheduled task started by the event
-of that fault, at most once every 15 minutes. **Install** in Brokers and hosts installs or updates it; by hand:
+of that fault, at most once every 15 minutes. **Install** in Brokers and hosts (Desktops page) installs or updates it; by hand:
 `Install-BrokerSelfRepair.ps1 -Broker rdcb1.example.com, rdcb2.example.com` (`-Remove` takes it away). A broker that
 already has a self-repair task of its own is left as it is.
 

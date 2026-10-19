@@ -36,8 +36,8 @@ $json = Join-Path $Out 'vdi-demo.json'
 if (-not $Shots) { return }
 $env:OTR_MANAGER_VDI_DEMO = $json; $env:OTR_MANAGER_SIZE = $Size; $env:OTR_MANAGER_VAULT = Join-Path $Out 'no-vault.otr'
 $mgr = (Resolve-Path (Join-Path $mw 'OpenThinRDP-Manager.ps1')).Path
-foreach ($s in @(@{ Name = 'manager-desktops'; Tab = 6; Row = 'bob'; Lang = 'en' }, @{ Name = 'manager-brokers'; Tab = 3; Row = ''; Lang = 'en' },
-  @{ Name = 'manager-desktops-it'; Tab = 6; Row = 'bob'; Lang = 'it' }, @{ Name = 'manager-brokers-it'; Tab = 3; Row = ''; Lang = 'it' })) {
+foreach ($s in @(@{ Name = 'manager-desktops'; Tab = 6; Row = 'bob'; Lang = 'en' }, @{ Name = 'manager-history'; Tab = 3; Row = ''; Lang = 'en' },
+  @{ Name = 'manager-desktops-it'; Tab = 6; Row = 'bob'; Lang = 'it' }, @{ Name = 'manager-history-it'; Tab = 3; Row = ''; Lang = 'it' })) {
   $env:OTR_MANAGER_SCREENSHOT = Join-Path $Out "$($s.Name).png"; $env:OTR_MANAGER_TAB = "$($s.Tab)"; $env:OTR_MANAGER_VDI_ROW = $s.Row
   & powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File $mgr -Folder $dest -Language $s.Lang
   $env:OTR_MANAGER_SCREENSHOT

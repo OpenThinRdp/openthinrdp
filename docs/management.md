@@ -97,7 +97,7 @@ Before saving `common.conf` it lists the devices that would reject it.
 
 The window has six pages on the left: **Devices** (the list, and the selected device with its settings, a summary,
 its events and its full report), **Common settings**, **Updates** (see [Pilot devices and going back](#pilot-devices-and-going-back)
-and [The manager updates itself](#the-manager-updates-itself)), **SSH keys**, **Vault** and **Problems**; the actions on the
+and [The manager updates itself](#the-manager-updates-itself)), **SSH keys**, **Vault** and **History**; the actions on the
 folder (refresh, open, release from GitHub, check permissions) and the state of the vault are in the bar at the top. In a settings list each row shows
 the value in use on the device, where it comes from (*the device itself*, *common settings*, *this device* for an
 exception) and *on its way* when a saved value has not reached the device yet (it reads the folder every 5 minutes;
@@ -181,7 +181,7 @@ minutes. The status file says where each picture comes from: `BRANDING=logo=comm
 
 ## Problems across the fleet
 
-Every device sends its event log to `status\<hostname>-events.log`. The **Problems** tab of the Windows manager
+Every device sends its event log to `status\<hostname>-events.log`. The **History** page of the Windows manager
 (since 0.1.7) reads them all together for a period (today, 24 hours, 7 or 30 days) and groups what went wrong:
 sign-in attempts that failed (by the broker really contacted), desktops that did not start, sign-ins refused, sessions dropped (by
 cause: network lost, FreeRDP stuck, error code), sessions taken over, UDP blocked, failed updates, rejected settings.

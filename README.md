@@ -189,7 +189,7 @@ on the shared folder the devices report to. No server, no agent, no database: wh
   user with the device, the desktop, its host, the session and the last sign-in; brokers and hosts checked (a broker
   that fails every request, a missing permission, a stuck RDVH agent), each problem with its fix; actions on VMs and
   sessions, always confirmed and logged.
-- **Problems across the fleet** grouped from every event log; a **vault** for the SSH key and the signing key; your
+- **The history of the fleet**, problems grouped from every event log; a **vault** for the SSH key and the signing key; your
   fleet on **its own signing key**; logo and background; and the manager **updates itself** from the signed releases.
 
 **Everything it does, page by page, with the steps for a pilot group and for going back: [docs/manager.md](docs/manager.md).**

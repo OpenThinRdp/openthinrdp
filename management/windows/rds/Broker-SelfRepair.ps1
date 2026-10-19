@@ -1,7 +1,7 @@
 <#
   OpenThinRDP - broker self-repair (Remote Desktop Connection Broker).
   Runs on a broker as SYSTEM, started by the scheduled task "OpenThinRDP - Broker self-repair"
-  (Install-BrokerSelfRepair.ps1, or Problems > Brokers and hosts in the manager) the moment the broker presents itself
+  (Install-BrokerSelfRepair.ps1, or Desktops > Brokers and hosts in the manager) the moment the broker presents itself
   with the wrong identity.
 
   THE FAULT. At every request tssdis.exe (the broker service) calls the broker itself with the computer account.
@@ -48,7 +48,7 @@ if (-not $Test -and $signals.Count -eq 0) { Write-Log 'started, but no signal in
 if (Test-Path -LiteralPath $stamp) {
   $last = (Get-Item -LiteralPath $stamp).LastWriteTime
   if (((Get-Date) - $last).TotalMinutes -lt $pauseMinutes) {
-    $m = "The broker presents itself with the wrong identity again, but its services were restarted at $($last.ToString('HH:mm:ss')): not again before $pauseMinutes minutes. If it goes on, a person is needed (manager: Problems > Brokers and hosts)."
+    $m = "The broker presents itself with the wrong identity again, but its services were restarted at $($last.ToString('HH:mm:ss')): not again before $pauseMinutes minutes. If it goes on, a person is needed (manager: Desktops > Brokers and hosts)."
     Write-Log $m; Write-Event 1002 'Error' $m; exit 0
   }
 }
@@ -98,5 +98,5 @@ Write-Log "  after: $state"
 
 $ok = $state -notmatch '=(Stopped|StartPending|StopPending)'
 $m = "Broker self-repair on ${env:COMPUTERNAME}: $why. Services restarted: $state. " +
-  $(if ($ok) { 'The real test is the next sign-in through this broker (event 801 in the SessionBroker Operational log).' } else { 'A service did not start: a person is needed (manager: Problems > Brokers and hosts).' })
+  $(if ($ok) { 'The real test is the next sign-in through this broker (event 801 in the SessionBroker Operational log).' } else { 'A service did not start: a person is needed (manager: Desktops > Brokers and hosts).' })
 Write-Event $(if ($ok) { 1001 } else { 1003 }) $(if ($ok) { 'Warning' } else { 'Error' }) $m

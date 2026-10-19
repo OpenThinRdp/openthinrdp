@@ -726,7 +726,7 @@ function Set-VdiRowState($r, $m, [datetime]$now, $hosts) {
   & $set 'ok' 7 'VdiStReady' $(if ($r.Vm) { Get-Text 'VdiWhyReady' } else { Get-Text 'VdiWhyNoVm' })
 }
 
-# The findings of the Problems page on brokers, shared names and hosts: Kind (error, warn, info, ok), Where, Text (one
+# The findings on brokers, shared names and hosts: Kind (error, warn, info, ok), Where, Text (one
 # sentence), Fix (an action kind, or $null), FixArg, Order. A healthy broker or host is one ok line that says so.
 function Get-VdiFindings($m, [datetime]$now, $settings) {
   $out = New-Object Collections.ArrayList
