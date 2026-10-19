@@ -15,8 +15,8 @@ jobs:
         run: for f in rootfs/opt/openthinrdp/*.sh rootfs/opt/openthinrdp/lib/*.sh management/publish/*.sh image/*.sh image/freerdp/*.sh image/rpi/*.sh image/rpi/openthinrdp-growroot tests/rpi-qemu.sh; do bash -n "$f" || exit 1; done
       - name: System tests in Debian 13
         run: docker run --rm -v "$PWD":/src:ro debian:trixie bash /src/tests/run-tests.sh
-  # The Windows manager in Windows PowerShell 5.1, as administrators run it: its scripts, its texts, the Desktops page
-  # from recorded data (no server, nothing changed).
+  # The Windows manager in Windows PowerShell 5.1, as administrators run it: its scripts, its texts, the Desktops page and
+  # the Health Center from recorded data (no server, nothing changed).
   manager-tests:
     runs-on: windows-latest
     steps:
@@ -24,3 +24,6 @@ jobs:
       - name: Manager tests in Windows PowerShell 5.1
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tests\windows\manager-tests.ps1
+      - name: Health Center tests in Windows PowerShell 5.1
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tests\windows\health-tests.ps1

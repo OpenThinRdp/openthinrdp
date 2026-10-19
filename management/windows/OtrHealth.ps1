@@ -1433,7 +1433,7 @@ function Get-HealthCheckPlan($check, $state, [datetime]$now) {
   Get-HealthActionPlan $check.Fix $check.Node $state $now $check.FixArg
 }
 # The repairs that run by themselves now: the safe fixes of the problems of the items in repair mode, not tried in the
-# last $script:HealthRetryMinutes, one per role (two DCs, two SQL replicas, two brokers never in the same round).
+# last $script:HealthRetryMinutes, one server per role (two DCs, two SQL replicas, two brokers never in the same round).
 # $tried: key -> time of the last try.
 function Get-HealthAutoPlans($state, $settings, [datetime]$now, [hashtable]$tried) {
   $m = $state.Model; $out = New-Object Collections.ArrayList; $roles = @{}; $keys = @{}
@@ -1447,10 +1447,11 @@ function Get-HealthAutoPlans($state, $settings, [datetime]$now, [hashtable]$trie
     $key = "$($c.Fix)|$($n.Id)|$($c.FixArg)"
     if ($keys.ContainsKey($key)) { continue }
     if ($tried -and $tried.ContainsKey($key) -and ($now - $tried[$key]).TotalMinutes -lt $script:HealthRetryMinutes) { continue }
-    if ($p.Role -and $p.Role -ne 'host' -and $roles.ContainsKey($p.Role)) { continue }
+    # one server per role in a round (several repairs of the same server are fine)
+    if ($p.Role -and $p.Role -ne 'host' -and $roles.ContainsKey($p.Role) -and $roles[$p.Role] -ne $n.Id) { continue }
     $p | Add-Member -NotePropertyName Key -NotePropertyValue $key -Force
     $p | Add-Member -NotePropertyName RoleName -NotePropertyValue $n.Name -Force
-    $keys[$key] = 1; if ($p.Role) { $roles[$p.Role] = 1 }
+    $keys[$key] = 1; if ($p.Role) { $roles[$p.Role] = $n.Id }
     [void]$out.Add($p)
   }
   @($out)
