@@ -425,6 +425,8 @@ function Get-VdiProbeConfig($devices, $settings) {
     $names += @([string]$d.S['CFG_BROKER']) + @(Split-List ([string]$d.S['CFG_BROKER_FALLBACK']))
   }
   $names += @(Split-List $settings.Brokers)
+  # the shared name of the brokers given in the settings of the Health Center, when the devices do not name it
+  if (Get-Command Get-HealthSettings -ErrorAction SilentlyContinue) { $names += @(Split-List (Get-HealthSettings).BrokerName) }
   @{ BrokerNames = @($names | Where-Object { $_ } | ForEach-Object { $_.Trim() } | Sort-Object -Unique); Brokers = @(Split-List $settings.Brokers); Hosts = @(Split-List $settings.Hosts)
      BrokerGroup = [string]$settings.BrokerGroup; StatusDir = $script:StatusDir; Devices = $devs; RepairTask = $script:VdiRepairTask; RepairFile = $script:VdiRepairFile
      OpenMs = 8000; OperationMs = 90000 }
