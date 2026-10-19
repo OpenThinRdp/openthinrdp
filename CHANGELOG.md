@@ -5,6 +5,7 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
 
 ## Unreleased
 
+- The settings dialog accepts spaces in the collection (`LOAD_BALANCE_INFO`), as in `tsv://MS Terminal Services Plugin.1.<collection>` for RDS session collections (#76).
 - **Raspberry Pi 4 (arm64), experimental** ([#61](https://github.com/OpenThinRdp/openthinrdp/issues/61)).
   - `image/build-rpi.sh` makes an SD card image: Debian 13 arm64 with Debian's kernel and `raspi-firmware`, the same
     kiosk, and a first boot that grows the root to the card. There is no installer.
