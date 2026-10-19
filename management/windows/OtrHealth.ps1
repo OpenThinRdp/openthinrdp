@@ -544,7 +544,9 @@ function Add-HcBasics($n, $o, [string]$role, [datetime]$now, [string]$pdc, $dcs)
     $pct = [int][math]::Round(100 * [double]$o.MemFreeMB / [double]$o.MemTotalMB)
     $free = Format-HcSize ([double]$o.MemFreeMB / 1024); $tot = Format-HcSize ([double]$o.MemTotalMB / 1024)
     Add-HcFact $n 'HcFMemory' (Get-Text 'HcMemFree' $free $tot $pct)
-    if ($pct -lt $L.MemPct) { [void](Add-HcCheck $n 'error' 'Mem' @($pct, $free, $tot) -why (Get-Text "HcW_Mem_$role")) }
+    # SQL Server keeps the memory it may take (max server memory): little free memory on a replica is normal
+    if ($role -eq 'sql') { }
+    elseif ($pct -lt $L.MemPct) { [void](Add-HcCheck $n 'error' 'Mem' @($pct, $free, $tot) -why (Get-Text "HcW_Mem_$role")) }
     elseif ($pct -lt $L.MemWarnPct) { [void](Add-HcCheck $n 'warn' 'Mem' @($pct, $free, $tot) -why (Get-Text "HcW_Mem_$role")) }
   }
   foreach ($d in @($o.Disks | Where-Object { $_ -and [double]$_.SizeGB -gt 0 })) {
@@ -608,7 +610,8 @@ function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
   if (-not $raw) { $m.Access = 'nodata'; return $m }
   $domain = $raw.Domain
   $pdc = if ($domain) { [string]$domain.Pdc } else { '' }
-  $dcShort = @(@($raw.Dcs) | Where-Object { $_ } | ForEach-Object { $_.Name })
+  # the domain controllers by name and by address (a time source is named either way)
+  $dcShort = @(@($raw.Dcs) | Where-Object { $_ } | ForEach-Object { $_.Name }) + @(@($domain.Dcs) | Where-Object { $_ -and $_.Ip } | ForEach-Object { $_.Ip })
   $hostsAll = @($raw.Hosts | Where-Object { $_ })
   # the rows of the Desktops page by VM: who uses it
   $desk = @{}; if ($vdi) { foreach ($r in @($vdi.Rows)) { if ($r -and $r.Vm) { $k = ([string]$r.Vm).ToUpper(); if (-not $desk.ContainsKey($k)) { $desk[$k] = @() }; $desk[$k] += $r } } }
@@ -618,7 +621,7 @@ function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
     foreach ($f in @($vf | Where-Object { $_.Where -eq $where -and $_.Kind -ne 'ok' })) {
       # the stop action of vTPM VMs is a check of the cluster here
       if ($f.Fix -eq 'HostOfflineAction' -and @($raw.Clusters).Count) { continue }
-      $title = if ($f.Fix) { Get-TextIf "HcVdi_$($f.Fix)" } else { '' }; if (-not $title) { $title = Get-Text 'HcT_Vdi' }
+      $title = if ($f.Fix) { Get-TextIf "HcVdi_$($f.Fix)" } elseif ($node.Kind -eq 'rds') { Get-Text 'HcT_VdiName' $where } else { '' }; if (-not $title) { $title = Get-Text 'HcT_Vdi' }
       [void]$node.Checks.Add([pscustomobject]@{ Kind = $f.Kind; Id = 'Vdi'; Title = $title; Text = $f.Text; Why = (Get-Text 'HcW_Vdi'); Fix = $f.Fix; FixArg = $f.FixArg; Source = 'vdi'; Node = $node.Id; Where = $f.Where }) } }
 
   # ---- Hyper-V: a cluster with its nodes, or the single hosts
@@ -763,7 +766,8 @@ function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
           elseif ($pct -lt $L.DiskWarnPct -and [double]$d.FreeGB -lt $L.DiskWarnGB) { [void](Add-HcCheck $vn 'warn' 'GuestDisk' @($d.Drive, (Format-HcSize $d.FreeGB), (Format-HcSize $d.SizeGB), $pct)) }
         }
       }
-      foreach ($k in 'VmStart', 'VmRestart', 'VmShutdown', 'VmResume') { Add-HcAction $vn $k }
+      foreach ($k in 'VmStart', 'VmRestart', 'VmShutdown') { Add-HcAction $vn $k }
+      if ($v.State -eq 'Paused') { Add-HcAction $vn 'VmResume' }
     }
   }
   # ---- what only the whole cluster can tell: vTPM VMs it would save, the guardian keys on every node, room for a failure
@@ -945,7 +949,7 @@ function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
           if ($other -and [int]$node.IntegratedOnly -eq 1) { [void](Add-HcCheck $rn 'error' 'SqlAuth' @($other.Replica)) }
         }
         $bs = $srvBy[(Get-HcShort $node.Server)]
-        if ($bs) { if ($bs.Reachable) { Add-HcBasics $rn $bs 'server' $now $pdc $dcShort } else { [void](Add-HcCheck $rn 'warn' $(if ($bs.Error -eq 'denied') { 'Denied' } else { 'Unreach' }) @($bs.Name, $bs.Error)) } }
+        if ($bs) { if ($bs.Reachable) { Add-HcBasics $rn $bs 'sql' $now $pdc $dcShort } else { [void](Add-HcCheck $rn 'warn' $(if ($bs.Error -eq 'denied') { 'Denied' } else { 'Unreach' }) @($bs.Name, $bs.Error)) } }
       }
     }
   }

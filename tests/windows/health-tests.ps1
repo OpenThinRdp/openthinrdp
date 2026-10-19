@@ -67,7 +67,7 @@ try {
   ok 'the tree: cluster > hosts > VMs, domain > DCs and DNS, SQL > replicas, brokers, devices, backups' {
     (& $node 'cluster:VDICL') -and (& $node 'host:HV1').Parent -eq 'cluster:VDICL' -and (& $node 'vm:VM-ALICE').Parent -eq 'host:HV1' -and (& $node 'dc:DC1').Parent -eq 'domain:EXAMPLE.COM' -and
     (& $node 'dns').Parent -eq 'domain:EXAMPLE.COM' -and (& $node 'replica:SQL2').Parent -eq 'sql:SQLHA.EXAMPLE.COM' -and (& $node 'broker:RDCB1').Parent -eq 'rds' -and (& $node 'device:NAS2').Parent -eq 'devices' -and (& $node 'backup') -and -not (& $node 'hyperv') }
-  ok 'the headline: 2 problems, 10 warnings, the error first' { $m.Errors -eq 2 -and $m.Warnings -eq 10 -and $m.HeadlineKind -eq 'error' -and $m.Problems[0].Check.Kind -eq 'error' -and $m.Headline -match '^2 problems, 10 warnings' }
+  ok 'the headline: 2 problems, 10 warnings, the error first' { $m.Errors -eq 2 -and $m.Warnings -eq 10 -and $m.HeadlineKind -eq 'error' -and $m.Problems[0].Check.Kind -eq 'error' -and $m.Headline -match '^Problems: 2, warnings: 10:' }
   ok 'VM-CAROL: saved with a vTPM is a problem, Start offered' { $x = @(& $chk 'vm:VM-CAROL' 'SavedTpm'); $x.Count -eq 1 -and $x[0].Kind -eq 'error' -and $x[0].Fix -eq 'VmStart' -and (& $node 'vm:VM-CAROL').Status -eq 'error' }
   ok 'the cluster: VM-CAROL would be saved (OfflineAction 1), fix with its name' { $x = @(& $chk 'cluster:VDICL' 'OfflineAction'); $x.Count -eq 1 -and $x[0].FixArg -eq 'VM-CAROL' }
   ok 'the cluster: if HV1 stops its VMs do not fit on HV2 (70 GB, 22 GB free)' { $x = @(& $chk 'cluster:VDICL' 'Room'); $x.Count -eq 1 -and $x[0].Text -match 'HV1' -and $x[0].Text -match '70 GB' }
@@ -263,7 +263,7 @@ try {
   # ---- Italian
   $script:Text = Read-LanguageTexts $script:LangDir 'it'
   $mi = ConvertTo-HealthModel (Copy-Raw) $null $now $set
-  ok 'the model in Italian' { $mi.Headline -match '^2 problemi, 10 avvisi' -and @($mi.Index['vm:VM-CAROL'].Checks)[0].Title -eq 'Salvata con vTPM' -and @($mi.Index['host:HV2'].Facts | Where-Object { $_.Label -eq 'Memoria' }).Count }
+  ok 'the model in Italian' { $mi.Headline -match '^Problemi: 2, avvisi: 10:' -and @($mi.Index['vm:VM-CAROL'].Checks)[0].Title -eq 'Salvata con vTPM' -and @($mi.Index['host:HV2'].Facts | Where-Object { $_.Label -eq 'Memoria' }).Count }
 } finally { Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item Env:\OTR_MANAGER_SETTINGS -ErrorAction SilentlyContinue }
 
 Write-Host ''

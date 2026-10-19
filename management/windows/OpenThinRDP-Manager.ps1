@@ -2839,7 +2839,8 @@ $pageHealth.Controls.Add($hcWrap); $pageHealth.Controls.Add((New-PageHeader (Get
 # the facts keep about 40% of the height of the item, its checks the rest
 function Set-HcInnerFit {
   $h = $hcInner.Height; if ($h -lt 160) { return }
-  $want = [Math]::Max(80, [Math]::Min([int]($h * 0.42), 22 * ([Math]::Max(3, $lvHcFacts.Items.Count)) + 12))
+  $rh = if ($lvHcFacts.Items.Count) { $lvHcFacts.GetItemRect(0).Height } else { 21 }
+  $want = [Math]::Max(80, [Math]::Min([int]($h * 0.45), $rh * ([Math]::Max(3, $lvHcFacts.Items.Count)) + 14))
   if ([Math]::Abs($hcInner.SplitterDistance - $want) -gt 2) { try { $hcInner.SplitterDistance = $want } catch { } }
   for ($k = 0; $k -lt 3; $k++) { if ($gridHc.Columns[$k].FillWeight -ne $script:HcGridWeights[$k]) { $gridHc.Columns[$k].FillWeight = $script:HcGridWeights[$k] } }
 }
@@ -4368,7 +4369,12 @@ function Show-HealthNode($n) {
     if (-not $checks.Count) { $i = $gridHc.Rows.Add((Get-Text 'HcStatus_ok'), '', (Get-Text 'HcNoChecks'), ''); $gridHc.Rows[$i].Cells[3] = New-Object System.Windows.Forms.DataGridViewTextBoxCell
       $cc = $gridHc.Rows[$i].Cells[0]; $cc.Style.ForeColor = $script:KindColor.ok; $cc.Style.BackColor = $script:KindSoft.ok; $cc.Style.Font = $fontSmallBold }
     $gridHc.CurrentCell = $null
-  } finally { $lvHcFacts.EndUpdate(); Update-HcButtons; Set-HcInnerFit }
+  } finally {
+    $lvHcFacts.EndUpdate()
+    # the value takes the rest of the width (the label column changed with the item): no horizontal scroll bar
+    $lvHcFacts.Columns[1].Width = [Math]::Max(120, $lvHcFacts.ClientSize.Width - $lvHcFacts.Columns[0].Width - 4)
+    Update-HcButtons; Set-HcInnerFit
+  }
 }
 # the buttons of the item: those it offers, each as its plan allows it now (the reason in the tooltip)
 function Update-HcButtons {
