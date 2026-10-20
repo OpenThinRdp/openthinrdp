@@ -444,6 +444,17 @@ the new version. The **Updates** page shows the manager's version and has **Chec
 
 ## Settings > Manager: language and local copy
 
+- **Management folder > Name it in the domain** (#82): writes `<account>=<folder>` into
+  `\\<domain>\NETLOGON\OpenThinRDP\folders.conf`, for the account of the devices (`MGMT_USER` of the common
+  settings). A device with that account and **no folder of its own** finds the folder there at every report: a new
+  device needs only domain, account and password. NETLOGON is on every DC and every domain account reads it over the
+  SMB the device uses anyway; no LDAP on the device (LDAP signing, or a domain without an LDAPS certificate, would
+  refuse it). The last folder found is kept for when no DC answers. Writing NETLOGON needs a domain administrator.
+- **Management folder > Move the folder...**: copies everything to a new network path, points `MGMT_SHARE` to it in
+  every `.conf` of both copies (and adds it to the old `common.conf`), updates the domain entry when there is one, and
+  goes on working on the new folder. Every device moves at its next report, those switched off when they start; the
+  old folder stays until no device reports there any more.
+
 - **Language**: the language of the window for your Windows user (*Language of Windows* = as today); it applies from
   the next start. `-Language` on the command line still wins.
 - **Local copy of the management folder**: choose a folder on this PC and the manager mirrors the management folder

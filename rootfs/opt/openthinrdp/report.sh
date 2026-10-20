@@ -20,7 +20,33 @@ H=$(hostname)
 IF=$(main_nic)
 # the VPN first: outside the office the management folder is reached through it
 [ "$(cfg VPN)" != off ] && "$OTR/vpn.sh" check
-RS=$(cfg MGMT_SHARE); SHARE=$(echo "$RS" | tr '\\' '/')
+RS=$(cfg MGMT_SHARE)
+# No folder in the settings, only the domain account (#82): the folder named for that account in the domain. The
+# manager writes \\<domain>\NETLOGON\OpenThinRDP\folders.conf (lines <account>=<folder>): NETLOGON is on every DC and
+# every domain account reads it, over the SMB the device uses anyway (no LDAP, which signing or a missing LDAPS
+# certificate would refuse). The last folder found is kept for when no DC answers; a moved folder is followed.
+FROMDOM=$OTR_LIB/share-from-domain
+share_from_domain(){
+  local dom acc m s
+  dom=$(cfg DOMAIN); [[ $dom == *.* ]] || dom=$(sed -n 's/^domain=//p' "$CRED" 2>/dev/null | head -1)
+  acc=$(sed -n 's/^username=//p' "$CRED" 2>/dev/null | head -1 | tr 'A-Z' 'a-z')
+  [[ $dom =~ ^[A-Za-z0-9.-]+\.[A-Za-z0-9-]+$ ]] && [ -n "$acc" ] || return 0
+  m=$(mktemp -d)
+  if timeout 20 mount -t cifs "//$dom/NETLOGON" "$m" -o "ro,credentials=$CRED,vers=3.0,sec=ntlmssp,iocharset=utf8" 2>>"$LOG"; then
+    s=$(tr -d '\r' < "$m/OpenThinRDP/folders.conf" 2>/dev/null | awk -v a="$acc" '
+      /^[ \t]*[#;]/ || index($0, "=") == 0 { next }
+      { k = tolower(substr($0, 1, index($0, "=") - 1)); v = substr($0, index($0, "=") + 1)
+        gsub(/^[ \t]+|[ \t]+$/, "", k); gsub(/^[ \t]+|[ \t]+$/, "", v); if (k == a) f = v }
+      END { print f }')
+    umount "$m"
+    if [[ $s =~ ^(\\\\|//)[A-Za-z0-9.-]+[\\/][A-Za-z0-9\ ._\$\\/-]+$ ]] && [ "$s" != "$(cat "$FROMDOM" 2>/dev/null)" ]; then
+      echo "$s" > "$FROMDOM"; ev "management folder from the domain ($acc): $s"
+    fi
+  fi
+  rmdir "$m" 2>/dev/null
+}
+if [ -z "$RS" ] && [ -f "$CRED" ]; then share_from_domain; RS=$(cat "$FROMDOM" 2>/dev/null); fi
+SHARE=$(echo "$RS" | tr '\\' '/')
 IPC=$(ip -4 -o addr show dev "$IF" 2>/dev/null | awk '{print $4}' | head -1)
 # only an xfreerdp3 with /u: is a session (the kiosk also runs "xfreerdp3 --version")
 SU=""; for P in $(pgrep -x xfreerdp3); do

@@ -165,7 +165,8 @@ OLDPW=$(sed -n 's/^password=//p' "$CRED" 2>/dev/null | head -1)
 V[SECURITY_UPDATES]=$(onoff "$(get SECURITY_UPDATES)")
 V[TPM_SECRETS]=$(onoff "$(get TPM_SECRETS)")
 case "$(low "$(get UPDATE_FROM)")" in share|cartella|folder) V[UPDATE_FROM]=share ;; off|no|none|nessuno) V[UPDATE_FROM]=off ;; *) V[UPDATE_FROM]=github ;; esac
-[ "${V[UPDATE_FROM]}" = share ] && [ -z "${V[MGMT_SHARE]}" ] && err "$V_UPDATE_SHARE"
+# (without a folder, one named for the domain account: report.sh)
+[ "${V[UPDATE_FROM]}" = share ] && [ -z "${V[MGMT_SHARE]}" ] && [ -z "${V[MGMT_USER]}" ] && err "$V_UPDATE_SHARE"
 V[UPDATE_GITHUB]=$(get UPDATE_GITHUB); [[ ${V[UPDATE_GITHUB]} =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || err "$V_UPDATE_GITHUB"
 case "$(low "$(get UPDATE_KEY)")" in site|sito) V[UPDATE_KEY]=site ;; *) V[UPDATE_KEY]=any ;; esac
 V[UPDATE_TO]=$(low "$(get UPDATE_TO)")
