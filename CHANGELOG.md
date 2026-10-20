@@ -12,6 +12,12 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
   One invalid setting (a hand-written `openthinrdp.conf`, an image built with settings of its own) made the rename
   fail silently and the device stayed `thinclient`; now the name is set anyway and the event log says which setting
   to fix.
+- **Zero-touch from the domain account** ([#82](https://github.com/OpenThinRdp/openthinrdp/issues/82)). A device with
+  a domain account and no folder of its own finds the management folder in
+  `\<domain>\NETLOGON\OpenThinRDP\folders.conf`, written by the manager (Settings > Manager > *Name it in the
+  domain*): a new device needs only domain, account and password, and follows the folder when it moves.
+- **Manager: move the management folder** in one step (Settings > Manager > *Move the folder...*): everything is
+  copied, every device follows at its next report, the manager goes on in the new folder.
 - **Manager: the configuration as text** ([#82](https://github.com/OpenThinRdp/openthinrdp/issues/82)).
   **Edit as text...** opens `common.conf` or a device's file as plain text, comments included; it is saved after the
   same checks as the page, in the form the page writes, with a backup. Passwords show as `********`.
