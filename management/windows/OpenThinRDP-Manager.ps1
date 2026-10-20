@@ -2879,15 +2879,16 @@ $hcModeTexts = @((Get-Text 'HcModeDiagnose'), (Get-Text 'HcModeRepair'))
 $cmbHcMode.Location = New-Object System.Drawing.Point(($lblHcMode.Left + (Get-TextWidth $lblHcMode.Text) + 8), 12)
 $btnHcRefresh = New-ActionButton 'BtnRefresh' 'Refresh' 'secondary'; $btnHcRefresh.Location = New-Object System.Drawing.Point(($cmbHcMode.Right + 10), 9)
 $btnHcSettings = New-ActionButton 'HcBtnDist' 'Desktop' 'secondary'; $btnHcSettings.Location = New-Object System.Drawing.Point(($btnHcRefresh.Right + 8), 9)
+$pbHc = New-Object System.Windows.Forms.ProgressBar; $pbHc.Style = 'Continuous'; $pbHc.Visible = $false; $pbHc.SetBounds(($btnHcSettings.Right + 14), 22, 180, 10)
 $lblHcHead = New-Label '' $fontBold; $lblHcHead.AutoSize = $false; $lblHcHead.AutoEllipsis = $true; $lblHcHead.Height = 24; $lblHcHead.Location = New-Object System.Drawing.Point(14, 52)
 $lblHcUpdated = New-Label '' $fontSmall $Theme.Muted; $lblHcUpdated.AutoSize = $false; $lblHcUpdated.TextAlign = 'MiddleRight'; $lblHcUpdated.Height = 24
-$hcTop.Controls.AddRange(@($lblHcMode, $cmbHcMode, $btnHcRefresh, $btnHcSettings, $lblHcHead, $lblHcUpdated))
+$hcTop.Controls.AddRange(@($lblHcMode, $cmbHcMode, $btnHcRefresh, $btnHcSettings, $pbHc, $lblHcHead, $lblHcUpdated))
 $script:HcTopCompact = $false
 $hcTop.add_Resize({ param($s, $e)
   $w = $s.ClientSize.Width
   $compact = ($cmbHcMode.Right + 10 + (Get-FullWidth @($btnHcRefresh, $btnHcSettings)) + 10) -gt ($w - 14)
   if ($compact -ne [bool]$script:HcTopCompact) { $script:HcTopCompact = $compact; Set-CompactButtons @($btnHcRefresh, $btnHcSettings) $compact }
-  $btnHcRefresh.Left = $cmbHcMode.Right + 10; $btnHcSettings.Left = $btnHcRefresh.Right + 8
+  $btnHcRefresh.Left = $cmbHcMode.Right + 10; $btnHcSettings.Left = $btnHcRefresh.Right + 8; $pbHc.Left = $btnHcSettings.Right + 14
   $uw = [Math]::Min(320, [Math]::Max(120, (Get-TextWidth $lblHcUpdated.Text $fontSmall) + 10))
   $lblHcUpdated.SetBounds(($w - $uw - 14), 52, $uw, 24); $lblHcHead.Width = [Math]::Max(80, $w - $uw - 40) })
 $tips.SetToolTip($btnHcRefresh, (Get-Text 'HcTipRefresh')); $tips.SetToolTip($cmbHcMode, (Get-Text 'HcTipMode')); $tips.SetToolTip($lblHcMode, (Get-Text 'HcTipMode'))
@@ -4472,6 +4473,8 @@ function Start-HealthRefresh([switch]$Queue) {
   }
   if (-not $set.Enabled) { Complete-HealthRefresh $null; return }
   $cfg = Get-HealthProbeConfig $set $script:Vdi.Model
+  $prog = [hashtable]::Synchronized(@{ Step = ''; Count = 0; Index = 0; Version = 0; Snap = $null }); $cfg.Progress = $prog
+  $script:Health.Progress = $prog; $script:Health.Seen = 0
   $ps = [powershell]::Create()
   # the probe uses OtrHealthNet (the backup log, the shares): the type is loaded in this process, the runspace shares it
   [void]$ps.AddScript($script:HealthProbe.ToString()).AddArgument($cfg)
@@ -4480,8 +4483,16 @@ function Start-HealthRefresh([switch]$Queue) {
   $t.Tag = @{ PS = $ps; H = $ps.BeginInvoke(); Started = (Get-Date) }
   $t.add_Tick({ param($s, $e)
     $st = $s.Tag
+    $pg = $script:Health.Progress
+    if ($pg -and [int]$pg.Version -ne [int]$script:Health.Seen) {
+      $script:Health.Seen = [int]$pg.Version; Update-HealthStamp
+      # the first reading: the parts already read go into the tree at once (later readings keep the last full one)
+      if (-not $script:Health.Raw -and $pg.Snap) {
+        try { $script:Health.Model = ConvertTo-HealthModel $pg.Snap $script:Vdi.Model (Get-Date) (Get-HealthSettings); Update-HealthView; Update-HealthNav } catch { }
+      }
+    }
     if (-not $st.H.IsCompleted -and ((Get-Date) - $st.Started).TotalSeconds -lt 400) { return }
-    $s.Stop(); $s.Dispose(); $script:Health.Busy = $false
+    $s.Stop(); $s.Dispose(); $script:Health.Busy = $false; $script:Health.Progress = $null
     $raw = $null
     try {
       if (-not $st.H.IsCompleted) { [void]$st.PS.BeginStop($null, $null); throw (Get-Text 'VdiErrTimeout') }
@@ -4508,9 +4519,11 @@ function Update-HealthModel {
   Update-HealthView; Update-HealthNav
 }
 function Update-HealthStamp {
-  $t = if ($script:Health.Busy) { Get-Text 'HcReading' } elseif ($script:Health.Received) { Get-Text 'VdiUpdatedAt' $script:Health.Received.ToString('HH:mm:ss') } else { '' }
+  $pg = $script:Health.Progress
+  $t = if ($script:Health.Busy -and $pg -and $pg.Step) { Get-Text 'HcReadingStep' (Get-Text "HcProbe_$($pg.Step)") $(if ([int]$pg.Count) { " ($($pg.Count))" } else { '' }) $pg.Index $script:HealthProbeSteps } elseif ($script:Health.Busy) { Get-Text 'HcReading' } elseif ($script:Health.Received) { Get-Text 'VdiUpdatedAt' $script:Health.Received.ToString('HH:mm:ss') } else { '' }
   if (-not $script:Health.Busy -and $script:Health.Received -and (Test-VdiStale $script:Health.Received (Get-Date)) -and -not $env:OTR_MANAGER_HEALTH_DEMO) { $t = Get-Text 'VdiStaleAt' $script:Health.Received.ToString('HH:mm:ss') }
   if ($script:Health.Error -and -not $script:Health.Busy) { $t = Get-Text 'VdiReadFailed' $script:Health.Error }
+  $pbHc.Visible = [bool]$script:Health.Busy; $pbHc.Value = if ($script:Health.Busy -and $pg) { [Math]::Min(100, [int](100 * [int]$pg.Index / $script:HealthProbeSteps)) } else { 0 }
   $lblHcUpdated.Text = $t; $tips.SetToolTip($lblHcUpdated, $t)
   $lblHcUpdated.ForeColor = if ($script:Health.Error) { $script:KindColor.warn } else { $Theme.Muted }
   $btnHcRefresh.Enabled = -not $script:Health.Busy

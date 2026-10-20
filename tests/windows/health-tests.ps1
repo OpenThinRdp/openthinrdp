@@ -48,7 +48,7 @@ try {
 
   $now = [datetime]'2026-10-19T09:30:00'
   $raw = Copy-Raw
-  $set = Get-HealthDefaults
+  $set = Get-HealthDefaults; $set.BackupPath = '\\nas\backup\logs'
   $m = ConvertTo-HealthModel $raw $null $now $set
   $node = { param($id) $m.Index[$id] }
   $chk = { param($id, $cid) @($m.Index[$id].Checks | Where-Object { $_.Id -eq $cid }) }
@@ -160,6 +160,14 @@ try {
   ok 'the probe: no list of servers from AD or from the guests of the hosts' { $probe -notmatch 'foreach \(\$x in \$d\.DomainControllers\) \{ \[pscustomobject\]' -and $probe -match '\$vmServers = @\(\)' }
   $me = ConvertTo-HealthModel ([pscustomobject]@{ Taken = '2026-10-19T09:30:00'; Hosts = @(); Dcs = @(); Servers = @(); Devices = @() }) $null $now (Get-HealthDefaults)
   ok 'nothing in the settings: each part says "not configured", with the way to the settings' { @('HvHosts', 'Dcs', 'BrokerList', 'Sql', 'DeviceList', 'Backup' | Where-Object { -not $me.Index["nc:$_"] -or $me.Index["nc:$_"].Actions -notcontains 'OpenSettings' }).Count -eq 0 -and -not @($me.Problems).Count }
+  # ---- no backup source: the backups are not judged; the reading tells its steps
+  $nb0 = ConvertTo-HealthModel (Copy-Raw) $null $now (Get-HealthDefaults)
+  $sb = Get-HealthDefaults; $sb.BackupPath = '\\nas\logs'; $nb1 = ConvertTo-HealthModel (Copy-Raw) $null $now $sb
+  ok 'no backup log in the settings: no VM said without a backup, one note "source not configured" with the way to the settings' {
+    -not @($nb0.Nodes | ForEach-Object { $_.Checks } | Where-Object { $_.Id -in 'NoVmBackup', 'CrashOnly', 'BackupLogShort' }).Count -and @($nb0.Index['nc:Backup'].Checks | Where-Object Id -eq 'BackupNoSource').Count -and $nb0.Index['nc:Backup'].Actions -contains 'OpenSettings' -and
+    -not $nb1.Index['nc:Backup'] }
+  ok 'the reading tells its steps (as many as the progress bar counts) and what it has read so far' { @([regex]::Matches($probe, "(?m)^\s+Step '\w+'")).Count -eq $script:HealthProbeSteps -and $probe -match 'function Snap' }
+  ok 'a part read so far makes a model too (the tree fills while reading)' { $part = Copy-Raw; foreach ($k in 'Dcs', 'Servers', 'Sql', 'Devices', 'Backup', 'Dns', 'RdsDb') { $part.PSObject.Properties.Remove($k) }; $mp = ConvertTo-HealthModel $part $null $now $set; [bool]$mp.Index['host:HV1'] }
   # ---- variants: a single host, without a cluster
   $rs = Copy-Raw; $rs.Clusters = @(); $rs.Hosts = @($rs.Hosts[0]); $rs.Hosts[0].Cluster = ''
   foreach ($v in $rs.Hosts[0].Vms) { $v.Clustered = $false; $v.OfflineAction = $null; $v.ResourceState = ''; $v.GroupState = '' }

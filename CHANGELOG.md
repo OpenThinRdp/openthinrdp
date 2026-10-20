@@ -23,6 +23,9 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
   per role (Hyper-V hosts with or without a cluster, DCs, DNS, brokers, RD Gateway, RD Web, SQL listener and replicas or
   single SQL servers, file servers, other servers, devices), each entry with a note; an empty part says *not
   configured* with a button to the settings. The settings of before move into the lists by themselves.
+- **Health Center: the reading shows its steps** with a progress bar, and the first one fills the tree part by part.
+  Without a backup log in the settings the backups are not judged: one note *source not configured*, never a false
+  *no recent backup*.
 - **Health Center: custom checks.** Your own diagnostic and repair scripts, on the servers you choose, shown in the tree
   like the others; kept in `config\health-checks` of the management folder, with a warning when people other than the
   administrators can write there.

@@ -92,6 +92,8 @@ public static class OtrHealthNet {
 $script:HealthRefreshSeconds = 180
 # older than this, a repair that was tried is tried again
 $script:HealthRetryMinutes = 30
+# the steps of a reading (Step in the probe), for the progress bar of the page
+$script:HealthProbeSteps = 13
 # two actions on servers of the same role (two DCs, two SQL replicas, two brokers) never closer than this
 $script:HealthRoleMinutes = 10
 # thresholds of the checks (the same for every site: a site with other needs changes them here)
@@ -321,6 +323,12 @@ $script:HealthProbe = {
   }
   $so = New-PSSessionOption -OpenTimeout ([int]$cfg.OpenMs) -OperationTimeout ([int]$cfg.OperationMs) -CancelTimeout 5000
   $notes = New-Object Collections.ArrayList
+  # The progress for the page ($cfg.Progress, a synchronized hashtable): the step, its number of servers, and what is
+  # read so far, so that the page shows the parts as they come instead of a frozen "reading" for a minute
+  $hcProgress = $cfg.Progress
+  function Snap { [pscustomobject]@{ Taken = Iso (Get-Date); Domain = $domain; Hosts = @($hosts | Where-Object { $_ }); Clusters = @($clusters | Where-Object { $_ }); Dcs = @($dcsOut | Where-Object { $_ })
+    Servers = @($servers | Where-Object { $_ }); Sql = $sql; RdsDb = $rdsDb; Custom = @(); Devices = @($devOut | Where-Object { $_ }); Backup = $backup; Notes = @($notes); Partial = $true } }
+  function Step([string]$key, [int]$n = 0) { $g = $hcProgress; if ($g -is [hashtable]) { try { $g.Snap = Snap } catch { }; $g.Step = $key; $g.Count = $n; $g.Index = [int]$g.Index + 1; $g.Version = [int]$g.Version + 1 } }
   function Invoke-Many($computers, $sb, $argList, [int]$openMs = 0) {
     $res = @{}; $fail = @{}
     $computers = @($computers | Where-Object { $_ } | Select-Object -Unique)
@@ -592,6 +600,7 @@ $r
   $guestSb = { [pscustomobject]@{ Disks = @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | Where-Object { $_.Size } | ForEach-Object {
     [pscustomobject]@{ Drive = "$($_.DeviceID)"; FreeGB = [math]::Round($_.FreeSpace / 1GB, 1); SizeGB = [math]::Round($_.Size / 1GB, 1) } }) } }
 
+  Step 'domain' @($cfg.Dcs).Count
   # ---- 1. the domain: its DCs, the owners of the FSMO roles (System.DirectoryServices: no module needed)
   $domain = $null; $dcNames = [ordered]@{}
   # the domain controllers of the settings (never the list of AD: they can be anywhere); the domain itself (FSMO
@@ -610,6 +619,7 @@ $r
     } catch { $domain = [pscustomobject]@{ Name = ''; Pdc = ''; Dcs = $dcs; Error = $_.Exception.GetBaseException().Message } }
   }
   $pdc = if ($domain) { [string]$domain.Pdc } else { '' }
+  Step 'hosts' @($cfg.Hosts).Count
   # ---- 2. hosts, then the nodes their clusters name
   $hc = [ordered]@{}
   foreach ($h in @($cfg.Hosts)) { if ($h -and -not $hc.Contains((Short $h))) { $hc[(Short $h)] = $h } }
@@ -623,6 +633,7 @@ $r
     if ($more.Count) { $r2 = Invoke-Many $more $hostSb @($pdc); foreach ($k in $r2.Res.Keys) { $hr.Res[$k] = $r2.Res[$k] }; foreach ($k in $r2.Fail.Keys) { $hr.Fail[$k] = $r2.Fail[$k] } }
   }
   $hosts = @(Merge $null $hr $hc)
+  Step 'clusters'
   # ---- 3. each cluster once, on its first node that answered
   $clusters = @()
   if ($cfg.Cluster -ne 'no') {
@@ -632,6 +643,7 @@ $r
       catch { $clusters += [pscustomobject]@{ Name = $g.Name; Node = $node.Name; Reachable = $false; Error = (($_.Exception.Message) -split "`n")[0] } }
     }
   }
+  Step 'dcs' @($cfg.Dcs).Count
   # ---- 4. domain controllers, then the other servers (brokers, SQL replicas): what every server tells about itself
   $dr = Invoke-Many @($dcNames.Values) $dcSb @($pdc)
   $dcsOut = @(Merge $null $dr $dcNames)
@@ -655,6 +667,7 @@ $r
       @(foreach ($row in $dt.Rows) { $o = [ordered]@{}; foreach ($col in $dt.Columns) { $v = $row[$col.ColumnName]; $o[$col.ColumnName] = $(if ($v -is [DBNull]) { $null } elseif ($v -is [datetime]) { Iso $v } else { $v }) }; [pscustomobject]$o }) }
     finally { $cn.Close() }
   }
+  Step 'sql'
   # ---- 5. SQL AlwaysOn through its listener: replicas, databases; then each replica directly (logins, jobs, backups)
   $sql = $null
   if ($cfg.SqlListener) {
@@ -706,6 +719,7 @@ $r
     $first = @($sql.Nodes | Where-Object { @($_.Services).Count }) | Select-Object -First 1
     if ($first) { try { $sql.Cluster = Invoke-Command -ComputerName $first.Server -ScriptBlock $clusterSb -SessionOption $so -ErrorAction Stop } catch { } }
   }
+  Step 'servers' (@($cfg.Servers).Count + @($cfg.Brokers).Count)
   # ---- 6. the other servers: every Windows server that answers gets what every server tells about itself. The
   # brokers (with their certificate and database), the SQL replicas, the server VMs of the hosts (their Windows says
   # "Server", their name in the domain comes from the integration services), the servers of the settings.
@@ -721,6 +735,7 @@ $r
   $servers = @(Merge $null $sr $sv)
   # RD Gateway and RD Web answer on 443, from here (what the clients from outside see)
   foreach ($s in @($servers | Where-Object { $_.Reachable -and (($_.PSObject.Properties['Gateway'] -and $_.Gateway) -or ($_.PSObject.Properties['RdWeb'] -and $_.RdWeb)) })) { $s | Add-Member -NotePropertyName Port443 -NotePropertyValue ([bool](Test-Tcp $s.Fqdn 443 2500)) -Force }
+  Step 'rdsdb'
   # ---- 6b. the database of the brokers (the server and database of their DBConnString): the heartbeat each broker
   # writes in it, and the desktops it has no address for
   $rdsDb = $null
@@ -733,6 +748,7 @@ $r
       $rdsDb.NoIp = @(Invoke-Sql $dbi.Server "SELECT DISTINCT t.Name FROM rds.Target t JOIN rds.Vm v ON v.Name = t.Name LEFT JOIN rds.TargetIp ti ON ti.TargetId = t.Id WHERE ti.IpAddress IS NULL OR ti.IpAddress = '0.0.0.0'" $false $dbi.Database | ForEach-Object { [string]$_.Name })
     } catch { $rdsDb.Error = (("$($_.Exception.GetBaseException().Message)") -split "`n")[0] }
   }
+  Step 'servermanager'
   # ---- 6c. the names in the lists of Server Manager: those that neither resolve nor exist in AD any more
   $smDead = @{}
   foreach ($s in @(@($hosts) + @($dcsOut) + @($servers) | Where-Object { $_ -and $_.Reachable -and $_.PSObject.Properties['SmNames'] })) {
@@ -745,6 +761,7 @@ $r
     }
     $s | Add-Member -NotePropertyName SmDead -NotePropertyValue @(@($s.SmNames) | Where-Object { $_ -and $smDead["$_".ToUpper()] }) -Force
   }
+  Step 'dns'
   # ---- 7. DNS: the servers of the settings and the DCs answer; the names of the servers resolve to one address each
   # and back; the time it takes (the system resolver, as the programs use it)
   $dnsServers = @(@($cfg.DnsServers) + @($domain.Dcs | ForEach-Object { $_.Ip }) | Where-Object { $_ } | Select-Object -Unique)
@@ -766,6 +783,7 @@ $r
   }
   foreach ($bn in @($cfg.BrokerName)) { if ($bn) { $ips = @(); try { $ips = @([Net.Dns]::GetHostAddresses($bn) | Where-Object { $_.AddressFamily -eq 'InterNetwork' } | ForEach-Object { $_.IPAddressToString }) } catch { }
     $names += [pscustomobject]@{ Name = $bn; Kind = 'shared'; Ips = $ips; Ms = 0; Reverse = @(); Own = @() } } }
+  Step 'devices' @($cfg.Devices).Count
   # ---- 8. the devices (and the host of a file share witness), from here
   $devs = @($cfg.Devices)
   foreach ($c in @($clusters | Where-Object { $_.Witness -and $_.Witness.Path })) {
@@ -778,6 +796,7 @@ $r
     $ports = @(foreach ($n in @($d.Ports)) { [pscustomobject]@{ Port = [int]$n; Open = [bool](Test-Tcp ([string]$d.Address) ([int]$n) 2500) } })
     $share = $null; if ($d.Share) { $share = [OtrHealthNet]::PathExists([string]$d.Share, 6000) }
     [pscustomobject]@{ Name = [string]$d.Name; Address = [string]$d.Address; Ping = $p; Ms = $ms; Ports = $ports; Share = [string]$d.Share; ShareOk = $share; Mac = [string]$d.Mac; Auto = [bool]($d.PSObject.Properties['Auto'] -and $d.Auto) } })
+  Step 'backup'
   # ---- 9. the backup log
   $backup = $null
   if ($cfg.BackupPath) {
@@ -785,6 +804,7 @@ $r
     try { $r = [OtrHealthNet]::Newest([string]$cfg.BackupPath, [string]$cfg.BackupText, 15000); if ($r) { $backup.File = $r[0]; $backup.Time = $r[1]; $backup.Matched = ($r[2] -eq '1') } }
     catch { $backup.Error = $_.Exception.GetBaseException().Message }
   }
+  Step 'guests'
   # ---- 10. inside the running VMs that answer by their name: their disks (none answering is normal: desktops,
   # Linux, another domain)
   $guests = @()
@@ -793,6 +813,7 @@ $r
     $gr = Invoke-Many $want $guestSb @() 4000
     $guests = @(foreach ($k in $gr.Res.Keys) { [pscustomobject]@{ Vm = $k; Disks = @(@($gr.Res[$k].Disks) | ForEach-Object { [pscustomobject]@{ Drive = $_.Drive; FreeGB = $_.FreeGB; SizeGB = $_.SizeGB } }) } })
   }
+  Step 'custom'
   # ---- 11. the custom checks of the administrators that are due: their script on every server of their target, with
   # the time limits of WinRM; a script returns @{ State = 'ok'|'warn'|'error'; Text = '...' }
   $custom = @()
@@ -998,6 +1019,8 @@ function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
   foreach ($s in @($raw.Servers | Where-Object { $_ -and ($_.PSObject.Properties['IsBroker'] -or $vdiBrokers -contains $_.Name) })) { if (-not $roleOf.ContainsKey($s.Name)) { $roleOf[$s.Name] = "broker:$($s.Name)" } }
   foreach ($b in $vdiBrokers) { if (-not $roleOf.ContainsKey($b)) { $roleOf[$b] = "broker:$b" } }
   # the VMs that must always run (settings)
+  # a backup source in the settings: only then the backups of the VMs are judged (missing, crash-consistent, old)
+  $bkOn = [bool]"$($settings.BackupPath)".Trim()
   $critical = @("$($settings.CriticalVms)" -split '[,;\r\n]+' | ForEach-Object { $_.Trim().ToUpper() } | Where-Object { $_ })
   # the server of a VM: its name in the domain (integration services), else its own name with - for spaces
   $serverOfVm = { param($v) $k = if ($v.PSObject.Properties['GuestFqdn'] -and $v.GuestFqdn) { Get-HcShort $v.GuestFqdn } else { (([string]$v.Name) -replace '\s+', '-').ToUpper() }; $k }
@@ -1204,7 +1227,7 @@ function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
       # its backups, as the host saw them (only where the host shows backups at all: a site without them is not
       # told every VM is missing one)
       $hb2 = @($h.PSObject.Properties['Backups'] | ForEach-Object { @($h.Backups) } | Where-Object { $_ })
-      if ($hb2.Count) {
+      if ($hb2.Count -and $bkOn) {
         $bv = @($hb2 | Where-Object { $_.Vm -eq $v.Name }) | Select-Object -First 1
         if ($bv -and $bv.Last) { Add-HcFact $vn 'HcFBackupLast' (Format-VdiClock (ConvertFrom-VdiTime $bv.Last) $now) }
         if ($bv -and $bv.CrashOnly) { [void](Add-HcCheck $vn 'warn' 'CrashOnly' @()) }
@@ -1247,7 +1270,7 @@ function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
       if ($v.Clustered) { Add-HcDone $vn 'VmRole' @('RoleOffline', 'OffRoleOnline', 'AntiAffinity') $v.ResourceState }
       Add-HcDone $vn 'Checkpoints' 'Checkpoints' $(if ([int]$v.Checkpoints) { "$($v.Checkpoints)" } else { Get-Text 'HcNone' })
       if (-not $v.Clustered -or -not $useCl) { Add-HcDone $vn 'StopAction' @('StopSave', 'StopOff') "$($v.StopAction)" }
-      if ($hb2.Count) { Add-HcDone $vn 'VmBackup' @('CrashOnly', 'NoVmBackup') }
+      if ($hb2.Count -and $bkOn) { Add-HcDone $vn 'VmBackup' @('CrashOnly', 'NoVmBackup') }
     }
     # many VMs not responding on the same host: the host or its storage, not the VMs (restarting them does not help)
     $hung = @($m.Nodes | Where-Object { $_.Kind -eq 'vm' -and $_.Parent -eq $hn.Id -and @($_.Checks | Where-Object Id -eq 'Hung').Count })
@@ -1255,7 +1278,7 @@ function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
     if (@($h.Services | Where-Object { $_.Name -eq 'VmHostAgent' -and $_.State -ne 'Missing' }).Count) { Add-HcDone $hn 'Rdvh' @('AgentFails', 'TssdisEmpty', 'MapWrong') }
     if ($hung.Count -ge 3) { [void](Add-HcCheck $hn 'error' 'HungMany' @($hung.Count, (($hung | Select-Object -First 5 | ForEach-Object Name) -join ', '))) }
     # how far back the host's log of backups goes (a short log cannot tell whether last night's backup ran)
-    if ($h.PSObject.Properties['BackupLogFrom'] -and $h.BackupLogFrom) { $bf = ConvertFrom-VdiTime $h.BackupLogFrom; if ($bf -and ($now - $bf).TotalHours -lt 30) { [void](Add-HcCheck $hn 'info' 'BackupLogShort' @((Format-VdiClock $bf $now))) } }
+    if ($bkOn -and $h.PSObject.Properties['BackupLogFrom'] -and $h.BackupLogFrom) { $bf = ConvertFrom-VdiTime $h.BackupLogFrom; if ($bf -and ($now - $bf).TotalHours -lt 30) { [void](Add-HcCheck $hn 'info' 'BackupLogShort' @((Format-VdiClock $bf $now))) } }
   }
   # ---- what only the whole cluster can tell: vTPM VMs it would save, the guardian keys on every node, room for a failure
   foreach ($c in @($clusters | Where-Object Reachable)) {
@@ -1667,8 +1690,8 @@ function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
       if ($d.Share) { Add-HcDone $nd 'Share' 'Share' $d.Share }
     }
   }
-  # ---- backups
-  if ($raw.Backup) {
+  # ---- backups (judged only with a backup log in the settings)
+  if ($raw.Backup -and $bkOn) {
     $b = $raw.Backup
     $nb = New-HcNode $m 'backup' 'backup' (Get-Text 'HcBackup') ''
     $nb.Data = $b
@@ -1690,12 +1713,12 @@ function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
     BrokerList = -not @($settings.Brokers | Where-Object { $_ }).Count -and -not @($sv0 | Where-Object { $_.PSObject.Properties['IsBroker'] -and $_.IsBroker }).Count
     Sql = -not "$($settings.SqlListener)".Trim() -and -not $raw.Sql -and -not @(Split-List $settings.Servers).Count
     DeviceList = -not @(Get-HealthDevices $settings).Count -and -not @($raw.Devices | Where-Object { $_ }).Count
-    Backup = -not "$($settings.BackupPath)".Trim() -and -not $raw.Backup
+    Backup = -not $bkOn
   }
   foreach ($k in $none.Keys) {
     if (-not $none[$k]) { continue }
     $nn = New-HcNode $m "nc:$k" 'group' (Get-Text "HcNc_$k") ''
-    [void](Add-HcCheck $nn 'info' 'NotConfigured' @($nn.Name)); $nn.Short = Get-Text 'HcNotConfigured'
+    [void](Add-HcCheck $nn 'info' $(if ($k -eq 'Backup') { 'BackupNoSource' } else { 'NotConfigured' }) @($nn.Name)); $nn.Short = Get-Text $(if ($k -eq 'Backup') { 'HcBackupNoSource' } else { 'HcNotConfigured' })
     Add-HcAction $nn 'OpenSettings'
   }
   $defs = @(Get-HealthCustomChecks)
