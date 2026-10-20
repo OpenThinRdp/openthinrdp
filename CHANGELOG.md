@@ -19,6 +19,10 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
   VMs to the other node, restart or shut down a server with its guards, the LAPS password (read only), and on a
   personal desktop the session actions. Which check of the original runbook script is where:
   [docs/health-center-coverage.md](docs/health-center-coverage.md).
+- **Health Center: every server entered by its role, nothing found by itself.** Settings > Health Center has one list
+  per role (Hyper-V hosts with or without a cluster, DCs, DNS, brokers, RD Gateway, RD Web, SQL listener and replicas or
+  single SQL servers, file servers, other servers, devices), each entry with a note; an empty part says *not
+  configured* with a button to the settings. The settings of before move into the lists by themselves.
 - **Health Center: custom checks.** Your own diagnostic and repair scripts, on the servers you choose, shown in the tree
   like the others; kept in `config\health-checks` of the management folder, with a warning when people other than the
   administrators can write there.

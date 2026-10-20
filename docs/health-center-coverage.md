@@ -9,6 +9,9 @@ lists every check and every command of that script, one row each, and says:
 - **site**: it belongs to that site only (a line-of-business application, a lab instrument, fixed lists of names):
   not ported. Most of these can be written by each site as a [custom check](manager.md#custom-checks).
 
+Unlike the script, which had the names of its servers written in it, the Health Center finds no server by itself:
+every server is entered by its role in Settings > Health Center (see [manager.md](manager.md#settings-and-what-it-needs)).
+
 Where = the item of the tree that shows it (with the name of its row) or the action that does it. Every item shows
 **every** check it ran, with its result: OK rows included (`HcC_*` texts), not only the problems.
 

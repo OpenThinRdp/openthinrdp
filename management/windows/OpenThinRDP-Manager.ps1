@@ -2954,7 +2954,7 @@ $hcInner.Panel2.Controls.Add($gridHc)
 $script:HcBarKinds = [ordered]@{ OpenDesktops = 'Desktop'; SessionShadow = 'Screen'; SessionMessage = 'Message'; SessionDisconnect = 'Unplug'; AssignDesktop = 'Contact'
   HostDrain = 'Forward'; HostResume = 'Play'; HostMoveAll = 'Forward'; VmStart = 'Play'; VmRestart = 'Refresh'; VmResume = 'Play'; VmRoleOnline = 'Shield'; VmMoveLive = 'Forward'
   VmRemoveCheckpoints = 'Delete'; VmRemoveSavedState = 'Delete'; VmStopAction = 'Settings'; TimeSync = 'Clock'; DcSyncAll = 'Sync'; DcRestartServices = 'Refresh'
-  RdsUnblockChain = 'Sync'; SqlFailover = 'Sync'; SqlCopyOnly = 'Save'; Laps = 'Key'; DeviceWake = 'Power'; ServerRestart = 'Refresh'
+  RdsUnblockChain = 'Sync'; SqlFailover = 'Sync'; SqlCopyOnly = 'Save'; Laps = 'Key'; DeviceWake = 'Power'; ServerRestart = 'Refresh'; OpenSettings = 'Settings'
   BrokerRestart = 'Refresh'; BrokerPurge = 'Delete'; BrokerSelfRepair = 'Repair'; HostUnblock = 'Repair'; HostPermissions = 'Shield' }
 # the actions of the brokers and hosts that the Desktops part plans (by the name of the broker or host)
 $script:HcVdiKinds = @('BrokerRestart', 'BrokerPurge', 'BrokerSelfRepair', 'HostUnblock', 'HostPermissions')
@@ -3127,7 +3127,7 @@ function Set-SettingsHeights { Set-BlockHeights $setHcCard @($blkSetHc, $blkSetV
 # the notes of the blocks and the list of the custom checks, as they are now
 function Update-SettingsTabs {
   $s = if ($script:HealthLoaded) { Get-HealthSettings } else { $null }
-  $blkSetHc.Tag.Note.Text = if ($s) { Get-Text 'SetHcNote' $(if ($s.Enabled) { Get-Text 'HcModeOn' } else { Get-Text 'HcModeOff' }) $(if ($s.Mode -eq 'repair') { Get-Text 'HcModeRepair' } else { Get-Text 'HcModeDiagnose' }) $(if ($s.Hosts) { $s.Hosts } else { Get-Text 'HcAuto' }) $(if ($s.Limits) { $s.Limits } else { Get-Text 'HcLimitsDefault' }) } else { '' }
+  $blkSetHc.Tag.Note.Text = if ($s) { Get-Text 'SetHcNote' $(if ($s.Enabled) { Get-Text 'HcModeOn' } else { Get-Text 'HcModeOff' }) $(if ($s.Mode -eq 'repair') { Get-Text 'HcModeRepair' } else { Get-Text 'HcModeDiagnose' }) $($c = @($script:HealthInvLists | ForEach-Object { @($s.Inventory.$_).Count } | Measure-Object -Sum).Sum; if ($c) { Get-Text 'HcInvCount' $c } else { Get-Text 'HcNotConfigured' }) $(if ($s.Limits) { $s.Limits } else { Get-Text 'HcLimitsDefault' }) } else { '' }
   $vs = if ($script:VdiLoaded) { try { Get-VdiSettings } catch { $null } } else { $null }
   $blkSetVdi.Tag.Note.Text = Get-Text 'SetVdiNote' $(if ($vs -and $vs.PSObject.Properties['Brokers'] -and $vs.Brokers) { $vs.Brokers } else { Get-Text 'HcAuto' })
   $cur = $script:LangCodes.IndexOf([string]$(try { (Read-ManagerSettings).Language } catch { '' })); $cmbLang.SelectedIndex = [Math]::Max(0, $cur)
@@ -4641,6 +4641,7 @@ function Update-HcButtons {
       $vp = if ($n.Desktop -and $script:Vdi.Model) { Get-VdiActionPlan $k $n.Desktop (Get-VdiState) $now $(if ($k -in 'SessionMessage', 'AssignDesktop') { '*' } else { $null }) } else { $null }
       Set-ActionEnabled $b ([bool]($vp -and -not $vp.Blocked)); $tips.SetToolTip($b, $(if (-not $vp) { Get-Text 'HcNoVdi' } elseif ($vp.Blocked) { $vp.Blocked } else { $vp.Title })); continue
     }
+    if ($k -eq 'OpenSettings') { Set-ActionEnabled $b $true; $tips.SetToolTip($b, (Get-Text 'HcTipOpenSettings')); continue }
     if ($k -eq 'Laps') { Set-ActionEnabled $b $true; $tips.SetToolTip($b, (Get-Text 'HcTipLaps')); continue }
     $p = Get-HealthActionPlan $k $n.Id $state $now
     Set-ActionEnabled $b (-not $p.Blocked)
@@ -4655,6 +4656,7 @@ function Invoke-HealthAction([string]$kind, $n, $check = $null) {
   if ($kind -eq 'OpenDesktops') { Show-HealthInDesktops $n; return }
   if ($kind -like 'Session*' -or $kind -eq 'AssignDesktop') { if ($n.Desktop) { Invoke-VdiAction $kind $n.Desktop }; return }
   if ($kind -eq 'Laps') { Show-HealthLaps $n; return }
+  if ($kind -eq 'OpenSettings') { Select-Page 1; $setTabs.SelectedTab = $tabSetHealth; return }
   if ($script:HcVdiKinds -contains $kind) { Invoke-VdiAction $kind $n.Name; return }
   if ($check -and $check.Source -eq 'vdi') { Invoke-VdiAction $check.Fix $check.Where $check.FixArg; return }
   $state = Get-HealthState; $now = Get-Date
@@ -4813,50 +4815,78 @@ function Show-CustomCheckDialog($c) {
     $dlg.DialogResult = 'OK' })
   try { if ($dlg.ShowDialog($form) -eq 'OK') { Update-SettingsTabs; Start-HealthRefresh -Queue } } finally { $dlg.Dispose() }
 }
+# Settings > Health Center: every server typed by hand by its role (nothing is found by itself: servers can be on other
+# networks or anywhere), each list with its notes; a new line at the bottom of a list adds, Remove (or Delete) removes.
 function Show-HealthSettingsDialog {
-  $s = Get-HealthSettings
-  $W = 700; $X0 = 210
+  $s = Get-HealthSettings; $inv = $s.Inventory
+  $W = 880; $script:HsY = 12; $grids = @{}
   $dlg = New-Object System.Windows.Forms.Form; Set-WindowIcon $dlg
   $dlg.Text = Get-Text 'HcSetTitle'; $dlg.Font = $fontBase; $dlg.FormBorderStyle = 'FixedDialog'; $dlg.MaximizeBox = $false; $dlg.MinimizeBox = $false; $dlg.StartPosition = 'CenterParent'
   $pan = New-Object System.Windows.Forms.Panel; $pan.AutoScroll = $true; $pan.Dock = 'Fill'
-  $note = New-Object System.Windows.Forms.Label; $note.Text = Get-Text 'HcSetNote' $script:SettingsFile
-  $note.MaximumSize = New-Object System.Drawing.Size(($W - 40), 0); $note.AutoSize = $true; $note.Location = New-Object System.Drawing.Point(14, 12); $pan.Controls.Add($note)
-  $y = 12 + $note.GetPreferredSize((New-Object System.Drawing.Size(($W - 40), 0))).Height + 12
-  $chk = New-Object System.Windows.Forms.CheckBox; $chk.Text = Get-Text 'HcSetEnabled'; $chk.Checked = [bool]$s.Enabled; $chk.AutoSize = $true; $chk.Location = New-Object System.Drawing.Point(14, $y); $pan.Controls.Add($chk); $y += 34
-  $boxes = @{}
-  $fields = @(@('Hosts', 'HcSetHosts', 1), @('Cluster', 'HcSetCluster', 0), @('Devices', 'HcSetDevices', 4), @('DnsServers', 'HcSetDns', 1), @('BrokerName', 'HcSetBrokerName', 1),
-    @('SqlListener', 'HcSetSql', 1), @('Servers', 'HcSetServers', 1), @('CriticalVms', 'HcSetCritical', 1), @('BackupPath', 'HcSetBackup', 1), @('BackupText', 'HcSetBackupText', 1), @('BackupHours', 'HcSetBackupHours', 1), @('Limits', 'HcSetLimits', 2))
-  foreach ($fd in $fields) {
-    $k = $fd[0]
-    $l = New-Object System.Windows.Forms.Label; $l.Text = Get-Text $fd[1]; $l.AutoSize = $true; $l.Location = New-Object System.Drawing.Point(14, ($y + 4)); $pan.Controls.Add($l)
-    if ($k -eq 'Cluster') {
-      $cb = New-Object System.Windows.Forms.ComboBox; $cb.DropDownStyle = 'DropDownList'; $cb.Font = $fontBase
-      foreach ($o in 'auto', 'yes', 'no') { [void]$cb.Items.Add((Get-Text "HcSetCluster_$o")) }
-      $cb.SelectedIndex = [Math]::Max(0, @('auto', 'yes', 'no').IndexOf([string]$s.Cluster)); $cb.SetBounds($X0, $y, 260, 26); $pan.Controls.Add($cb); $boxes[$k] = $cb; $y += 36; continue
-    }
-    $tb = New-Object System.Windows.Forms.TextBox
-    if ($fd[2] -gt 1) { $tb.Multiline = $true; $tb.ScrollBars = 'Vertical'; $tb.AcceptsReturn = $true; $tb.Font = $fontMono; $tb.SetBounds($X0, $y, ($W - $X0 - 30), 22 * $fd[2]); $tb.Text = ("$($s.$k)" -split "`r?`n") -join "`r`n"; $y += 22 * $fd[2] + 4 }
-    else { $tb.SetBounds($X0, $y, $(if ($k -eq 'BackupHours') { 80 } else { $W - $X0 - 30 }), 26); $tb.Text = [string]$s.$k; $y += 30 }
-    $pan.Controls.Add($tb); $boxes[$k] = $tb
-    $hk = "$($fd[1])Hint"
-    if ($script:Text.ContainsKey($hk)) {
-      $hint = New-Object System.Windows.Forms.Label; $hint.Text = Get-Text $hk; $hint.ForeColor = $Theme.Muted
-      $hint.MaximumSize = New-Object System.Drawing.Size(($W - $X0 - 30), 0); $hint.AutoSize = $true; $hint.Location = New-Object System.Drawing.Point($X0, $y); $pan.Controls.Add($hint)
-      $y += $hint.GetPreferredSize((New-Object System.Drawing.Size(($W - $X0 - 30), 0))).Height + 10
-    } else { $y += 6 }
-  }
-  $err = New-Object System.Windows.Forms.Label; $err.ForeColor = $script:KindColor.error; $err.SetBounds(14, $y, ($W - 40), 36); $pan.Controls.Add($err); $y += 40
+  $addText = { param([string]$text, $font, $color, [int]$x = 14)
+    $l = New-Object System.Windows.Forms.Label; $l.Text = $text; $l.Font = $font; if ($color) { $l.ForeColor = $color }
+    $l.MaximumSize = New-Object System.Drawing.Size(($W - 40 - $x), 0); $l.AutoSize = $true; $l.Location = New-Object System.Drawing.Point($x, $script:HsY); $pan.Controls.Add($l)
+    $script:HsY += $l.GetPreferredSize((New-Object System.Drawing.Size(($W - 40 - $x), 0))).Height + 4 }
+  $addBox = { param([string]$key, [string]$value, [int]$width = 420, [int]$lines = 1)
+    $l = New-Object System.Windows.Forms.Label; $l.Text = Get-Text $key; $l.AutoSize = $true; $l.Location = New-Object System.Drawing.Point(14, ($script:HsY + 4)); $pan.Controls.Add($l)
+    $tb = New-Object System.Windows.Forms.TextBox; $tb.Text = $value
+    if ($lines -gt 1) { $tb.Multiline = $true; $tb.ScrollBars = 'Vertical'; $tb.AcceptsReturn = $true }
+    $tb.SetBounds(240, $script:HsY, $width, $(if ($lines -gt 1) { 22 * $lines } else { 26 })); $pan.Controls.Add($tb); $script:HsY += $tb.Height + 8; $tb }
+  $addGrid = { param([string]$key, $cols, $rows)
+    & $addText (Get-Text "HcInv_$key") $fontBold $null
+    $hk = "HcInvHint_$key"; if ($script:Text.ContainsKey($hk)) { & $addText (Get-Text $hk) $fontSmall $Theme.Muted }
+    $g = New-Object System.Windows.Forms.DataGridView; $g.Font = $fontBase; $g.AllowUserToAddRows = $true; $g.AllowUserToDeleteRows = $true; $g.RowHeadersVisible = $false
+    $g.AutoSizeColumnsMode = 'Fill'; $g.BackgroundColor = $Theme.Card; $g.BorderStyle = 'FixedSingle'; $g.SelectionMode = 'FullRowSelect'; $g.ColumnHeadersHeightSizeMode = 'AutoSize'
+    foreach ($c in $cols) { $i = $g.Columns.Add($c, (Get-Text "HcInvCol_$c")); if ($c -eq 'Note') { $g.Columns[$i].FillWeight = 160 } }
+    foreach ($r in @($rows)) { [void]$g.Rows.Add([object[]]@($cols | ForEach-Object { [string]$r.$_ })) }
+    $h = 26 + 24 * [Math]::Max(3, @($rows).Count + 1)
+    $g.SetBounds(14, $script:HsY, ($W - 160), $h); $pan.Controls.Add($g)
+    $rm = New-Button 'HcInvRemove' 110 28; $rm.Location = New-Object System.Drawing.Point(($W - 136), $script:HsY); $rm.Tag = $g; $pan.Controls.Add($rm)
+    $rm.add_Click({ param($x, $e) $gg = $x.Tag; foreach ($row in @($gg.SelectedRows)) { if (-not $row.IsNewRow) { $gg.Rows.Remove($row) } } })
+    $script:HsY += $h + 12; $grids[$key] = $g }
+  & $addText (Get-Text 'HcSetNote' $script:SettingsFile) $fontBase $Theme.Muted
+  $chk = New-Object System.Windows.Forms.CheckBox; $chk.Text = Get-Text 'HcSetEnabled'; $chk.Checked = [bool]$s.Enabled; $chk.AutoSize = $true; $chk.Location = New-Object System.Drawing.Point(14, $script:HsY); $pan.Controls.Add($chk); $script:HsY += 34
+  $two = @('Name', 'Note')
+  & $addGrid 'HvHosts' $two $inv.HvHosts
+  $lc = New-Object System.Windows.Forms.Label; $lc.Text = Get-Text 'HcInvCluster'; $lc.AutoSize = $true; $lc.Location = New-Object System.Drawing.Point(14, ($script:HsY + 4)); $pan.Controls.Add($lc)
+  $cbCl = New-Object System.Windows.Forms.ComboBox; $cbCl.DropDownStyle = 'DropDownList'; $cbCl.Font = $fontBase; [void]$cbCl.Items.AddRange(@((Get-Text 'HcInvNo'), (Get-Text 'HcInvYes'))); $cbCl.SelectedIndex = $(if ($inv.HvCluster -eq 'yes') { 1 } else { 0 })
+  $cbCl.SetBounds(240, $script:HsY, 100, 26); $pan.Controls.Add($cbCl); $script:HsY += 34
+  $tbClName = & $addBox 'HcInvClusterName' $inv.ClusterName 300
+  $cbCl.add_SelectedIndexChanged({ $tbClName.Enabled = $cbCl.SelectedIndex -eq 1 }); $tbClName.Enabled = $cbCl.SelectedIndex -eq 1
+  & $addGrid 'Dcs' $two $inv.Dcs
+  & $addGrid 'DnsList' $two $inv.DnsList
+  & $addGrid 'BrokerList' $two $inv.BrokerList
+  $tbBroker = & $addBox 'HcSetBrokerName' $s.BrokerName
+  & $addGrid 'Gateways' $two $inv.Gateways
+  & $addGrid 'RdWebs' $two $inv.RdWebs
+  & $addText (Get-Text 'HcInvSql') $fontBold $null
+  $tbSql = & $addBox 'HcSetSql' $s.SqlListener
+  & $addGrid 'SqlReplicas' $two $inv.SqlReplicas
+  & $addGrid 'SqlSingle' $two $inv.SqlSingle
+  & $addGrid 'FileServers' $two $inv.FileServers
+  & $addGrid 'OtherServers' $two $inv.OtherServers
+  & $addGrid 'DeviceList' @('Name', 'Address', 'Ports', 'Share', 'Mac', 'Note') $inv.DeviceList
+  & $addText (Get-Text 'HcInvMore') $fontBold $null
+  $tbCrit = & $addBox 'HcSetCritical' $s.CriticalVms
+  $tbBPath = & $addBox 'HcSetBackup' $s.BackupPath
+  $tbBText = & $addBox 'HcSetBackupText' $s.BackupText
+  $tbBHours = & $addBox 'HcSetBackupHours' ([string]$s.BackupHours) 80
+  $tbLim = & $addBox 'HcSetLimits' $s.Limits 420 2
+  & $addText (Get-Text 'HcSetLimitsHint') $fontSmall $Theme.Muted 240
+  $err = New-Object System.Windows.Forms.Label; $err.ForeColor = $script:KindColor.error; $err.SetBounds(14, $script:HsY, ($W - 40), 36); $pan.Controls.Add($err); $script:HsY += 40
   $ok = New-Button 'BtnSave' 110 28; $cancel = New-Button 'BtnCancel' 100 28
-  $cancel.Location = New-Object System.Drawing.Point(($W - 30 - $cancel.Width), $y); $ok.Location = New-Object System.Drawing.Point(($cancel.Left - 8 - $ok.Width), $y)
-  $cancel.DialogResult = 'Cancel'; $dlg.AcceptButton = $null; $dlg.CancelButton = $cancel; $pan.Controls.AddRange(@($ok, $cancel)); $y += 42
+  $cancel.Location = New-Object System.Drawing.Point(($W - 40 - $cancel.Width), $script:HsY); $ok.Location = New-Object System.Drawing.Point(($cancel.Left - 8 - $ok.Width), $script:HsY)
+  $cancel.DialogResult = 'Cancel'; $dlg.CancelButton = $cancel; $pan.Controls.AddRange(@($ok, $cancel)); $script:HsY += 42
   $dlg.Controls.Add($pan)
-  # as high as its fields, at most the screen (its fields scroll)
   $wa = [System.Windows.Forms.Screen]::FromControl($form).WorkingArea
-  $dlg.ClientSize = New-Object System.Drawing.Size($W, [Math]::Min($y + 6, $wa.Height - 80))
+  $dlg.ClientSize = New-Object System.Drawing.Size(($W + 20), [Math]::Min($script:HsY + 6, $wa.Height - 80))
+  $read = { param($g, $cols) @(foreach ($row in $g.Rows) { if ($row.IsNewRow) { continue }; $o = [ordered]@{}; foreach ($c in $cols) { $o[$c] = "$($row.Cells[$c].Value)".Trim() }; if ($o.Name) { [pscustomobject]$o } }) }
   $ok.add_Click({
-    $n = Get-HealthSettings
-    $n.Enabled = $chk.Checked; $n.Cluster = @('auto', 'yes', 'no')[[Math]::Max(0, $boxes['Cluster'].SelectedIndex)]
-    foreach ($k in 'Hosts', 'Devices', 'DnsServers', 'BrokerName', 'SqlListener', 'Servers', 'CriticalVms', 'BackupPath', 'BackupText', 'BackupHours', 'Limits') { $n.$k = $boxes[$k].Text }
+    $n = Get-HealthSettings; $i = New-HealthInventory
+    foreach ($k in @($grids.Keys)) { $i.$k = @(& $read $grids[$k] $(if ($k -eq 'DeviceList') { @('Name', 'Address', 'Ports', 'Share', 'Mac', 'Note') } else { @('Name', 'Note') })) }
+    $i.HvCluster = if ($cbCl.SelectedIndex -eq 1) { 'yes' } else { 'no' }; $i.ClusterName = $tbClName.Text.Trim()
+    $n.Inventory = $i; $n.Enabled = $chk.Checked; $n.BrokerName = $tbBroker.Text; $n.SqlListener = $tbSql.Text; $n.CriticalVms = $tbCrit.Text
+    $n.BackupPath = $tbBPath.Text; $n.BackupText = $tbBText.Text; $n.BackupHours = $tbBHours.Text; $n.Limits = $tbLim.Text
     $why = Test-HealthSettings $n
     if ($why) { $err.Text = $why; return }
     try { Save-HealthSettings $n } catch { $err.Text = $_.Exception.Message; return }

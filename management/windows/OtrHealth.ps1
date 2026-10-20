@@ -97,9 +97,51 @@ $script:HealthRoleMinutes = 10
 # thresholds of the checks (the same for every site: a site with other needs changes them here)
 $script:HealthLimits = @{ DiskGB = 5; DiskPct = 8; DiskWarnPct = 15; DiskWarnGB = 50; MemPct = 5; MemWarnPct = 10; SkewWarn = 60; SkewMax = 240
   CheckpointDays = 3; ReverseMs = 1500; DnsMs = 1000; BackupHours = 26; JobDays = 3 }
+# ---- The inventory: every server is typed by hand in Settings > Health Center, by its role; nothing is found by itself,
+# because servers can be on other networks or anywhere. What a configured host or cluster says about its own nodes and
+# VMs, and an availability group about its replicas, is still read from it. Each list: entries { Name; Note }; the
+# devices: { Name; Address; Ports; Share; Mac; Note }. Names: a name, a full name or an IPv4 address.
+$script:HealthInvLists = @('HvHosts', 'Dcs', 'DnsList', 'BrokerList', 'Gateways', 'RdWebs', 'SqlReplicas', 'SqlSingle', 'FileServers', 'OtherServers', 'DeviceList')
+function New-HealthInventory { $o = [ordered]@{ Version = 1; HvCluster = 'no'; ClusterName = '' }; foreach ($k in $script:HealthInvLists) { $o[$k] = @() }; [pscustomobject]$o }
+function ConvertTo-HcEntry($x) { if ($x -is [string]) { [pscustomobject]@{ Name = $x.Trim(); Note = '' } } else { [pscustomobject]@{ Name = "$($x.Name)".Trim(); Note = "$($x.Note)".Trim() } } }
+function ConvertTo-HcDeviceEntry($d) { [pscustomobject]@{ Name = "$($d.Name)".Trim(); Address = "$($d.Address)".Trim(); Ports = ((@($d.Ports) | Where-Object { "$_".Trim() }) -join ','); Share = "$($d.Share)".Trim(); Mac = "$($d.Mac)".Trim(); Note = "$($d.Note)".Trim() } }
+# the settings of before the inventory, without loss: the hosts, DNS servers, servers and devices of the Health Center,
+# the hosts and brokers of the settings of the desktops
+function ConvertTo-HealthInventory($s, $desk) {
+  $inv = New-HealthInventory
+  $inv.HvHosts = @(@(@(Split-List $s.Hosts) + @($(if ($desk -and $desk.PSObject.Properties['Hosts']) { Split-List $desk.Hosts })) | Where-Object { $_ } | Sort-Object -Unique) | ForEach-Object { ConvertTo-HcEntry $_ })
+  $inv.HvCluster = if ($s.Cluster -eq 'no' -or -not $inv.HvHosts.Count) { 'no' } else { 'yes' }
+  $inv.DnsList = @(Split-List $s.DnsServers | ForEach-Object { ConvertTo-HcEntry $_ })
+  $inv.BrokerList = @($(if ($desk -and $desk.PSObject.Properties['Brokers']) { Split-List $desk.Brokers }) | Where-Object { $_ } | ForEach-Object { ConvertTo-HcEntry $_ })
+  $inv.OtherServers = @(Split-List $s.Servers | ForEach-Object { ConvertTo-HcEntry $_ })
+  $inv.DeviceList = @(Get-HealthDevices $s | ForEach-Object { ConvertTo-HcDeviceEntry $_ })
+  $inv
+}
+# the same inventory with its entries cleaned (a file written by hand, an older version)
+function Repair-HealthInventory($i) {
+  $inv = New-HealthInventory
+  if (-not $i) { return $inv }
+  $inv.HvCluster = if ("$($i.HvCluster)" -eq 'yes') { 'yes' } else { 'no' }; $inv.ClusterName = "$($i.ClusterName)".Trim()
+  foreach ($k in $script:HealthInvLists) {
+    if (-not $i.PSObject.Properties[$k]) { continue }
+    $inv.$k = @(@($i.$k) | Where-Object { $_ } | ForEach-Object { if ($k -eq 'DeviceList') { ConvertTo-HcDeviceEntry $_ } else { ConvertTo-HcEntry $_ } } | Where-Object { $_.Name })
+  }
+  $inv
+}
+# the fields the probe reads, made from the inventory
+function Set-HealthFromInventory($s) {
+  $i = $s.Inventory
+  $nm = { param($k) @(@($i.$k) | ForEach-Object { "$($_.Name)".Trim() } | Where-Object { $_ }) }
+  $put = { param($k, $v) $s | Add-Member -NotePropertyName $k -NotePropertyValue $v -Force }
+  & $put 'Hosts' ((& $nm 'HvHosts') -join ' '); & $put 'Cluster' $(if ($i.HvCluster -eq 'yes') { 'yes' } else { 'no' })
+  & $put 'DnsServers' ((& $nm 'DnsList') -join ' ')
+  & $put 'Servers' ((@(@(& $nm 'OtherServers') + @(& $nm 'FileServers') + @(& $nm 'Gateways') + @(& $nm 'RdWebs') + @(& $nm 'SqlSingle') + @(& $nm 'SqlReplicas')) | Select-Object -Unique) -join ' ')
+  & $put 'Devices' ((@(@($i.DeviceList) | Where-Object { $_.Name } | ForEach-Object { (@($_.Name, $(if ($_.Address) { $_.Address } else { $_.Name }), $_.Ports, $_.Share, $_.Mac) | Where-Object { "$_".Trim() }) -join ' ' })) -join "`n")
+  & $put 'Dcs' @(& $nm 'Dcs'); & $put 'Brokers' @(& $nm 'BrokerList')
+}
 function Get-HealthDefaults {
   [pscustomobject]@{ Enabled = $true; Mode = 'diagnose'; Items = (New-Object psobject); Hosts = ''; Cluster = 'auto'; Devices = ''; DnsServers = ''; BrokerName = ''
-    SqlListener = ''; BackupPath = ''; BackupText = ''; BackupHours = $script:HealthLimits.BackupHours; Servers = ''; CriticalVms = ''; Limits = '' }
+    SqlListener = ''; BackupPath = ''; BackupText = ''; BackupHours = $script:HealthLimits.BackupHours; Servers = ''; CriticalVms = ''; Limits = ''; Inventory = (New-HealthInventory); Dcs = @(); Brokers = @() }
 }
 $script:HealthLimitsDefault = $script:HealthLimits.Clone()
 # the thresholds changed in the settings: "DiskPct=10; MemWarnPct=15" (names of $script:HealthLimits, whole numbers)
@@ -121,6 +163,9 @@ function Get-HealthSettings {
   if ($m.PSObject.Properties['Health'] -and $m.Health) {
     foreach ($p in $s.PSObject.Properties.Name) { if ($m.Health.PSObject.Properties[$p] -and $null -ne $m.Health.$p) { $s.$p = $m.Health.$p } }
   }
+  $hasInv = $m.PSObject.Properties['Health'] -and $m.Health -and $m.Health.PSObject.Properties['Inventory'] -and $m.Health.Inventory
+  $s.Inventory = if ($hasInv) { Repair-HealthInventory $m.Health.Inventory } else { ConvertTo-HealthInventory $s $(if ($m.PSObject.Properties['Desktops']) { $m.Desktops } else { $null }) }
+  Set-HealthFromInventory $s
   $s.Enabled = [bool]$s.Enabled
   if ($s.Mode -notin 'diagnose', 'repair') { $s.Mode = 'diagnose' }
   if ($s.Cluster -notin 'auto', 'yes', 'no') { $s.Cluster = 'auto' }
@@ -145,6 +190,20 @@ function ConvertFrom-HealthDevice([string]$line) {
 function Get-HealthDevices($s) { @(@("$($s.Devices)" -split "`r?`n") | ForEach-Object { ConvertFrom-HealthDevice $_ } | Where-Object { $_ }) }
 # $null = good, else the reason
 function Test-HealthSettings($s) {
+  if ($s.PSObject.Properties['Inventory'] -and $s.Inventory) {
+    $i = $s.Inventory
+    foreach ($k in @($script:HealthInvLists | Where-Object { $_ -ne 'DeviceList' })) {
+      foreach ($e in @($i.$k)) { if ("$($e.Name)".Trim() -cnotmatch $script:Rx.Name) { return (Get-Text 'HcErrInv' (Get-Text "HcInv_$k") $e.Name) } }
+    }
+    if ($i.HvCluster -eq 'yes' -and "$($i.ClusterName)".Trim() -cnotmatch $script:Rx.Name) { return (Get-Text 'HcErrClusterName') }
+    foreach ($d in @($i.DeviceList)) {
+      $a = if ("$($d.Address)".Trim()) { "$($d.Address)".Trim() } else { "$($d.Name)".Trim() }
+      if ("$($d.Name)".Trim() -cnotmatch $script:Rx.Name -or $a -cnotmatch $script:Rx.Name -or ("$($d.Ports)".Trim() -and "$($d.Ports)".Trim() -notmatch '^\d{1,5}(\s*,\s*\d{1,5})*$') -or
+        ("$($d.Share)".Trim() -and "$($d.Share)".Trim() -notmatch $script:Rx.Share) -or ("$($d.Mac)".Trim() -and "$($d.Mac)".Trim() -notmatch '^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$')) { return (Get-Text 'HcErrDevice' "$($d.Name) $($d.Address) $($d.Ports) $($d.Share) $($d.Mac)".Trim()) }
+    }
+    foreach ($d in @($i.DeviceList)) { $d.Ports = ("$($d.Ports)" -replace '\s', '') }
+    Set-HealthFromInventory $s
+  }
   foreach ($n in @(Split-List $s.Hosts) + @(Split-List $s.DnsServers) + @(Split-List $s.BrokerName) + @(Split-List $s.Servers)) { if ($n -cnotmatch $script:Rx.Name) { return (Get-Text 'VdiErrName' $n) } }
   if ($s.SqlListener -and ("$($s.SqlListener)" -replace ',\d{1,5}$', '') -cnotmatch $script:Rx.Name) { return (Get-Text 'VdiErrName' $s.SqlListener) }
   foreach ($l in @("$($s.Devices)" -split "`r?`n" | Where-Object { $_.Trim() })) {
@@ -158,12 +217,13 @@ function Test-HealthSettings($s) {
   $null
 }
 function Save-HealthSettings($s) {
+  if ($s.PSObject.Properties['Inventory'] -and $s.Inventory) { Set-HealthFromInventory $s }
   $m = Read-ManagerSettings
   $items = if ($s.Items -is [psobject]) { $s.Items } else { New-Object psobject }
   Set-ManagerSetting $m 'Health' ([pscustomobject]@{ Enabled = [bool]$s.Enabled; Mode = $(if ($s.Mode -eq 'repair') { 'repair' } else { 'diagnose' }); Items = $items
     Hosts = ((Split-List $s.Hosts) -join ' '); Cluster = [string]$s.Cluster
     Devices = ((@("$($s.Devices)" -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })) -join "`n"); DnsServers = ((Split-List $s.DnsServers) -join ' ')
-    BrokerName = ((Split-List $s.BrokerName) -join ' '); Servers = ((Split-List $s.Servers) -join ' '); CriticalVms = ((@("$($s.CriticalVms)" -split '[,;\r\n]+' | ForEach-Object { $_.Trim() } | Where-Object { $_ })) -join ', '); SqlListener = "$($s.SqlListener)".Trim(); BackupPath = "$($s.BackupPath)".Trim(); BackupText = "$($s.BackupText)".Trim(); BackupHours = [int]$s.BackupHours; Limits = "$($s.Limits)".Trim() })
+    BrokerName = ((Split-List $s.BrokerName) -join ' '); Servers = ((Split-List $s.Servers) -join ' '); CriticalVms = ((@("$($s.CriticalVms)" -split '[,;\r\n]+' | ForEach-Object { $_.Trim() } | Where-Object { $_ })) -join ', '); SqlListener = "$($s.SqlListener)".Trim(); BackupPath = "$($s.BackupPath)".Trim(); BackupText = "$($s.BackupText)".Trim(); BackupHours = [int]$s.BackupHours; Limits = "$($s.Limits)".Trim(); Inventory = $(if ($s.PSObject.Properties['Inventory'] -and $s.Inventory) { $s.Inventory } else { New-HealthInventory }) })
   Save-ManagerSettings $m
 }
 # the mode of one item: its own, else the one of the nearest item above it with its own, else the page's
@@ -254,7 +314,7 @@ $script:HealthProbe = {
   param($cfg)
   $ErrorActionPreference = 'Continue'; $ProgressPreference = 'SilentlyContinue'
   function Iso($d) { if ($d) { ([datetime]$d).ToString('yyyy-MM-ddTHH:mm:ss') } else { $null } }
-  function Short($n) { ([string]$n -split '\.')[0].ToUpper() }
+  function Short($n) { if ("$n" -match '^\d{1,3}(\.\d{1,3}){3}$') { return "$n" }; ([string]$n -split '\.')[0].ToUpper() }
   function Test-Tcp([string]$ip, [int]$port, [int]$ms) {
     $c = New-Object Net.Sockets.TcpClient
     try { $a = $c.BeginConnect($ip, $port, $null, $null); if (-not $a.AsyncWaitHandle.WaitOne($ms)) { return $false }; $c.EndConnect($a); $true } catch { $false } finally { $c.Close() }
@@ -534,15 +594,20 @@ $r
 
   # ---- 1. the domain: its DCs, the owners of the FSMO roles (System.DirectoryServices: no module needed)
   $domain = $null; $dcNames = [ordered]@{}
+  # the domain controllers of the settings (never the list of AD: they can be anywhere); the domain itself (FSMO
+  # owners) is still asked to AD
+  foreach ($x in @($cfg.Dcs)) { if ($x -and -not $dcNames.Contains((Short $x))) { $dcNames[(Short $x)] = $x } }
+  $dcs = @(foreach ($k in $dcNames.Keys) { $n = $dcNames[$k]; $ip = ''; try { $ip = @([Net.Dns]::GetHostAddresses($n) | Where-Object { $_.AddressFamily -eq 'InterNetwork' } | ForEach-Object { $_.IPAddressToString })[0] } catch { }
+    [pscustomobject]@{ Name = $n; Ip = "$ip"; Site = '' } })
   if ($cfg.Domain) {
     try {
       $d = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
       $fs = @{}; foreach ($k in 'PdcRoleOwner', 'RidRoleOwner', 'InfrastructureRoleOwner') { try { $fs[$k] = "$($d.$k.Name)" } catch { $fs[$k] = '' } }
       foreach ($k in 'SchemaRoleOwner', 'NamingRoleOwner') { try { $fs[$k] = "$($d.Forest.$k.Name)" } catch { $fs[$k] = '' } }
-      $dcs = @(foreach ($x in $d.DomainControllers) { [pscustomobject]@{ Name = "$($x.Name)"; Ip = "$($x.IPAddress)"; Site = "$($x.SiteName)" } })
+      # the site of each DC of the settings, when AD knows it
       $domain = [pscustomobject]@{ Name = "$($d.Name)"; Pdc = $fs.PdcRoleOwner; Rid = $fs.RidRoleOwner; Infra = $fs.InfrastructureRoleOwner; Schema = $fs.SchemaRoleOwner; Naming = $fs.NamingRoleOwner; Dcs = $dcs; Error = $null }
-      foreach ($x in $dcs) { $dcNames[(Short $x.Name)] = $x.Name }
-    } catch { $domain = [pscustomobject]@{ Name = ''; Pdc = ''; Dcs = @(); Error = $_.Exception.GetBaseException().Message } }
+      foreach ($x in $d.DomainControllers) { $dc = @($dcs | Where-Object { (Short $_.Name) -eq (Short "$($x.Name)") }) | Select-Object -First 1; if ($dc) { $dc.Site = "$($x.SiteName)"; if (-not $dc.Ip) { $dc.Ip = "$($x.IPAddress)" } } }
+    } catch { $domain = [pscustomobject]@{ Name = ''; Pdc = ''; Dcs = $dcs; Error = $_.Exception.GetBaseException().Message } }
   }
   $pdc = if ($domain) { [string]$domain.Pdc } else { '' }
   # ---- 2. hosts, then the nodes their clusters name
@@ -646,7 +711,8 @@ $r
   # "Server", their name in the domain comes from the integration services), the servers of the settings.
   $sv = [ordered]@{}; $isBroker = @{}
   foreach ($n in @($cfg.Brokers)) { $k = Short $n; if ($n -and -not $sv.Contains($k) -and -not $hc.Contains($k) -and -not $dcNames.Contains($k)) { $sv[$k] = $n; $isBroker[$k] = 1 } }
-  $vmServers = @($hosts | Where-Object Reachable | ForEach-Object { @($_.Vms | Where-Object { $_.State -eq 'Running' -and $_.GuestFqdn -and "$($_.GuestOs)" -match 'Server' } | ForEach-Object GuestFqdn) })
+  # the server VMs of the hosts are checked inside only when they are in the settings (nothing is found by itself)
+  $vmServers = @()
   foreach ($n in @($(if ($sql) { $sql.Nodes | ForEach-Object Server })) + @($cfg.Servers) + $vmServers) { $k = Short $n; if ($n -and -not $sv.Contains($k) -and -not $hc.Contains($k) -and -not $dcNames.Contains($k)) { $sv[$k] = $n } }
   $bOnly = [ordered]@{}; $sOnly = [ordered]@{}; foreach ($k in $sv.Keys) { if ($isBroker.ContainsKey($k)) { $bOnly[$k] = $sv[$k] } else { $sOnly[$k] = $sv[$k] } }
   $br = Invoke-Many @($bOnly.Values) $brokerSb @($pdc)
@@ -752,17 +818,11 @@ $r
 
 # the input of the probe: the settings, and what the Desktops page already found (its hosts and brokers)
 function Get-HealthProbeConfig($settings, $vdiModel) {
-  $hosts = @(Split-List $settings.Hosts)
-  $brokers = @()
-  if ($vdiModel) {
-    $hosts += @($vdiModel.Hosts | Where-Object { $_ -and $_.Fqdn } | ForEach-Object Fqdn)
-    $brokers = @($vdiModel.Brokers | Where-Object { $_ -and $_.Fqdn } | ForEach-Object Fqdn)
-  }
-  $vs = Get-VdiSettings
-  $hosts += @(Split-List $vs.Hosts)
+  # the servers of the settings only: no hosts or brokers taken from the Desktops part
+  $hosts = @(Split-List $settings.Hosts); $brokers = @($settings.Brokers | Where-Object { $_ })
   @{ Hosts = @($hosts | Where-Object { $_ } | Sort-Object -Unique); Brokers = @($brokers | Sort-Object -Unique); DnsServers = @(Split-List $settings.DnsServers)
      SqlListener = "$($settings.SqlListener)".Trim(); Devices = @(Get-HealthDevices $settings); BackupPath = "$($settings.BackupPath)".Trim(); BackupText = "$($settings.BackupText)".Trim()
-     BrokerName = @(Split-List $settings.BrokerName); Cluster = [string]$settings.Cluster; Servers = @(Split-List $settings.Servers)
+     BrokerName = @(Split-List $settings.BrokerName); Cluster = [string]$settings.Cluster; Servers = @(Split-List $settings.Servers); Dcs = @($settings.Dcs | Where-Object { $_ })
      # the custom checks that are due now (each runs every IntervalMin)
      Custom = @(foreach ($c in @(Get-HealthCustomChecks)) { $due = -not $script:HealthCustomLast.ContainsKey($c.Name) -or ((Get-Date) - $script:HealthCustomLast[$c.Name]).TotalMinutes -ge $c.IntervalMin
        if ($due) { $script:HealthCustomLast[$c.Name] = Get-Date }; [pscustomobject]@{ Name = $c.Name; Where = $c.Where; Script = $c.Script; Due = $due } })
@@ -1621,6 +1681,22 @@ function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
       Add-HcFact $nb 'HcFBackupLast' (Get-Text 'HcBackupAt' (Format-VdiClock $t $now) $hrs ([IO.Path]::GetFileName([string]$b.File)))
       if ($hrs -gt [int]$settings.BackupHours) { [void](Add-HcCheck $nb 'error' 'BackupOld' @($hrs, (Format-VdiClock $t $now), $settings.BackupHours)) }
     }
+  }
+  # the parts with nothing in the settings (and nothing read): said so, with the way to the settings
+  $sv0 = @($raw.Servers | Where-Object { $_ })
+  $none = [ordered]@{
+    HvHosts = -not @(Split-List $settings.Hosts).Count -and -not @($raw.Hosts | Where-Object { $_ }).Count
+    Dcs = -not @($settings.Dcs | Where-Object { $_ }).Count -and -not @($raw.Dcs | Where-Object { $_ }).Count
+    BrokerList = -not @($settings.Brokers | Where-Object { $_ }).Count -and -not @($sv0 | Where-Object { $_.PSObject.Properties['IsBroker'] -and $_.IsBroker }).Count
+    Sql = -not "$($settings.SqlListener)".Trim() -and -not $raw.Sql -and -not @(Split-List $settings.Servers).Count
+    DeviceList = -not @(Get-HealthDevices $settings).Count -and -not @($raw.Devices | Where-Object { $_ }).Count
+    Backup = -not "$($settings.BackupPath)".Trim() -and -not $raw.Backup
+  }
+  foreach ($k in $none.Keys) {
+    if (-not $none[$k]) { continue }
+    $nn = New-HcNode $m "nc:$k" 'group' (Get-Text "HcNc_$k") ''
+    [void](Add-HcCheck $nn 'info' 'NotConfigured' @($nn.Name)); $nn.Short = Get-Text 'HcNotConfigured'
+    Add-HcAction $nn 'OpenSettings'
   }
   $defs = @(Get-HealthCustomChecks)
   if ($defs.Count) {

@@ -143,6 +143,23 @@ try {
     $pm.DefaultNo -and ($pm.Blocked -or (@($pm.Steps).Count -eq $run -and -not @($pm.Steps | Where-Object { $_.Script -ne 'MoveLive' -or $_.Args[1] -ne 'HV2' }).Count)) }
 
   ok 'VM-ALICE: the session, the actions on it and the personal desktop, as on the Distribution' { @('SessionShadow', 'SessionMessage', 'SessionDisconnect', 'SessionLogoff', 'AssignDesktop' | Where-Object { $mv.Index['vm:VM-ALICE'].Actions -notcontains $_ }).Count -eq 0 -and $mv.Index['vm:VM-ALICE'].Desktop }
+  # ---- the inventory: every server typed by hand, nothing found by itself
+  ok 'inventory: the settings of before move into the typed lists without loss (hosts of both pages, DNS, servers, devices, brokers)' {
+    $inv = ConvertTo-HealthInventory ([pscustomobject]@{ Hosts = 'hv1 hv2'; Cluster = 'auto'; DnsServers = '192.0.2.53'; Servers = 'web1 file1'; Devices = "nas 192.0.2.9 445 \\nas\b 00-11-32-AA-BB-CC" }) ([pscustomobject]@{ Hosts = 'hv3'; Brokers = 'rdcb1 rdcb2' })
+    @($inv.HvHosts).Count -eq 3 -and $inv.HvCluster -eq 'yes' -and @($inv.DnsList)[0].Name -eq '192.0.2.53' -and @($inv.OtherServers).Count -eq 2 -and @($inv.BrokerList).Count -eq 2 -and @($inv.DeviceList)[0].Mac -eq '00-11-32-AA-BB-CC' -and @($inv.DeviceList)[0].Share -eq '\\nas\b' }
+  ok 'inventory: names, full names and IPv4 addresses accepted; a bad name, a cluster without its name, a bad device refused' {
+    $s = Get-HealthSettings; $s.Inventory.Dcs = @((ConvertTo-HcEntry 'dc1.example.com'), (ConvertTo-HcEntry '192.0.2.10')); $ok = -not (Test-HealthSettings $s)
+    $s.Inventory.Gateways = @(ConvertTo-HcEntry 'bad name!'); $bad1 = Test-HealthSettings $s; $s.Inventory.Gateways = @()
+    $s.Inventory.HvHosts = @(ConvertTo-HcEntry 'hv1'); $s.Inventory.HvCluster = 'yes'; $s.Inventory.ClusterName = ''; $bad2 = Test-HealthSettings $s; $s.Inventory.HvCluster = 'no'
+    $s.Inventory.DeviceList = @([pscustomobject]@{ Name = 'nas'; Address = '192.0.2.9'; Ports = '445,x'; Share = ''; Mac = ''; Note = '' }); $bad3 = Test-HealthSettings $s
+    $ok -and $bad1 -and $bad2 -and $bad3 }
+  ok 'probe input: only the lists of the settings (DCs, brokers, file, gateway and SQL servers among the servers), nothing from the Desktops part' {
+    $s = Get-HealthSettings; $s.Inventory = New-HealthInventory; $s.Inventory.Dcs = @(ConvertTo-HcEntry 'dc1'); $s.Inventory.BrokerList = @(ConvertTo-HcEntry 'rdcb1'); $s.Inventory.Gateways = @(ConvertTo-HcEntry 'gw1'); $s.Inventory.SqlSingle = @(ConvertTo-HcEntry 'sql9')
+    Set-HealthFromInventory $s; $c = Get-HealthProbeConfig $s ([pscustomobject]@{ Hosts = @([pscustomobject]@{ Fqdn = 'hvx.example.com' }); Brokers = @([pscustomobject]@{ Fqdn = 'rdcbx.example.com' }) })
+    -not @($c.Hosts).Count -and @($c.Brokers) -join ',' -eq 'rdcb1' -and @($c.Dcs) -join ',' -eq 'dc1' -and @($c.Servers) -contains 'gw1' -and @($c.Servers) -contains 'sql9' }
+  ok 'the probe: no list of servers from AD or from the guests of the hosts' { $probe -notmatch 'foreach \(\$x in \$d\.DomainControllers\) \{ \[pscustomobject\]' -and $probe -match '\$vmServers = @\(\)' }
+  $me = ConvertTo-HealthModel ([pscustomobject]@{ Taken = '2026-10-19T09:30:00'; Hosts = @(); Dcs = @(); Servers = @(); Devices = @() }) $null $now (Get-HealthDefaults)
+  ok 'nothing in the settings: each part says "not configured", with the way to the settings' { @('HvHosts', 'Dcs', 'BrokerList', 'Sql', 'DeviceList', 'Backup' | Where-Object { -not $me.Index["nc:$_"] -or $me.Index["nc:$_"].Actions -notcontains 'OpenSettings' }).Count -eq 0 -and -not @($me.Problems).Count }
   # ---- variants: a single host, without a cluster
   $rs = Copy-Raw; $rs.Clusters = @(); $rs.Hosts = @($rs.Hosts[0]); $rs.Hosts[0].Cluster = ''
   foreach ($v in $rs.Hosts[0].Vms) { $v.Clustered = $false; $v.OfflineAction = $null; $v.ResourceState = ''; $v.GroupState = '' }
@@ -298,7 +315,8 @@ try {
     (Test-HealthSettings ([pscustomobject]@{ Hosts = ''; DnsServers = ''; BrokerName = ''; SqlListener = ''; Devices = 'nas 192.0.2.9 what?'; BackupPath = ''; BackupHours = 26 })) }
   ok 'settings: saved and read back with the mode of an item; the Desktops settings kept' {
     Save-VdiSettings ([pscustomobject]@{ Enabled = $true; BrokerGroup = 'EXAMPLE\RDS-Brokers'; Brokers = ''; Hosts = '' })
-    $s = Get-HealthSettings; $s.Hosts = 'hv1.example.com, hv2.example.com'; $s.Devices = "nas 192.0.2.9 445`r`nups 192.0.2.40 80"; $s.SqlListener = 'sqlha.example.com,1433'; $s.Mode = 'repair'
+    $s = Get-HealthSettings; $s.Inventory.HvHosts = @((ConvertTo-HcEntry 'hv1.example.com'), (ConvertTo-HcEntry 'hv2.example.com')); $s.Inventory.HvCluster = 'yes'; $s.Inventory.ClusterName = 'vdicl.example.com'
+    $s.Inventory.DeviceList = @([pscustomobject]@{ Name = 'nas'; Address = '192.0.2.9'; Ports = '445'; Share = ''; Mac = ''; Note = 'the NAS' }, [pscustomobject]@{ Name = 'ups'; Address = '192.0.2.40'; Ports = '80'; Share = ''; Mac = ''; Note = '' }); $s.SqlListener = 'sqlha.example.com,1433'; $s.Mode = 'repair'
     Set-HealthItemMode $s 'host:HV1' 'diagnose'
     if (Test-HealthSettings $s) { return $false }
     Save-HealthSettings $s; $r = Get-HealthSettings

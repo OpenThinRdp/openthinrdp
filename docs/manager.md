@@ -320,21 +320,27 @@ offered on data older than 5 minutes; `OTR_MANAGER_VDI_DRYRUN=1` makes every act
 ### Settings and what it needs
 
 **Settings > Health Center** (the menu entry *Settings*), kept for your account on your PC (`%APPDATA%\OpenThinRDP\manager.json`), not in the
-folder. Most of it is found by itself: the hosts of the Desktops page and the nodes of their clusters, the VMs, the
-domain controllers and the FSMO owners from AD, the brokers from the devices and the deployment, the witness from the
-cluster. To give:
+folder. **Nothing is found by itself**: servers can be on other networks or anywhere, so every server is entered by its
+role, one list each, with a note for you (a name, a full name or an IPv4 address; a new line at the bottom of a list
+adds, *Remove* removes):
 
-- **Hyper-V hosts** not found that way, and whether they form a **failover cluster** (*as the hosts say*, *yes*: a host
-  outside a cluster is said so, *no*: single hosts);
-- **devices to watch**, one per line: `name address [ports] [\\server\share] [MAC]`, e.g.
-  `nas 192.0.2.9 445,5001 \\nas\backup 00-11-32-AA-BB-CC` (with a MAC, Wake-on-LAN);
-- more **DNS servers**, the **shared name of the brokers** when the devices do not use it (the Desktops page reads it
-  too), the **SQL AlwaysOn listener** (`sqlha.example.com` or `sqlha.example.com,1433`; empty: no SQL checks), the
-  **backup log** (a file or a folder, the text of a success, the maximum age in hours);
-- **other servers** to check (basic checks), the **critical VMs** (off = a problem), and the **thresholds** to change,
-  e.g. `DiskPct=10; MemWarnPct=15` (empty: the defaults; the dialog says the names).
+- **Hyper-V hosts**, and whether they are in a **failover cluster** (*yes* with the name of the cluster: its other
+  nodes and all its VMs are read from it, and the actions use the cluster; *no*: single hosts, each with its own VMs);
+- **domain controllers** (the FSMO owners are still asked to AD), **DNS servers** besides the DCs;
+- **RD Connection Brokers** and the **shared broker name** of the devices, **RD Gateway**, **RD Web Access**;
+- **SQL Server**: the AlwaysOn **listener** (`sqlha.example.com` or `sqlha.example.com,1433`) and its **replicas** (the
+  group tells its replicas too; those entered are checked even when the listener does not answer), or **single SQL
+  servers**;
+- **file servers** and **other Windows servers** (basic checks);
+- **devices** (NAS, witness, switches, UPS): the address, the TCP ports to test, an SMB share, a MAC for Wake-on-LAN;
+- the **critical VMs** (off = a problem), the **backup log** (a file or a folder, the text of a success, the maximum
+  age in hours) and the **thresholds** to change, e.g. `DiskPct=10; MemWarnPct=15`.
 
-The settings of the desktops (brokers, collections) are in the same tab, *Desktops (brokers)*.
+A part with nothing in its list says *not configured* in the tree, with a button to this tab. The settings of before
+(hosts, DNS servers, servers, devices, and the hosts and brokers of the desktops) move into these lists by themselves,
+the first time. Servers given by IP address need WinRM over HTTPS or the address in the WinRM *TrustedHosts*.
+
+The settings of the desktops (collections, the group of the brokers) are in the same tab, *Desktops (brokers)*.
 
 ### Custom checks
 
