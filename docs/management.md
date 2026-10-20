@@ -96,7 +96,7 @@ and edits these files with the same validation, a backup of every file it overwr
 Before saving `common.conf` it lists the devices that would reject it.
 
 The window has its pages on the left: **Devices** (the list, and the selected device with its settings, a summary,
-its events and its full report), **Desktops**, **Health Center**, **Common settings**, **Updates** (see [Pilot devices and going back](#pilot-devices-and-going-back)
+its events and its full report), **Health Center** (with the **Distribution** of the desktops), **Settings** (devices, Health Center, manager, custom checks), **Updates** (see [Pilot devices and going back](#pilot-devices-and-going-back)
 and [The manager updates itself](#the-manager-updates-itself)), **Vault** (with the SSH keys of the devices) and **History**; the actions on the
 folder (refresh, open, release from GitHub, check permissions) and the state of the vault are in the bar at the top. In a settings list each row shows
 the value in use on the device, where it comes from (*the device itself*, *common settings*, *this device* for an

@@ -1975,4 +1975,9 @@
   HcSetCriticalHint      = 'VM che devono essere sempre accese, separate da virgole: spenta = un problema.'
   HcSetLimits            = 'Soglie'
   HcSetLimitsHint        = 'Solo quelle da cambiare, nome=numero intero separati da ; per esempio DiskPct=10; MemWarnPct=15. Vuoto = i valori predefiniti.'
+  HcAct_BrokerRestart    = 'Riavvia i servizi del broker'
+  HcAct_BrokerPurge      = 'Svuota i ticket del broker'
+  HcAct_BrokerSelfRepair = 'Installa l''autoriparazione del broker'
+  HcAct_HostUnblock      = 'Sblocca l''agente RDVH'
+  HcAct_HostPermissions  = 'Ripara i permessi dei broker'
 }

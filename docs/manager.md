@@ -58,7 +58,7 @@ screen**, **Logo and background...**, **Software version...**. Under it:
 
 ## Settings for all devices or one
 
-**Common settings** are for every device (`config\common.conf`); in a device's **Settings** tab, tick *Exception*
+**Settings > Devices** holds the settings for every device (`config\common.conf`); in a device's **Settings** tab, tick *Exception*
 to give that device a value of its own (`config\<hostname>.conf`), which wins over the common one. Every row shows:
 
 - the value **in use on the device** (from its last report);
@@ -159,15 +159,19 @@ which users, first and last time. A line is orange when 3 or more devices had th
 server or the network, not at a device. "Six devices could not reach the broker this morning" is one line instead
 of six logs.
 
-## Desktops, brokers and Hyper-V hosts
+## Desktops: the Distribution view of the Health Center
 
 When a user cannot sign in, the cause is often on the Windows side: a broker that fails every request, a host whose
-RDVH agent is stuck, a desktop that is saved or off, a session left disconnected. The **Desktops** page shows that side
-next to the devices, for a deployment of Remote Desktop Services with Hyper-V (personal desktops, and session hosts when
-there are some).
+RDVH agent is stuck, a desktop that is saved or off, a session left disconnected. The desktops are part of the
+**Health Center**: *who cannot sign in now* opens its headline, each personal desktop (VM) in its tree shows the user,
+the Windows session, the last sign-in and the thin client, with the actions on the session (*Shadow*, *Message*,
+*Disconnect*, *Log off*) and *Personal desktop of the user*. The button **Distribution** on top of the Health Center
+shows the whole deployment as one table, searchable: user, device, desktop, host, state of the VM, session, last
+sign-in (**Health Center** goes back to the tree). It works with Remote Desktop Services and Hyper-V (personal
+desktops, and session hosts when there are some).
 
 <p align="center">
-<img src="screenshots/manager-desktops.png" alt="Desktops page: on top the problems of brokers and hosts with their Fix buttons and who cannot sign in, then each user with the device, the desktop, its host, the VM, the session and the last sign-in; the selected user with its actions" width="100%">
+<img src="screenshots/manager-desktops.png" alt="Health Center, Distribution: one row per user with the device, the desktop, its host, the state of the VM, the session and the last sign-in" width="100%">
 </p>
 
 - **One row per user and device**: the device, the personal desktop (VM), its Hyper-V host, the state of the VM
@@ -187,7 +191,7 @@ there are some).
 
 ### Brokers and hosts
 
-On top of the **Desktops** page, the brokers, the shared name the devices use, and the Hyper-V hosts: one line per
+The brokers, the shared name the devices use, and the Hyper-V hosts are items of the Health Center tree: one line per
 problem, in one sentence and, when a safe fix exists, with its button; **Show all** adds the healthy ones. When all is
 well it is one green line, *Brokers and hosts: all OK*. A right click on a broker or a host gives all its actions.
 
@@ -232,13 +236,13 @@ well it is one green line, *Brokers and hosts: all OK*. A right click on a broke
 A broker can start failing every sign-in after it leaves and joins the farm again: it presents itself without the `$`,
 falls back to NTLM, and every request ends with *access denied* (event 804, `0x80070005`) until its services start
 again. `management/windows/rds/Broker-SelfRepair.ps1` does that by itself, as a scheduled task started by the event
-of that fault, at most once every 15 minutes. **Install** in Brokers and hosts (Desktops page) installs or updates it; by hand:
+of that fault, at most once every 15 minutes. *Install the broker self-repair* on a broker of the Health Center installs or updates it; by hand:
 `Install-BrokerSelfRepair.ps1 -Broker rdcb1.example.com, rdcb2.example.com` (`-Remove` takes it away). A broker that
 already has a self-repair task of its own is left as it is.
 
 ## Health Center: the whole infrastructure
 
-The Desktops page answers "who cannot sign in, and which broker or host stops them". The **Health Center** looks one
+The Distribution answers "who works where, and who cannot sign in". The **Health Center** looks one
 step further, at what all of it stands on: the Hyper-V hosts and their failover cluster, the storage, the VMs, the
 domain controllers, DNS, an SQL AlwaysOn group, the NAS or the witness, the backups. One page instead of Failover
 Cluster Manager, Hyper-V Manager, Server Manager, SQL Server Management Studio and the event logs.
@@ -250,16 +254,18 @@ Cluster Manager, Hyper-V Manager, Server Manager, SQL Server Management Studio a
 - **On the left a tree**: cluster, its hosts and their VMs (or *Hyper-V hosts* without a cluster); the domain with its
   DCs and DNS; the SQL listener with its replicas; *Remote Desktop* with the brokers; the devices; the backups. Each
   item has a dot and a word (*Saved with a vTPM*, *Free memory*, *to see: 3*), never the colour alone.
-- **On the right the selected item**: what is wrong in one sentence, its facts (up since, Windows, memory, disks,
+- **On the right the selected item**: what is wrong in one sentence, then **every check it ran with its result**
+  (*OK*, *Warning*, *Problem*, each with one short line: *Memory: 41% free*, *Clock: 0.2 s from the domain time*), its facts (up since, Windows, memory, disks,
   clock, addresses, VMs...), its checks (each: what is wrong, with its numbers, and what it means in plain words) with a
   **Fix** button where a fix exists, and its actions (*Drain the node*, *Resume the node*, *Start VM*, *Restart VM*,
-  *Shut down VM*, *Resynchronise the clock*, *Replicate now*, *Wake up*...). A button that cannot be used now is grey and
-  its tooltip says why.
+  *Shut down VM*, *Move all VMs to the other node*, *Restart the server*, *Shut down the server*, *Resynchronise the
+  clock*, *Replicate now*, *Wake up*, *Local administrator password (LAPS)*, and on a personal desktop the session
+  actions...). A button that cannot be used now is grey and its tooltip says why.
 - **On top** the headline (*Everything OK: 2 hosts, 16 VMs, 2 domain controllers*, or the problems), when it was read,
   and the mode. Read in the background every 3 minutes from the start: the menu shows the count of problems on any page.
-- **With the Desktops page**: the findings of the brokers and hosts there show up on the same items here (read once,
-  fixed the same way); *Open in Desktops* on a personal desktop or a broker, *Show in Health Center* with a right click
-  on a host, a broker or a user there.
+- **With the desktops**: the findings of the brokers and hosts show up on the same items (read once, fixed the same
+  way); a broker or a host has the actions of the desktops too (restart its services, empty its tickets, install the
+  self-repair, unblock the RDVH agent, repair the permissions of the brokers).
 
 <p align="center">
 <img src="screenshots/manager-health-cluster.png" alt="Health Center, the cluster selected: nodes, witness, shared volume, storage pool, live migration, the VMs with a vTPM it would save and the room left if a node fails" width="100%">
@@ -276,7 +282,10 @@ Cluster Manager, Hyper-V Manager, Server Manager, SQL Server Management Studio a
 | **Domain and DCs** | the domain ports from this PC (LDAP, Kerberos, DNS, SMB, global catalog, ADWS), the DC services and their start mode (a *disabled* one is said so), SYSVOL and NETLOGON, inbound replication, the owners of the FSMO roles answering, 127.0.0.1 first in the DNS servers of a DC, the DCs alike (services, DNS zones) |
 | **DNS** | every DNS server answers and how fast, every server name resolves to one address of its own and back (a storage or APIPA address registered under the name is the classic way of losing seconds at every connection), reverse lookups that are slow, reverse zones for the networks of the servers |
 | **SQL AlwaysOn** (when configured) | the listener and the primary, every replica connected and healthy, every database synchronized (or synchronizing on an asynchronous replica) and not suspended, the SQL services of every replica, the same active logins and SQL Agent jobs on every replica (AlwaysOn copies databases, not logins), failed jobs of the last 3 days, Windows-only authentication on one replica, the last full backup of every database |
-| **Devices** | ping, the TCP ports given, an SMB share; the host of a file share witness is watched by itself |
+| **Hyper-V host, more** | network adapters (up, speed, driver and its date; a driver different from the other node is said), the UPS or battery when Windows sees one (on battery = a problem), the cluster volumes reachable from this node, the vTPM guardian keys |
+| **Remote Desktop Gateway, RD Web** (on any server that has them) | the gateway service, its certificate (found, expired, expiring in 30 days), at least one connection and one resource authorization policy, port 443 answering, the failed connections of the last 24 hours; RD Web: the web server running |
+| **Devices** | ping, the TCP ports given, an SMB share, Wake-on-LAN; a device that is the file share witness of a cluster says so, and the state of the witness |
+| **Custom checks** | your own scripts, on the servers you choose (below) |
 | **Backups** (when configured) | the newest file of a log folder, or the newest one with the text of a success, not older than the hours given |
 
 ### Diagnosis only, or diagnosis and repair
@@ -306,7 +315,7 @@ offered on data older than 5 minutes; `OTR_MANAGER_VDI_DRYRUN=1` makes every act
 
 ### Settings and what it needs
 
-**Settings...** on the page, kept for your account on your PC (`%APPDATA%\OpenThinRDP\manager.json`), not in the
+**Settings > Health Center** (the menu entry *Settings*), kept for your account on your PC (`%APPDATA%\OpenThinRDP\manager.json`), not in the
 folder. Most of it is found by itself: the hosts of the Desktops page and the nodes of their clusters, the VMs, the
 domain controllers and the FSMO owners from AD, the brokers from the devices and the deployment, the witness from the
 cluster. To give:
@@ -317,7 +326,45 @@ cluster. To give:
   `nas 192.0.2.9 445,5001 \\nas\backup 00-11-32-AA-BB-CC` (with a MAC, Wake-on-LAN);
 - more **DNS servers**, the **shared name of the brokers** when the devices do not use it (the Desktops page reads it
   too), the **SQL AlwaysOn listener** (`sqlha.example.com` or `sqlha.example.com,1433`; empty: no SQL checks), the
-  **backup log** (a file or a folder, the text of a success, the maximum age in hours).
+  **backup log** (a file or a folder, the text of a success, the maximum age in hours);
+- **other servers** to check (basic checks), the **critical VMs** (off = a problem), and the **thresholds** to change,
+  e.g. `DiskPct=10; MemWarnPct=15` (empty: the defaults; the dialog says the names).
+
+The settings of the desktops (brokers, collections) are in the same tab, *Desktops (brokers)*.
+
+### Custom checks
+
+**Settings > Custom checks** adds your own checks, shown in the tree like the others, on the server they ran on:
+
+- a **name**, **where** it runs (`hosts`, `dcs`, `brokers`, `sql`, `servers`, or names of servers), **every** how many
+  minutes (at least 3), what it means;
+- a **diagnostic script**, run on each server over WinRM with the time limits of the Health Center, that returns
+  `@{ State = 'ok' | 'warn' | 'error'; Text = 'one short line' }`;
+- an optional **repair script** (done when it returns `$true`, `@{ State = 'ok' }` or nothing without an error), and
+  whether it is **risky**: a repair that is not risky runs by itself on the items in repair mode, a risky one always
+  asks (default *No*).
+
+They are kept in the management folder, `config\health-checks\<id>.json`, `<id>.check.ps1` and `<id>.repair.ps1`, so
+everyone who opens the folder runs them, with their own rights on the servers: the Health Center says it in red when
+someone other than the administrators can write in that folder. Two examples:
+
+```powershell
+# 1. Print spooler running (where: servers; repair: Start-Service Spooler, not risky)
+$s = Get-Service Spooler -ErrorAction SilentlyContinue
+if (-not $s) { @{ State = 'ok'; Text = 'not installed' } }
+elseif ($s.Status -eq 'Running') { @{ State = 'ok'; Text = 'running' } }
+else { @{ State = 'error'; Text = "Spooler is $($s.Status)" } }
+```
+
+```powershell
+# 2. A web application answers its health page (where: the name of its server)
+try {
+  $r = Invoke-WebRequest -Uri 'https://localhost:5001/healthz' -UseBasicParsing -TimeoutSec 10
+  if ($r.StatusCode -eq 200) { @{ State = 'ok'; Text = 'answers' } } else { @{ State = 'warn'; Text = "HTTP $($r.StatusCode)" } }
+} catch { @{ State = 'error'; Text = $_.Exception.Message } }
+```
+
+Which check of the original runbook script is where: [health-center-coverage.md](health-center-coverage.md).
 
 The manager runs as an account that administers the servers, with **WinRM** (5985) to the hosts, DCs, brokers and SQL
 replicas, NTP (UDP 123) from them to the PDC emulator, and a login on every SQL replica (Windows authentication). The
@@ -376,6 +423,17 @@ manager stay as they are; if anything fails, the previous files come back.
 Update the copy the administrators start (on a share, from a PC that can write there): everybody who starts it gets
 the new version. The **Updates** page shows the manager's version and has **Check again**. Details:
 [management.md](management.md#the-manager-updates-itself).
+
+## Settings > Manager: language and local copy
+
+- **Language**: the language of the window for your Windows user (*Language of Windows* = as today); it applies from
+  the next start. `-Language` on the command line still wins.
+- **Local copy of the management folder**: choose a folder on this PC and the manager mirrors the management folder
+  there in the background at every start (and with *Update the copy now*), without the packages of the old versions.
+  When the file server is down, the manager offers to open the local copy, so the Health Center works when it is
+  needed most; *Open the local copy* opens it by hand, or start with `-Folder <local copy>`. The title says *(LOCAL
+  COPY)*: what is changed there stays there and does not reach the file server.
+- **The manager updates itself**: its block is in this tab too.
 
 ## Starting it, and the command line
 

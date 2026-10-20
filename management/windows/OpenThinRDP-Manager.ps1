@@ -2954,7 +2954,10 @@ $hcInner.Panel2.Controls.Add($gridHc)
 $script:HcBarKinds = [ordered]@{ OpenDesktops = 'Desktop'; SessionShadow = 'Screen'; SessionMessage = 'Message'; SessionDisconnect = 'Unplug'; AssignDesktop = 'Contact'
   HostDrain = 'Forward'; HostResume = 'Play'; HostMoveAll = 'Forward'; VmStart = 'Play'; VmRestart = 'Refresh'; VmResume = 'Play'; VmRoleOnline = 'Shield'; VmMoveLive = 'Forward'
   VmRemoveCheckpoints = 'Delete'; VmRemoveSavedState = 'Delete'; VmStopAction = 'Settings'; TimeSync = 'Clock'; DcSyncAll = 'Sync'; DcRestartServices = 'Refresh'
-  RdsUnblockChain = 'Sync'; SqlFailover = 'Sync'; SqlCopyOnly = 'Save'; Laps = 'Key'; DeviceWake = 'Power'; ServerRestart = 'Refresh' }
+  RdsUnblockChain = 'Sync'; SqlFailover = 'Sync'; SqlCopyOnly = 'Save'; Laps = 'Key'; DeviceWake = 'Power'; ServerRestart = 'Refresh'
+  BrokerRestart = 'Refresh'; BrokerPurge = 'Delete'; BrokerSelfRepair = 'Repair'; HostUnblock = 'Repair'; HostPermissions = 'Shield' }
+# the actions of the brokers and hosts that the Desktops part plans (by the name of the broker or host)
+$script:HcVdiKinds = @('BrokerRestart', 'BrokerPurge', 'BrokerSelfRepair', 'HostUnblock', 'HostPermissions')
 
 $script:HcButtons = [ordered]@{}
 foreach ($k in $script:HcBarKinds.Keys) { $b = New-ActionButton "HcAct_$k" $script:HcBarKinds[$k] $(if ($k -eq 'OpenDesktops') { 'primary' } else { 'secondary' }); $b.Name = $k; $script:HcButtons[$k] = $b }
@@ -4618,12 +4621,18 @@ function Update-HcButtons {
   $state = Get-HealthState; $now = Get-Date
   foreach ($k in @($script:HcButtons.Keys)) {
     $b = $script:HcButtons[$k]
-    $want = $n -and @($n.Actions) -contains $k
+    $want = $n -and (@($n.Actions) -contains $k -or ($script:HcVdiKinds -contains $k -and $script:Vdi.Model -and $n.Kind -eq $(if ($k -like 'Broker*') { 'broker' } else { 'host' }) -and @($(if ($k -like 'Broker*') { $script:Vdi.Model.Brokers } else { $script:Vdi.Model.Hosts }) | Where-Object { $_ -and $_.Name -eq $n.Name }).Count))
     if ($k -eq 'TimeSync' -and $n) { $want = $n.Kind -in 'host', 'dc', 'broker', 'replica' -and $n.Data -and $n.Data.PSObject.Properties['Reachable'] -and $n.Data.Reachable }
     $b.Visible = [bool]$want
     if (-not $want) { continue }
     if ($k -eq 'OpenDesktops') { Set-ActionEnabled $b ([bool]$script:VdiLoaded); $tips.SetToolTip($b, (Get-Text 'HcOpenDesktops')); continue }
     # the session of the user of a desktop: the plans of the Desktops part; the LAPS password: read only
+    if ($script:HcVdiKinds -contains $k) {
+      $list = if ($k -like 'Broker*') { @($script:Vdi.Model.Brokers) } else { @($script:Vdi.Model.Hosts) }
+      $want = $n -and $script:Vdi.Model -and $n.Kind -eq $(if ($k -like 'Broker*') { 'broker' } else { 'host' }) -and @($list | Where-Object { $_ -and $_.Name -eq $n.Name }).Count
+      $b.Visible = [bool]$want; if (-not $want) { continue }
+      $vp = Get-VdiActionPlan $k $n.Name (Get-VdiState) $now; Set-ActionEnabled $b (-not $vp.Blocked); $tips.SetToolTip($b, $(if ($vp.Blocked) { $vp.Blocked } else { $vp.Title })); continue
+    }
     if ($k -like 'Session*' -or $k -eq 'AssignDesktop') {
       $vp = if ($n.Desktop -and $script:Vdi.Model) { Get-VdiActionPlan $k $n.Desktop (Get-VdiState) $now $(if ($k -in 'SessionMessage', 'AssignDesktop') { '*' } else { $null }) } else { $null }
       Set-ActionEnabled $b ([bool]($vp -and -not $vp.Blocked)); $tips.SetToolTip($b, $(if (-not $vp) { Get-Text 'HcNoVdi' } elseif ($vp.Blocked) { $vp.Blocked } else { $vp.Title })); continue
@@ -4642,6 +4651,7 @@ function Invoke-HealthAction([string]$kind, $n, $check = $null) {
   if ($kind -eq 'OpenDesktops') { Show-HealthInDesktops $n; return }
   if ($kind -like 'Session*' -or $kind -eq 'AssignDesktop') { if ($n.Desktop) { Invoke-VdiAction $kind $n.Desktop }; return }
   if ($kind -eq 'Laps') { Show-HealthLaps $n; return }
+  if ($script:HcVdiKinds -contains $kind) { Invoke-VdiAction $kind $n.Name; return }
   if ($check -and $check.Source -eq 'vdi') { Invoke-VdiAction $check.Fix $check.Where $check.FixArg; return }
   $state = Get-HealthState; $now = Get-Date
   $plan = if ($check) { Get-HealthCheckPlan $check $state $now } else { Get-HealthActionPlan $kind $n.Id $state $now }

@@ -13,7 +13,20 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
 - **Manager: Health Center, the health of the whole Hyper-V and RDS infrastructure**
   ([#78](https://github.com/OpenThinRdp/openthinrdp/issues/78)). A page under Desktops; details in
   [docs/manager.md](docs/manager.md#health-center-the-whole-infrastructure).
-  - A tree of the infrastructure (cluster, hosts, VMs; domain, DCs, DNS; SQL AlwaysOn and its replicas; brokers;
+- **Health Center: every check with its result.** Each item lists every check it ran, OK ones included, with one short
+  line; new checks: RD Gateway and RD Web (service, certificate, policies, port 443, failed connections), network
+  adapters and their drivers, UPS, the cluster volumes from each node, the witness on its device; new actions: move all
+  VMs to the other node, restart or shut down a server with its guards, the LAPS password (read only), and on a
+  personal desktop the session actions. Which check of the original runbook script is where:
+  [docs/health-center-coverage.md](docs/health-center-coverage.md).
+- **Health Center: custom checks.** Your own diagnostic and repair scripts, on the servers you choose, shown in the tree
+  like the others; kept in `config\health-checks` of the management folder, with a warning when people other than the
+  administrators can write there.
+- **Manager: the Desktops page is the Distribution view of the Health Center**: one table, searchable, user -> device ->
+  desktop -> host -> VM -> session; who cannot sign in opens the headline of the Health Center.
+- **Manager: Settings with tabs**: Devices (the common settings), Health Center (with the desktops and the thresholds),
+  Manager (its updates, its language, a local copy of the management folder for when the file server is down), Custom
+  checks.  - A tree of the infrastructure (cluster, hosts, VMs; domain, DCs, DNS; SQL AlwaysOn and its replicas; brokers;
     devices such as a NAS or the witness; backups), each item with its state; the selected one with its facts, its
     checks (what is wrong and what it means, in one sentence each) and its actions. On top *everything OK* or the
     problems. Read in the background every 3 minutes.

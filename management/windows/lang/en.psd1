@@ -1983,4 +1983,9 @@
   HcSetCriticalHint      = 'VMs that must always be on, separated by commas: off = a problem.'
   HcSetLimits            = 'Thresholds'
   HcSetLimitsHint        = 'Only those to change, name=whole number separated by ; for example DiskPct=10; MemWarnPct=15. Empty = the defaults.'
+  HcAct_BrokerRestart    = 'Restart the broker services'
+  HcAct_BrokerPurge      = 'Purge the broker tickets'
+  HcAct_BrokerSelfRepair = 'Install the broker self-repair'
+  HcAct_HostUnblock      = 'Unblock the RDVH agent'
+  HcAct_HostPermissions  = 'Repair the broker permissions'
 }
