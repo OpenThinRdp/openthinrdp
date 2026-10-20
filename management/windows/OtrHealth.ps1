@@ -99,8 +99,22 @@ $script:HealthLimits = @{ DiskGB = 5; DiskPct = 8; DiskWarnPct = 15; DiskWarnGB 
   CheckpointDays = 3; ReverseMs = 1500; DnsMs = 1000; BackupHours = 26; JobDays = 3 }
 function Get-HealthDefaults {
   [pscustomobject]@{ Enabled = $true; Mode = 'diagnose'; Items = (New-Object psobject); Hosts = ''; Cluster = 'auto'; Devices = ''; DnsServers = ''; BrokerName = ''
-    SqlListener = ''; BackupPath = ''; BackupText = ''; BackupHours = $script:HealthLimits.BackupHours; Servers = ''; CriticalVms = '' }
+    SqlListener = ''; BackupPath = ''; BackupText = ''; BackupHours = $script:HealthLimits.BackupHours; Servers = ''; CriticalVms = ''; Limits = '' }
 }
+$script:HealthLimitsDefault = $script:HealthLimits.Clone()
+# the thresholds changed in the settings: "DiskPct=10; MemWarnPct=15" (names of $script:HealthLimits, whole numbers)
+function ConvertFrom-HealthLimits([string]$text) {
+  foreach ($p in @("$text" -split '[;,\r\n]+' | ForEach-Object { $_.Trim() } | Where-Object { $_ })) {
+    $k, $v = $p -split '\s*=\s*', 2; $n = 0
+    $ok = $k -and $script:HealthLimitsDefault.ContainsKey($k) -and [int]::TryParse("$v", [ref]$n) -and $n -ge 0
+    [pscustomobject]@{ Key = $k; Value = $n; Bad = -not $ok; Text = $p }
+  }
+}
+function Set-HealthLimits([string]$text) {
+  $script:HealthLimits = $script:HealthLimitsDefault.Clone()
+  foreach ($x in @(ConvertFrom-HealthLimits $text)) { if (-not $x.Bad) { $script:HealthLimits[$x.Key] = $x.Value } }
+}
+function Get-HealthLimitsText { (@($script:HealthLimitsDefault.Keys | Sort-Object | ForEach-Object { "$_=$($script:HealthLimitsDefault[$_])" })) -join '; ' }
 function Get-HealthSettings {
   $s = Get-HealthDefaults
   $m = Read-ManagerSettings
@@ -111,6 +125,7 @@ function Get-HealthSettings {
   if ($s.Mode -notin 'diagnose', 'repair') { $s.Mode = 'diagnose' }
   if ($s.Cluster -notin 'auto', 'yes', 'no') { $s.Cluster = 'auto' }
   $h = 0; if (-not [int]::TryParse("$($s.BackupHours)", [ref]$h) -or $h -lt 1) { $h = $script:HealthLimits.BackupHours }; $s.BackupHours = $h
+  Set-HealthLimits $s.Limits
   if (-not ($s.Items -is [psobject]) -or $s.Items -is [string]) { $s.Items = New-Object psobject }
   $s
 }
@@ -138,6 +153,7 @@ function Test-HealthSettings($s) {
   }
   foreach ($v in @("$($s.CriticalVms)" -split '[,;\r\n]+' | ForEach-Object { $_.Trim() } | Where-Object { $_ })) { if ($v -notmatch '^[A-Za-z0-9 ._()-]{1,100}$') { return (Get-Text 'HcErrVm' $v) } }
   if ($s.BackupPath -and "$($s.BackupPath)" -notmatch '^([A-Za-z]:\\|\\\\[A-Za-z0-9.-]+\\)') { return (Get-Text 'HcErrBackup' $s.BackupPath) }
+  foreach ($x in @(ConvertFrom-HealthLimits $s.Limits)) { if ($x.Bad) { return (Get-Text 'HcErrLimit' $x.Text (Get-HealthLimitsText)) } }
   $h = 0; if (-not [int]::TryParse("$($s.BackupHours)", [ref]$h) -or $h -lt 1 -or $h -gt 2000) { return (Get-Text 'HcErrHours' $s.BackupHours) }
   $null
 }
@@ -147,7 +163,7 @@ function Save-HealthSettings($s) {
   Set-ManagerSetting $m 'Health' ([pscustomobject]@{ Enabled = [bool]$s.Enabled; Mode = $(if ($s.Mode -eq 'repair') { 'repair' } else { 'diagnose' }); Items = $items
     Hosts = ((Split-List $s.Hosts) -join ' '); Cluster = [string]$s.Cluster
     Devices = ((@("$($s.Devices)" -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })) -join "`n"); DnsServers = ((Split-List $s.DnsServers) -join ' ')
-    BrokerName = ((Split-List $s.BrokerName) -join ' '); Servers = ((Split-List $s.Servers) -join ' '); CriticalVms = ((@("$($s.CriticalVms)" -split '[,;\r\n]+' | ForEach-Object { $_.Trim() } | Where-Object { $_ })) -join ', '); SqlListener = "$($s.SqlListener)".Trim(); BackupPath = "$($s.BackupPath)".Trim(); BackupText = "$($s.BackupText)".Trim(); BackupHours = [int]$s.BackupHours })
+    BrokerName = ((Split-List $s.BrokerName) -join ' '); Servers = ((Split-List $s.Servers) -join ' '); CriticalVms = ((@("$($s.CriticalVms)" -split '[,;\r\n]+' | ForEach-Object { $_.Trim() } | Where-Object { $_ })) -join ', '); SqlListener = "$($s.SqlListener)".Trim(); BackupPath = "$($s.BackupPath)".Trim(); BackupText = "$($s.BackupText)".Trim(); BackupHours = [int]$s.BackupHours; Limits = "$($s.Limits)".Trim() })
   Save-ManagerSettings $m
 }
 # the mode of one item: its own, else the one of the nearest item above it with its own, else the page's
@@ -724,7 +740,7 @@ $r
       'servers' { @(@($hosts) + @($dcsOut) + @($servers) | Where-Object Reachable | ForEach-Object Fqdn) }
       default { @("$w" -split '[ ,;]+' | Where-Object { $_ }) }
     }
-    $ccr = Invoke-Many $targets ([scriptblock]::Create([string]$cc.Script)) @()
+    $ccr = Invoke-Many $targets ([scriptblock]::Create([string]$cc.Script)) @() 15000
     foreach ($k in $ccr.Res.Keys) { $o = $ccr.Res[$k]
       $st = "$(if ($o -is [hashtable]) { $o['State'] } elseif ($o.PSObject.Properties['State']) { $o.State })".ToLower(); if ($st -notin 'ok', 'warn', 'error') { $st = 'warn' }
       $custom += [pscustomobject]@{ Name = [string]$cc.Name; Target = $k; State = $st; Text = "$(if ($o -is [hashtable]) { $o['Text'] } elseif ($o.PSObject.Properties['Text']) { $o.Text })" } }
@@ -1613,7 +1629,7 @@ function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
     $open = @(Test-HealthCustomFolder)
     if ($open.Count) { [void](Add-HcCheck $cg 'error' 'CustomFolder' @(($open -join ', '))) }
     Add-HcDone $cg 'CustomFolder' 'CustomFolder'
-    foreach ($r in @($raw.PSObject.Properties['Custom'] | ForEach-Object { @($_.Value) } | Where-Object { $_ })) {
+    foreach ($r in @(Merge-HealthCustomResults $raw $defs)) {
       $c = @($defs | Where-Object { $_.Name -eq $r.Name }) | Select-Object -First 1; if (-not $c) { continue }
       $tk = Get-HcShort $r.Target
       $node = @($m.Nodes | Where-Object { $_.Id -in "host:$tk", "dc:$tk", "broker:$tk", "server:$tk", "replica:$tk" -or ($_.Kind -eq 'vm' -and $_.PSObject.Properties['ServerName'] -and $_.ServerName -eq $tk) }) | Select-Object -First 1

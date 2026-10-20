@@ -268,6 +268,20 @@ try {
   $src = [IO.File]::ReadAllText($mgr)
   ok 'SSH keys: no button of their own in the menu, their list on the Vault page' { $src -match '\$vaultWrap\.Controls\.Add\(\$keysCard\)' -and $src -notmatch 'foreach \(\$b in @\([^)]*\$navKeys[^)]*\)\) \{ \$nav\.Controls\.Add' -and $src -match 'if \(\$i -eq 2\) \{ \$i = 4 \}' }
 
+  # ---- the Settings page, the Distribution, the local copy
+  ok 'Settings: four tabs (devices, Health Center, manager, custom checks), the manager block there, not on the Updates page' { $src -match '\$setTabs\.TabPages\.Add' -and $src -match 'foreach \(\$b in @\(\$blkLocal, \$blkLang, \$blkManager\)\) \{ \$setMgrCard\.Controls\.Add\(\$b\) \}' -and $src -notmatch '\$updCard\.Controls\.Add\(\$blkManager\)' }
+  ok 'Desktops: no menu entry of their own, the Distribution of the Health Center; no settings dialog opened from the pages' { $src -notmatch 'navHealth, \$navDesktops' -and $src -match "New-PageHeader \(Get-Text 'HcDistTitle'\)" -and @([regex]::Matches($src, 'add_Click\(\{ Show-(Health|Vdi)SettingsDialog')).Count -eq 2 -and $src -match '\$btnSetHc\.add_Click\(\{ Show-HealthSettingsDialog' -and $src -match '\$btnSetVdi\.add_Click\(\{ Show-VdiSettingsDialog' }
+  ok 'Italian: no typographic apostrophe in the texts (it ends a quoted text in PowerShell)' { [IO.File]::ReadAllText((Join-Path $mw 'lang\it.psd1')) -notmatch "[$([char]0x2018)$([char]0x2019)]" }
+  $lcFrom = Join-Path $tmp 'share'; $lcTo = Join-Path $tmp 'local'
+  foreach ($d in 'config', 'status', 'updates\versions\1.0') { New-Item -ItemType Directory -Path (Join-Path $lcFrom $d) -Force | Out-Null }
+  'a' | Set-Content (Join-Path $lcFrom 'config\common.conf'); 'b' | Set-Content (Join-Path $lcFrom 'updates\versions\1.0\big.deb')
+  $null = & robocopy.exe @(Get-LocalCopyArgs $lcFrom $lcTo)
+  ok 'local copy: a mirror of the management folder without the packages of the old versions' { (Test-Path (Join-Path $lcTo 'config\common.conf')) -and -not (Test-Path (Join-Path $lcTo 'updates\versions\1.0\big.deb')) }
+  ok 'local copy: never onto the management folder itself' { -not (Start-LocalCopySync $lcFrom $lcFrom) }
+  $lsf = Join-Path $tmp 'lang-settings.json'; '{ "Language": "it" }' | Set-Content $lsf
+  $lang = & powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "`$env:OTR_MANAGER_SETTINGS = '$lsf'; . '$(Join-Path $mw 'OpenThinRDP-Manager.ps1')' -Folder '$tmp' -FunctionsOnly; `$script:Language"
+  ok 'the language chosen in Settings > Manager when -Language is not given' { "$lang".Trim() -eq 'it' }
+
   # ---- Italian
   $script:Text = Read-LanguageTexts $script:LangDir 'it'
   $mi = ConvertTo-VdiModel $raw $devs $now

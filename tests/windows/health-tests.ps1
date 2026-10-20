@@ -60,7 +60,7 @@ try {
   $missing = @($ids | Where-Object { -not $en.ContainsKey("HcT_$_") -or -not $en.ContainsKey("HcX_$_") })
   ok "every check ($($ids.Count)) has HcT_ and HcX_ $(if ($missing.Count) { "(missing: $($missing -join ', '))" })" { $ids.Count -ge 60 -and -not $missing.Count }
   $kinds = 'ServiceStart', 'SqlStartService', 'ServiceUnstick', 'NetlogonRestart', 'TimeSync', 'TimeDomain', 'WitnessOnline', 'ClusterOfflineAction', 'ClusterDrainOnShutdown', 'ClusterGroupStart', 'HostDrain', 'HostResume',
-    'VmStart', 'VmRestart', 'VmShutdown', 'VmResume', 'VmRoleOnline', 'VmRemoveCheckpoints', 'VmStopAction', 'DcSyncAll', 'DnsReverseZone', 'SqlResume', 'DeviceWake'
+    'VmStart', 'VmRestart', 'VmShutdown', 'VmResume', 'VmRoleOnline', 'VmRemoveCheckpoints', 'VmStopAction', 'DcSyncAll', 'DnsReverseZone', 'SqlResume', 'DeviceWake', 'HostMoveAll', 'CustomRepair', 'ServerRestart', 'ServerShutdown'
   ok 'every action has its title and its plan' { -not @($kinds | Where-Object { -not $en.ContainsKey("HcAct_$_") -or (Get-HealthActionPlan $_ 'x' @{ Model = $m } $now).Blocked -ne (Get-Text 'VdiBlkUnknown' 'x') }).Count }
 
   # ---- the model of the recorded site
@@ -98,6 +98,51 @@ try {
   ok 'RDCB2: fails every sign-in (Desktops page), restart offered; VM-ALICE: the desktop of alice' {
     @($mv.Index['broker:RDCB2'].Checks | Where-Object { $_.Source -eq 'vdi' -and $_.Fix -eq 'BrokerRestart' }).Count -eq 1 -and @($mv.Index['vm:VM-ALICE'].Facts | Where-Object { $_.Value -eq 'alice' }).Count -and $mv.Index['vm:VM-ALICE'].Actions -contains 'OpenDesktops' }
 
+  # ---- every check of an item with its result: the OK rows too, never next to a problem of the same group
+  $hv1 = $m.Index['host:HV1']
+  ok 'HV1: OK rows for what was checked and found good (memory, services, clock), none for a group with a problem' {
+    $okIds = @($hv1.Checks | Where-Object Kind -eq 'ok' | ForEach-Object Id)
+    $okIds -contains 'OkHvServices' -and $okIds -contains 'OkMem' -and @($m.Nodes | ForEach-Object { $n = $_; @($n.Checks | Where-Object Kind -eq 'ok' | Where-Object { $g = $_.Id.Substring(2); @($n.Done | Where-Object { $_.Group -eq $g } | ForEach-Object { $_.Ids } | Where-Object { $i = $_; @($n.Checks | Where-Object { $_.Kind -in 'error', 'warn' -and $_.Id -eq $i }).Count }).Count }) }).Count -eq 0 -and -not @($m.Problems | Where-Object { $_.Check.Kind -eq 'ok' }).Count }
+  ok 'every OK row has a title in English and Italian' { -not @($m.Nodes | ForEach-Object { $_.Checks } | Where-Object { $_.Kind -eq 'ok' -and ($_.Title -like 'HcC_*' -or -not $_.Title) }).Count }
+
+  # ---- RD Gateway and RD Web on a server: service, certificate, policies, port 443
+  $rg = Copy-Raw; $gs = @($rg.Servers | Where-Object { $_.Name -eq 'RDCB1' })[0]
+  $gs | Add-Member -NotePropertyName Gateway -NotePropertyValue ([pscustomobject]@{ State = 'Running'; CertFound = $true; Thumbprint = 'AB12'; Subject = 'CN=gw.example.com'; NotAfter = '2026-10-30T00:00:00'; Cap = 1; Rap = 0; Failed = 25; FailedText = 'user refused' }) -Force
+  $gs | Add-Member -NotePropertyName Port443 -NotePropertyValue $false -Force
+  $mg = ConvertTo-HealthModel $rg $null $now $set; $gc = @($mg.Index['broker:RDCB1'].Checks)
+  ok 'RD Gateway: certificate expiring in 10 days, no resource policy, 443 closed, 25 failures (warning)' {
+    @($gc | Where-Object Id -eq 'GwCertExpiring').Count -and @($gc | Where-Object Id -eq 'GwPolicies').Count -and @($gc | Where-Object Id -eq 'Gw443').Count -and @($gc | Where-Object { $_.Id -eq 'GwFailed' -and $_.Kind -eq 'warn' }).Count -and -not @($gc | Where-Object Id -eq 'OkGateway').Count }
+
+  # ---- the thresholds of the settings
+  ok 'thresholds: a known name with a whole number is taken, an unknown one refused, empty = the defaults' {
+    $bad = @(ConvertFrom-HealthLimits 'DiskPct=12; Nope=3' | Where-Object Bad); Set-HealthLimits 'DiskPct=12'; $a = $script:HealthLimits.DiskPct; Set-HealthLimits ''
+    $bad.Count -eq 1 -and $bad[0].Key -eq 'Nope' -and $a -eq 12 -and $script:HealthLimits.DiskPct -eq $script:HealthLimitsDefault.DiskPct -and (Test-HealthSettings ([pscustomobject]@{ Hosts = ''; DnsServers = ''; BrokerName = ''; Servers = ''; SqlListener = ''; Devices = ''; CriticalVms = ''; BackupPath = ''; BackupHours = 24; Limits = 'x=1' })) }
+
+  # ---- custom checks: saved in config\health-checks, read back, shown on their server, the repair as risky says
+  $script:ConfigDir = Join-Path $tmp 'config'; New-Item -ItemType Directory -Path $script:ConfigDir -Force | Out-Null
+  ok 'custom check: a name, a valid target and a script that parses are needed' {
+    (Test-HealthCustomCheck ([pscustomobject]@{ Name = ''; Where = 'hosts'; Script = 'x' })) -and (Test-HealthCustomCheck ([pscustomobject]@{ Name = 'a'; Where = 'bad name!'; Script = 'x' })) -and (Test-HealthCustomCheck ([pscustomobject]@{ Name = 'a'; Where = 'hosts'; Script = 'if (' })) -and -not (Test-HealthCustomCheck ([pscustomobject]@{ Name = 'a'; Where = 'hosts'; Script = "@{ State = 'ok' }" })) }
+  $cid = Save-HealthCustomCheck ([pscustomobject]@{ Name = 'Spooler stopped'; Where = 'hosts'; IntervalMin = 10; Description = 'why'; Script = "@{ State = 'ok'; Text = 'x' }"; Repair = 'Start-Service Spooler'; Risky = $false }) ''
+  [void](Save-HealthCustomCheck ([pscustomobject]@{ Name = 'Risky one'; Where = 'HV2'; IntervalMin = 5; Description = ''; Script = "@{ State = 'ok' }"; Repair = 'Restart-Computer'; Risky = $true }) '')
+  $defs = @(Get-HealthCustomChecks)
+  ok 'custom checks: read back from the folder (json + scripts), the interval at least 3 minutes' { $defs.Count -eq 2 -and @($defs | Where-Object Id -eq $cid)[0].Repair -eq 'Start-Service Spooler' -and @($defs | Where-Object Name -eq 'Risky one')[0].IntervalMin -eq 5 }
+  $rc = Copy-Raw; $rc | Add-Member -NotePropertyName Custom -NotePropertyValue @([pscustomobject]@{ Name = 'Spooler stopped'; Target = 'HV1'; State = 'error'; Text = 'stopped' }, [pscustomobject]@{ Name = 'Risky one'; Target = 'HV2'; State = 'warn'; Text = 'odd' }) -Force
+  $mc = ConvertTo-HealthModel $rc $null $now $set
+  $c1 = @($mc.Index['host:HV1'].Checks | Where-Object Id -eq 'Custom')[0]; $c2 = @($mc.Index['host:HV2'].Checks | Where-Object Id -eq 'Custom')[0]
+  $p1 = Get-HealthCheckPlan $c1 @{ Model = $mc; Received = $now } $now; $p2 = Get-HealthCheckPlan $c2 @{ Model = $mc; Received = $now } $now
+  ok 'custom checks: on their host like the others, the repair safe when not risky, asking (default No) when risky' {
+    $c1.Kind -eq 'error' -and $c1.Title -eq 'Spooler stopped' -and $c1.Fix -eq 'CustomRepair' -and $p1.Safe -and -not $p1.Blocked -and $p1.Steps[0].Computer -eq 'HV1' -and -not $p2.Safe -and $p2.DefaultNo -and $mc.Index['custom'] }
+  ok 'custom checks: the group says the interval and how the repair runs' { @($mc.Index['custom'].Facts | Where-Object { $_.Value -match 'every 10 min' }).Count -eq 1 }
+  ok 'remote script CustomRun: runs the text given, ok on $true or State ok' { $sb = $script:HealthRemote['CustomRun']; (& $sb '$true' 10).Ok -and -not (& $sb "@{ State = 'error'; Text = 'no' }" 10).Ok -and (& $sb "@{ State = 'error'; Text = 'no' }" 10).Error -eq 'no' }
+  Remove-Item -LiteralPath $script:ConfigDir -Recurse -Force
+
+  # ---- move all the VMs of a node, without pausing it
+  $pm = Get-HealthActionPlan 'HostMoveAll' 'host:HV1' @{ Model = $m } $now
+  ok 'move all VMs of HV1: one live move per running clustered VM to HV2, the node not paused, default No' {
+    $run = @($m.Index['host:HV1'].Data.Vms | Where-Object { $_.State -eq 'Running' -and $_.Clustered }).Count
+    $pm.DefaultNo -and ($pm.Blocked -or (@($pm.Steps).Count -eq $run -and -not @($pm.Steps | Where-Object { $_.Script -ne 'MoveLive' -or $_.Args[1] -ne 'HV2' }).Count)) }
+
+  ok 'VM-ALICE: the session, the actions on it and the personal desktop, as on the Distribution' { @('SessionShadow', 'SessionMessage', 'SessionDisconnect', 'SessionLogoff', 'AssignDesktop' | Where-Object { $mv.Index['vm:VM-ALICE'].Actions -notcontains $_ }).Count -eq 0 -and $mv.Index['vm:VM-ALICE'].Desktop }
   # ---- variants: a single host, without a cluster
   $rs = Copy-Raw; $rs.Clusters = @(); $rs.Hosts = @($rs.Hosts[0]); $rs.Hosts[0].Cluster = ''
   foreach ($v in $rs.Hosts[0].Vms) { $v.Clustered = $false; $v.OfflineAction = $null; $v.ResourceState = ''; $v.GroupState = '' }
