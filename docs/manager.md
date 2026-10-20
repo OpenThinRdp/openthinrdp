@@ -442,6 +442,17 @@ Update the copy the administrators start (on a share, from a PC that can write t
 the new version. The **Updates** page shows the manager's version and has **Check again**. Details:
 [management.md](management.md#the-manager-updates-itself).
 
+## Power and commands of a device
+
+**Power and commands** in the header of a device:
+
+- **Power on (Wake-on-LAN)**: the magic packet to the broadcast of the network the device last reported (e.g.
+  `192.168.1.255` for `192.168.0.37/23`) and to `255.255.255.255`. It needs Wake-on-LAN in the BIOS; the device
+  enables it on its network card at every start.
+- **Restart**, **Switch off**, **Send its status now**, **Run a command...**: over SSH as `otradmin` with the key of
+  the vault (SSH on for the device). Restart and switch off warn when someone is working on the device; a command
+  shows its output and exit code (`sudo` in front for root). Every action goes to the change log.
+
 ## Settings > Manager: language and local copy
 
 - **Management folder > Name it in the domain** (#82): writes `<account>=<folder>` into

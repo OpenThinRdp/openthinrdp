@@ -1017,6 +1017,29 @@ function Remove-VaultKeyFile {
   Get-ChildItem -LiteralPath $script:VaultKeysDir -Directory -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-1) } |
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 }
+# ---- Power and commands of a device. Wake-on-LAN from here (no SSH: the device is off), to the broadcast of its own
+# network as it last reported it and to 255.255.255.255; the rest over SSH as otradmin with the key of the vault.
+function Get-WolPacket([string]$mac) {
+  $hex = $mac -replace '[^0-9A-Fa-f]', ''; if ($hex.Length -ne 12) { return $null }
+  $b = New-Object byte[] 102; for ($i = 0; $i -lt 6; $i++) { $b[$i] = 255 }
+  for ($i = 0; $i -lt 16; $i++) { for ($j = 0; $j -lt 6; $j++) { $b[6 + $i * 6 + $j] = [Convert]::ToByte($hex.Substring($j * 2, 2), 16) } }
+  $b
+}
+# 192.168.0.37/23 -> 192.168.1.255
+function Get-Broadcast([string]$cidr) {
+  if ($cidr -notmatch '^(\d{1,3}(\.\d{1,3}){3})/(\d{1,2})$') { return $null }
+  $ip = [Net.IPAddress]::Parse($Matches[1]).GetAddressBytes(); [Array]::Reverse($ip)
+  $n = [BitConverter]::ToUInt32($ip, 0); $hm = [uint32]([Math]::Pow(2, 32 - [int]$Matches[3]) - 1)
+  $bb = [BitConverter]::GetBytes([uint32]($n -bor $hm)); [Array]::Reverse($bb); ([Net.IPAddress]$bb).ToString()
+}
+function Send-DeviceWake($d) {
+  $p = Get-WolPacket ([string]$d.S['MAC']); if (-not $p) { return $false }
+  $dest = @('255.255.255.255') + @(Get-Broadcast ([string]$d.S['IP']) | Where-Object { $_ })
+  $u = New-Object Net.Sockets.UdpClient; $u.EnableBroadcast = $true
+  try { foreach ($x in $dest) { foreach ($port in 9, 7) { [void]$u.Send($p, $p.Length, $x, $port) } } } finally { $u.Close() }
+  Add-ChangeLog "$($d.Name): Wake-on-LAN sent ($($d.S['MAC']) to $($dest -join ', '))"
+  $true
+}
 # a command on a device as otradmin with the key of the vault ($key = Get-VaultKeyFile) and no other: the keys in
 # the profile of this account are not offered (IdentitiesOnly)
 function Invoke-DeviceSsh([string]$ip, [string]$command, [string]$key, [string]$name) {
@@ -2660,7 +2683,12 @@ $btnVpnDev = New-ActionButton 'BtnVpnProfile' 'Vpn' 'secondary'; $btnVpnDev.Visi
 $btnDot1xDev = New-ActionButton 'BtnDot1x' 'Certificate' 'secondary'; $btnDot1xDev.Visible = $false
 # which version it installs: like all devices, pilot, or one of its own
 $btnTrackDev = New-ActionButton 'BtnDeviceVersion' 'Download' 'secondary'
-foreach ($b in @($btnRemoteDev, $btnBrandDev, $btnTrackDev, $btnVpnDev, $btnDot1xDev)) { $b.Margin = New-Object System.Windows.Forms.Padding(8, 0, 0, 0); $devActions.Controls.Add($b) }
+# power on (Wake-on-LAN), restart, switch off, report now, a command: one button with its menu
+$btnPowerDev = New-ActionButton 'BtnDevicePower' 'Power' 'secondary'
+$mnuPower = New-Object System.Windows.Forms.ContextMenuStrip; $mnuPower.Font = $fontBase
+foreach ($k in 'wake', 'reboot', 'poweroff', 'report', 'command') { $it = $mnuPower.Items.Add((Get-Text "PwrMenu_$k")); $it.Tag = $k; $it.add_Click({ param($s, $e) if ($script:Selected) { Invoke-DeviceAction $script:Selected $s.Tag } }) }
+$btnPowerDev.add_Click({ $mnuPower.Show($btnPowerDev, (New-Object System.Drawing.Point(0, $btnPowerDev.Height))) })
+foreach ($b in @($btnRemoteDev, $btnPowerDev, $btnBrandDev, $btnTrackDev, $btnVpnDev, $btnDot1xDev)) { $b.Margin = New-Object System.Windows.Forms.Padding(8, 0, 0, 0); $devActions.Controls.Add($b) }
 $tips.SetToolTip($btnRemoteDev, (Get-Text 'TipRemoteScreen')); $tips.SetToolTip($btnVpnDev, (Get-Text 'TipVpnProfile')); $tips.SetToolTip($btnTrackDev, (Get-Text 'TipDeviceVersion'))
 $tips.SetToolTip($btnDot1xDev, (Get-Text 'TipDot1x'))
 $devHead.Controls.AddRange(@($lblDevName, $lblDevState, $lblDevInfo, $devActions))
@@ -2669,9 +2697,9 @@ $devHead.Controls.AddRange(@($lblDevName, $lblDevState, $lblDevInfo, $devActions
 $script:DevActionsCompact = $false
 function Set-DeviceActionsFit {
   $left = [Math]::Max($lblDevName.Right, $(if ($lblDevState.Visible) { $lblDevState.Right } else { 0 }))
-  $shown = @($btnRemoteDev, $btnBrandDev, $btnTrackDev, $btnVpnDev, $btnDot1xDev | Where-Object { $_.Visible })
+  $shown = @($btnRemoteDev, $btnPowerDev, $btnBrandDev, $btnTrackDev, $btnVpnDev, $btnDot1xDev | Where-Object { $_.Visible })
   $compact = ($devHead.ClientSize.Width - 16 - $left - 24) -lt (Get-FullWidth $shown)
-  if ($compact -ne $script:DevActionsCompact) { $script:DevActionsCompact = $compact; Set-CompactButtons @($btnRemoteDev, $btnBrandDev, $btnTrackDev, $btnVpnDev, $btnDot1xDev) $compact }
+  if ($compact -ne $script:DevActionsCompact) { $script:DevActionsCompact = $compact; Set-CompactButtons @($btnRemoteDev, $btnPowerDev, $btnBrandDev, $btnTrackDev, $btnVpnDev, $btnDot1xDev) $compact }
   $devActions.Location = New-Object System.Drawing.Point(($devHead.ClientSize.Width - $devActions.Width - 16), 14)
   # the line under the name ends with ... when it does not fit; the whole of it in the tooltip
   $lblDevInfo.AutoSize = $false; $lblDevInfo.AutoEllipsis = $true; $lblDevInfo.Height = 24
@@ -3447,7 +3475,7 @@ function Update-DeviceList {
 function Update-DeviceHeader($d) {
   if (-not $d) {
     $lblDevName.Text = Get-Text 'NoDevice'; $lblDevState.Visible = $false; $lblDevInfo.Text = ''
-    $btnRemoteDev.Enabled = $false; $btnBrandDev.Enabled = $false; $btnTrackDev.Enabled = $false; $btnVpnDev.Visible = $false; $btnDot1xDev.Visible = $false; return
+    $btnRemoteDev.Enabled = $false; $btnPowerDev.Enabled = $false; $btnBrandDev.Enabled = $false; $btnTrackDev.Enabled = $false; $btnVpnDev.Visible = $false; $btnDot1xDev.Visible = $false; return
   }
   $s = $d.S
   $lblDevName.Text = $d.Name
@@ -3463,7 +3491,7 @@ function Update-DeviceHeader($d) {
   if ($script:Rollout) { $t = Get-DeviceTrack $d.Name $script:Rollout
     if ($t.Kind -eq 'pilot') { $parts += Get-Text 'DevPilot' } elseif ($t.Kind -eq 'own') { $parts += Get-Text 'DevOwnVersion' $t.Target } }
   $lblDevInfo.Text = $parts -join $dot
-  $btnRemoteDev.Enabled = $true; $btnBrandDev.Enabled = $true; $btnTrackDev.Enabled = $true; $btnVpnDev.Visible = ($s['CFG_VPN'] -eq 'openvpn')
+  $btnRemoteDev.Enabled = $true; $btnPowerDev.Enabled = $true; $btnBrandDev.Enabled = $true; $btnTrackDev.Enabled = $true; $btnVpnDev.Visible = ($s['CFG_VPN'] -eq 'openvpn')
   $btnDot1xDev.Visible = ($s['CFG_DOT1X'] -in 'peap', 'tls') -or ($s['CFG_WIFI'] -eq 'on' -and $s['CFG_WIFI_SECURITY'] -in 'peap', 'tls')
   Set-DeviceActionsFit
 }
@@ -5146,6 +5174,42 @@ $hcTimer.add_Tick({ if (-not $env:OTR_MANAGER_HEALTH_DEMO) { Start-HealthRefresh
 # brings them to a free local port. Nothing is installed on this PC: the ssh.exe of Windows 10/11 and the browser.
 # Only the key of the vault is offered (IdentitiesOnly): the keys in the profile of this account do not open
 # screens. The device shows a notice while it lasts and stops by itself after 2 hours; closing the window here ends it.
+# kind: wake, reboot, poweroff, report, command
+function Invoke-DeviceAction($d, [string]$kind) {
+  $name = $d.Name; $title = Get-Text 'PwrTitle' $name
+  if ($kind -eq 'wake') {
+    if (-not (Confirm-Action $title (Get-Text 'PwrWakeAsk' $name ([string]$d.S['MAC'])))) { return }
+    if (Send-DeviceWake $d) { $barText.Text = Get-Text 'PwrWakeSent' $name } else { Show-Message $title (Get-Text 'PwrNoMac') }
+    return
+  }
+  $ip = ([string]$d.S['IP']) -replace '/.*$', ''
+  if (-not (Get-Command ssh.exe -ErrorAction SilentlyContinue)) { Show-Message $title (Get-Text 'ErrRemoteNoSshExe'); return }
+  if ($ip -notmatch '^\d{1,3}(\.\d{1,3}){3}$') { Show-Message $title (Get-Text 'ErrRemoteNoIp'); return }
+  if ($d.S['CFG_SSH'] -ne 'on') { Show-Message $title (Get-Text 'ErrRemoteNoSsh'); return }
+  $user = Get-SessionUser $d.S
+  $cmd = switch ($kind) { 'reboot' { 'sudo systemctl reboot' } 'poweroff' { 'sudo systemctl poweroff' } 'report' { 'sudo systemctl start openthinrdp-report.service' } default { '' } }
+  if ($kind -eq 'command') {
+    Add-Type -AssemblyName Microsoft.VisualBasic
+    $cmd = [Microsoft.VisualBasic.Interaction]::InputBox((Get-Text 'PwrCommandAsk' $name), $title, '')
+    if (-not $cmd.Trim()) { return }
+  }
+  $ask = switch ($kind) { 'reboot' { Get-Text 'PwrRebootAsk' $name } 'poweroff' { Get-Text 'PwrOffAsk' $name } 'report' { $null } default { Get-Text 'PwrCommandConfirm' $name $cmd "`r`n`r`n" } }
+  if ($ask -and $user) { $ask += "`r`n`r`n" + (Get-Text 'PwrSessionWarn' $user) }
+  if ($ask -and -not (Confirm-Action $title $ask $(if ($user -or $kind -eq 'command') { 'Button2' } else { 'Button1' }))) { return }
+  if (-not (Request-VaultOpen)) { return }
+  $key = Get-VaultKeyFile
+  if (-not $key) { Show-Message $title (Get-Text 'ErrRemoteNoVaultKey'); Select-Page 4; return }
+  $form.Cursor = 'WaitCursor'
+  try { $r = Invoke-DeviceSsh $ip $cmd $key $name } finally { $form.Cursor = 'Default' }
+  Add-ChangeLog "${name}: $kind ($cmd) -> exit $($r.Code)"
+  # reboot and poweroff end the connection themselves (255): that is the expected answer
+  if ($kind -in 'reboot', 'poweroff' -and $r.Code -in 0, 255) { $barText.Text = Get-Text "Pwr${kind}Done" $name; return }
+  if ($kind -eq 'report' -and $r.Code -eq 0) { $barText.Text = Get-Text 'PwrReportDone' $name; return }
+  $out = if ($r.Text) { $r.Text } else { Get-Text 'PwrNoOutput' }
+  if ($out.Length -gt 6000) { $out = $out.Substring(0, 6000) + "`r`n..." }
+  Show-Message $title ((Get-Text 'PwrResult' $cmd $r.Code "`r`n") + "`r`n`r`n" + ($out -replace "(?<!`r)`n", "`r`n")) $(if ($r.Code -eq 0) { 'Information' } else { 'Warning' })
+}
+
 function Start-RemoteScreen($d) {
   $name = $d.Name; $ip = ([string]$d.S['IP']) -replace '/.*$', ''
   if (-not (Get-Command ssh.exe -ErrorAction SilentlyContinue)) { Show-Message (Get-Text 'RemoteTitle' $name) (Get-Text 'ErrRemoteNoSshExe'); return }
