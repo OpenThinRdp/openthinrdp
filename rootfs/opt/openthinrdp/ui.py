@@ -437,9 +437,12 @@ bs.connect('clicked', sign_in); ep.connect('activate', sign_in); eu.connect('act
 
 # day and month in the language of the kiosk (LANGUAGE), not of the system: a system installed in English with
 # LANGUAGE=it would show "Monday 12 October"
-DAYS = {'it': ('lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato', 'domenica')}
+DAYS = {'it': ('lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato', 'domenica'),
+        'nl': ('maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag')}
 MONTHS = {'it': ('gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre',
-                 'ottobre', 'novembre', 'dicembre')}
+                 'ottobre', 'novembre', 'dicembre'),
+          'nl': ('januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september',
+                 'oktober', 'november', 'december')}
 def today():
     t = time.localtime()
     if A.lang in DAYS:

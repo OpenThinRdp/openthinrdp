@@ -167,7 +167,7 @@ Cosa serve al dispositivo: [Requisiti](#requisiti).
 - **Orari di accensione e spegnimento e Wake-on-LAN**, schermo sempre acceso, monitor accesi in ritardo gestiti.
 - **Pulsante web**: un'applicazione web, navigazione libera o una pagina kiosk a schermo intero, con Chromium
   ([schermi che mostrano solo una pagina web](#schermi-che-mostrano-solo-una-pagina-web)).
-- Interfaccia in italiano e inglese; altre lingue sono un file ciascuna.
+- Interfaccia in italiano, inglese e olandese; altre lingue sono un file ciascuna.
 
 <p align="center">
 <img src="docs/screenshots/connecting.png" alt="Avvio del desktop con i passi reali" width="32%">

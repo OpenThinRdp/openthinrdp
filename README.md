@@ -159,7 +159,7 @@ What the device needs: [Requirements](#requirements).
 - **Power schedule and Wake-on-LAN**, screen always on, monitors switched on late handled.
 - **Web button**: a web app, free browsing, or a full screen kiosk page, with Chromium
   ([screens that only show a web page](#screens-that-only-show-a-web-page)).
-- English and Italian interface; more languages are one file each.
+- English, Italian and Dutch interface; more languages are one file each.
 
 <p align="center">
 <img src="docs/screenshots/connecting.png" alt="Desktop start with the real steps" width="32%">

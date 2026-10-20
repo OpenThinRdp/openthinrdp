@@ -387,7 +387,7 @@
   Label_POWER_ON_DAYS       = 'Giorni di accensione'
   Help_POWER_ON_DAYS        = 'Cifre dei giorni: 1 = lunedì ... 7 = domenica (es. 12345 = da lunedì a venerdì).'
   Label_LANGUAGE            = 'Lingua'
-  Help_LANGUAGE             = "Due lettere: en o it, o un altro file di lingua aggiunto all'immagine."
+  Help_LANGUAGE             = "Due lettere: en, it o nl, o un altro file di lingua aggiunto all'immagine."
   Label_KEYBOARD            = 'Tastiera'
   Help_KEYBOARD             = 'Layout della tastiera (X11/console), es. it, us, de, fr.'
   Label_TITLE               = 'Titolo'

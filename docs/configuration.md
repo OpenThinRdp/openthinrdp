@@ -360,7 +360,7 @@ own to test on. Reports are welcome in the [Discussions](https://github.com/Open
 
 | Key | Default | Meaning |
 |---|---|---|
-| `LANGUAGE` | `en` | `en`, `it` (a file in `/opt/openthinrdp/lang/`) |
+| `LANGUAGE` | `en` | `en`, `it`, `nl` (a file in `/opt/openthinrdp/lang/`) |
 | `KEYBOARD` | `us` | X11 layout |
 | `TITLE` | `Remote desktop` | window titles |
 | `LOGO` | `/opt/openthinrdp/branding/logo.png` | logo in the dialogs. A logo in the management folder wins, see [management.md](management.md#logo-and-background-picture) |
