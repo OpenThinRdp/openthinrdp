@@ -59,7 +59,10 @@ screen**, **Logo and background...**, **Software version...**. Under it:
 ## Settings for all devices or one
 
 **Settings > Devices** holds the settings for every device (`config\common.conf`); in a device's **Settings** tab, tick *Exception*
-to give that device a value of its own (`config\<hostname>.conf`), which wins over the common one. Every row shows:
+to give that device a value of its own (`config\<hostname>.conf`), which wins over the common one. **Edit as text...**
+opens the same file as plain text, comments included: it is saved only after the same checks as the page, in the form
+the page would write (a Wi-Fi passphrase becomes its key, a PIN its hash), with the previous file in `config\backup\`.
+Passwords show as `********`: leave them to keep them. Every row shows:
 
 - the value **in use on the device** (from its last report);
 - **where it comes from**: the device itself, the common settings, or an exception for this device;

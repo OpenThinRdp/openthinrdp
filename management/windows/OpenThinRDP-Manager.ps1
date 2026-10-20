@@ -1479,6 +1479,64 @@ function Get-EapNotes($r, $before, $final) {
 }
 
 # ---------------------------------------------------------------------------------------------
+# A .conf as text (#82): the file as it is, comments included, checked by the same save plans as the pages and
+# normalized by them on save. Secrets never show: the WPA key and the PIN as their marks (the plans keep the saved
+# ones), the passwords as ******** (put back on save; anything else typed there is the new password).
+# ---------------------------------------------------------------------------------------------
+$script:TextPwRx = '^(\s*)(MGMT_PASSWORD|EAP_PASSWORD)(\s*=\s*)(.*?)\s*$'
+$script:TextMask = '********'
+function ConvertTo-MaskedConf([string[]]$lines) {
+  foreach ($l in $lines) {
+    if ($l -cmatch '^\s*WIFI_PSK\s*=\s*\S') { "WIFI_PSK=$($script:MarkSaved)" }
+    elseif ($l -cmatch '^\s*SETTINGS_PIN_SHA256\s*=\s*\S') { "SETTINGS_PIN_SHA256=$($script:MarkSet)" }
+    elseif ($l -cmatch $script:TextPwRx -and $Matches[4]) { "$($Matches[1])$($Matches[2])$($Matches[3])$($script:TextMask)" }
+    else { $l }
+  }
+}
+# $dev = $null: common.conf. Returns the plan of the page (Errors, Warnings, Notes, Changes) plus the Lines to write.
+function Get-ConfTextPlan($dev, [string]$text) {
+  $f = if ($dev) { Get-HostFile $dev.Name } else { $script:CommonFile }
+  $before = Read-ConfFile $f
+  $lines = [System.Collections.Generic.List[string]]@($text.TrimEnd() -split "`r?`n")
+  $err = @(); $warn = @(); $extra = @()
+  for ($i = 0; $i -lt $lines.Count; $i++) {
+    $l = $lines[$i]
+    if ($l -cmatch $script:TextPwRx -and $Matches[4] -eq $script:TextMask) {
+      $k = $Matches[2]
+      if ($before[$k]) { $lines[$i] = "$($Matches[1])$k$($Matches[3])$($before[$k])" } else { $err += Get-Text 'ErrTextNoPassword' $k }
+    }
+    # neither a setting nor a comment: the device skips the line without a word
+    elseif ($l.Trim() -and $l -notmatch '^\s*[#;]' -and $l -cnotmatch '^\s*[A-Z][A-Z0-9_]*\s*=') { $err += Get-Text 'ErrTextLine' ($i + 1) $l.Trim() }
+  }
+  $now = [ordered]@{}
+  foreach ($l in $lines) { if ($l -cmatch '^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*?)\s*$') { $now[$Matches[1]] = $Matches[2] } }
+  $managed = [ordered]@{}
+  foreach ($k in @(@($before.Keys) + @($now.Keys) | Select-Object -Unique)) {
+    if (Get-Setting $k) { $managed[$k] = if ($now.Contains($k)) { $now[$k] } else { $null } }
+    elseif ($before[$k] -cne $now[$k]) { $extra += $(if ($k -in 'MGMT_PASSWORD', 'EAP_PASSWORD') { Get-Text 'TextPwChanged' $k } else { "${k}: '$($before[$k])' -> '$($now[$k])'" }) }
+  }
+  $ign = @(Get-IgnoredKeys $now -Common:(-not $dev) | Where-Object { $_ -notin 'MGMT_PASSWORD', 'EAP_PASSWORD' })
+  if ($ign.Count) { $warn += Get-Text 'WarnTextIgnored' ($ign -join ', ') }
+  $plan = if ($dev) { Get-DeviceSavePlan $dev $managed } else { Get-CommonSavePlan $managed $script:Devices }
+  # the stored form, as the pages write it (a WPA passphrase becomes its key, a PIN its hash)
+  for ($i = 0; $i -lt $lines.Count; $i++) {
+    if ($lines[$i] -cmatch '^\s*([A-Z][A-Z0-9_]*)\s*=' -and $plan.Values.Contains($Matches[1]) -and $null -ne $plan.Values[$Matches[1]]) { $lines[$i] = "$($Matches[1])=$($plan.Values[$Matches[1]])" }
+  }
+  if ($plan.RenameMac) {
+    for ($i = $lines.Count - 1; $i -ge 0; $i--) { if ($lines[$i] -match $script:RenameRx) { $lines.RemoveAt($i) } }
+    $lines.Add("# rename-mac: $($plan.RenameMac)   (rename pending: identifies the device under its new name)")
+  }
+  [pscustomobject]@{ File = $f; Errors = @($err + $plan.Errors); Warnings = @($warn + @($plan.PSObject.Properties['Warnings'] | ForEach-Object Value))
+    Notes = $plan.Notes; Changes = @($plan.Changes + $extra); Lines = $lines }
+}
+function Save-ConfText($plan) {
+  if (-not (Test-Path -LiteralPath $script:ConfigDir)) { New-Item -ItemType Directory -Path $script:ConfigDir | Out-Null }
+  if (Test-Path -LiteralPath $plan.File) { Copy-Item -LiteralPath $plan.File -Destination (Get-BackupPath $plan.File) }
+  [IO.File]::WriteAllText($plan.File, (($plan.Lines -join "`r`n") + "`r`n"), $script:Utf8)
+  Add-ChangeLog ("{0} (as text): {1}" -f [IO.Path]::GetFileName($plan.File), ($plan.Changes -join '; '))
+}
+
+# ---------------------------------------------------------------------------------------------
 # SSH keys: config\authorized_keys. The device keeps only the lines in this format (comments and
 # anything else are dropped), and an EMPTY file removes every key, while a MISSING file leaves the
 # last keys in place: so this tool never deletes the file.
@@ -2620,7 +2678,8 @@ $btnSaveDev = New-ActionButton 'BtnSave' 'Save' 'primary'
 $btnReloadDev = New-ActionButton 'BtnUndo' 'Undo' 'secondary'
 $btnClearDev = New-ActionButton 'BtnRemoveExceptions' 'Delete' 'danger'
 $lblDirtyDev = New-Label (Get-Text 'Unsaved') $fontSmallBold $script:KindColor.warn; $lblDirtyDev.Margin = New-Object System.Windows.Forms.Padding(6, 8, 0, 0); $lblDirtyDev.Visible = $false
-$barDev = New-ActionBar @($btnSaveDev, $btnReloadDev, $lblDirtyDev) @($btnClearDev)
+$btnTextDev = New-ActionButton 'BtnAsText' 'Document' 'secondary'
+$barDev = New-ActionBar @($btnSaveDev, $btnReloadDev, $btnTextDev, $lblDirtyDev) @($btnClearDev)
 $filterDev = New-FilterBar $gridDev
 $tabDevSettings.Controls.Add($gridDev); $tabDevSettings.Controls.Add($filterDev); $tabDevSettings.Controls.Add($helpDev); $tabDevSettings.Controls.Add($barDev)
 
@@ -2642,7 +2701,8 @@ $btnSaveCom = New-ActionButton 'BtnSave' 'Save' 'primary'
 $btnReloadCom = New-ActionButton 'BtnUndo' 'Undo' 'secondary'
 $btnBrandCom = New-ActionButton 'BtnBranding' 'Picture' 'secondary'
 $lblDirtyCom = New-Label (Get-Text 'Unsaved') $fontSmallBold $script:KindColor.warn; $lblDirtyCom.Margin = New-Object System.Windows.Forms.Padding(6, 8, 0, 0); $lblDirtyCom.Visible = $false
-$barCom = New-ActionBar @($btnSaveCom, $btnReloadCom, $btnBrandCom, $lblDirtyCom)
+$btnTextCom = New-ActionButton 'BtnAsText' 'Document' 'secondary'
+$barCom = New-ActionBar @($btnSaveCom, $btnReloadCom, $btnTextCom, $btnBrandCom, $lblDirtyCom)
 $filterCom = New-FilterBar $gridCom
 $comCard.Controls.Add($gridCom); $comCard.Controls.Add($filterCom); $comCard.Controls.Add($helpCom); $comCard.Controls.Add($barCom)
 $comWrap.Controls.Add($comCard)
@@ -3483,6 +3543,45 @@ function Save-Common {
   $barText.Text = Get-Text 'SavedCommon' $plan.File (Get-Text 'ColSource')
   Update-CommonGrid
   if ($script:Selected) { Update-DeviceGrid }
+}
+
+# the device file ($dev) or common.conf ($null) as text; unsaved changes of the page first (one place edits at a time)
+function Show-ConfTextDialog($dev) {
+  if (($dev -and $lblDirtyDev.Visible) -or (-not $dev -and $lblDirtyCom.Visible)) { Show-Message (Get-Text 'MsgTextDirtyTitle') (Get-Text 'MsgTextDirty') 'Information'; return }
+  $f = if ($dev) { Get-HostFile $dev.Name } else { $script:CommonFile }
+  $orig = if (Test-Path -LiteralPath $f) { @(Read-Lines $f) } elseif ($dev) { $script:HostHeader } else { $script:CommonHeader }
+  $dlg = New-Object System.Windows.Forms.Form; Set-WindowIcon $dlg
+  $dlg.Text = Get-Text 'TextTitle' ([IO.Path]::GetFileName($f)); $dlg.Font = $fontBase; $dlg.StartPosition = 'CenterParent'; $dlg.MinimizeBox = $false
+  $dlg.ClientSize = New-Object System.Drawing.Size(860, 620); $dlg.MinimumSize = New-Object System.Drawing.Size(560, 380)
+  $top = New-Object System.Windows.Forms.Label; $top.Dock = 'Top'; $top.Height = 44; $top.Padding = New-Object System.Windows.Forms.Padding(10, 6, 10, 0)
+  $top.Text = (Get-Text 'TextHint') + "`r`n" + $f; $top.ForeColor = $Theme.Muted
+  $tb = New-Object System.Windows.Forms.TextBox; $tb.Multiline = $true; $tb.ScrollBars = 'Both'; $tb.AcceptsReturn = $true; $tb.AcceptsTab = $false; $tb.WordWrap = $false
+  $tb.Font = $fontMono; $tb.Dock = 'Fill'; $tb.Text = (@(ConvertTo-MaskedConf $orig) -join "`r`n")
+  $bottom = New-Object System.Windows.Forms.Panel; $bottom.Dock = 'Bottom'; $bottom.Height = 96
+  $err = New-Object System.Windows.Forms.TextBox; $err.Multiline = $true; $err.ReadOnly = $true; $err.ScrollBars = 'Vertical'; $err.BorderStyle = 'None'
+  $err.ForeColor = $script:KindColor.error; $err.SetBounds(10, 6, 620, 84); $err.Anchor = 'Top, Left, Right, Bottom'
+  $ok = New-Button 'BtnSave' 110 28; $cancel = New-Button 'BtnCancel' 100 28
+  $cancel.Location = New-Object System.Drawing.Point((860 - 12 - $cancel.Width), 58); $ok.Location = New-Object System.Drawing.Point(($cancel.Left - 8 - $ok.Width), 58)
+  $ok.Anchor = 'Bottom, Right'; $cancel.Anchor = 'Bottom, Right'; $cancel.DialogResult = 'Cancel'; $dlg.CancelButton = $cancel
+  $bottom.Controls.AddRange(@($err, $ok, $cancel))
+  $dlg.Controls.Add($tb); $dlg.Controls.Add($top); $dlg.Controls.Add($bottom)
+  $ok.add_Click({
+    try { $p = Get-ConfTextPlan $dev $tb.Text } catch { $err.Text = $_.Exception.Message; return }
+    if ($p.Errors.Count) { $err.Text = (Get-Text 'MsgNotSaved') + "`r`n- " + ($p.Errors -join "`r`n- "); return }
+    if (-not $p.Changes.Count -and (($p.Lines -join "`n").TrimEnd() -ceq ((@($orig) -join "`n").TrimEnd()))) { $dlg.DialogResult = 'Cancel'; return }
+    $msg = (Get-Text 'ConfirmText' ([IO.Path]::GetFileName($p.File)))
+    if ($p.Changes.Count) { $msg += "`r`n`r`n- " + ($p.Changes -join "`r`n- ") } else { $msg += "`r`n`r`n" + (Get-Text 'TextOnlyComments') }
+    if ($p.Warnings.Count) { $w = @($p.Warnings | Select-Object -First 15); $msg += "`r`n`r`n" + (Get-Text 'MsgWillReject') + "`r`n- " + ($w -join "`r`n- ") }
+    if ($p.Notes.Count) { $msg += "`r`n`r`n" + ($p.Notes -join "`r`n`r`n") }
+    if (-not (Confirm-Action (Get-Text 'TextTitle' ([IO.Path]::GetFileName($p.File))) $msg $(if ($p.Warnings.Count -or $p.Notes.Count) { 'Button2' } else { 'Button1' }))) { return }
+    try { Save-ConfText $p } catch { $err.Text = Get-Text 'MsgSaveFailed' $_.Exception.Message; return }
+    $dlg.DialogResult = 'OK' })
+  try {
+    if ($dlg.ShowDialog($form) -eq 'OK') {
+      $barText.Text = Get-Text 'SavedText' $f
+      Update-CommonGrid; if ($script:Selected) { Update-DeviceGrid }
+    }
+  } finally { $dlg.Dispose() }
 }
 
 function Save-Keys {
@@ -5096,6 +5195,8 @@ $btnSaveDev.add_Click({ Save-Device })
 $btnReloadDev.add_Click({ Update-DeviceGrid })
 $btnClearDev.add_Click({ Clear-Device })
 $btnSaveCom.add_Click({ Save-Common })
+$btnTextDev.add_Click({ if ($script:Selected) { Show-ConfTextDialog $script:Selected } })
+$btnTextCom.add_Click({ Show-ConfTextDialog $null })
 $btnReloadCom.add_Click({ Update-CommonGrid })
 $btnBrandDev.add_Click({ if ($script:Selected) { Show-BrandingDialog $script:Selected } })
 $btnRemoteDev.add_Click({ if ($script:Selected) { Start-RemoteScreen $script:Selected } })
