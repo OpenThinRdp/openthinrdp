@@ -18,6 +18,9 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
   domain*): a new device needs only domain, account and password, and follows the folder when it moves.
 - **Manager: move the management folder** in one step (Settings > Manager > *Move the folder...*): everything is
   copied, every device follows at its next report, the manager goes on in the new folder.
+- **Manager: correct the permissions of the devices' account.** *Check permissions*, when it finds a problem, offers
+  (after asking) to give the account what it needs and no more: read on the folder, modify on `status\` only; write
+  rights of its own elsewhere are removed, rights through groups only reported.
 - **Manager: the configuration as text** ([#82](https://github.com/OpenThinRdp/openthinrdp/issues/82)).
   **Edit as text...** opens `common.conf` or a device's file as plain text, comments included; it is saved after the
   same checks as the page, in the form the page writes, with a backup. Passwords show as `********`.
