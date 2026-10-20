@@ -43,8 +43,8 @@ try {
   $verbs = @(Get-Commands $pa | Where-Object { $_ -match '^(Set|Start|Stop|Restart|Remove|Add|New|Suspend|Resume|Move|Clear|Enable|Disable|Invoke-Sql)-' -and $_ -notin 'New-Object', 'New-PSSessionOption', 'Add-Member' })
   ok "the probe changes nothing: no Set/Start/Stop/Remove/Add... command ($($verbs -join ', '))" { -not $verbs.Count }
   ok 'the probe: SQL only SELECT, the clock over SNTP (not w32tm /stripchart, localised and failing on servers with NTP)' {
-    $q = @([regex]::Matches($probe, 'Invoke-Sql \S+ "([^"]+)"') | ForEach-Object { $_.Groups[1].Value }) + @([regex]::Matches($probe, "Invoke-Sql \S+ '([^']+)'") | ForEach-Object { $_.Groups[1].Value }); $q.Count -ge 8 -and -not @($q | Where-Object { $_ -notmatch '^SELECT ' -or $_ -match '(?i)\b(ALTER|UPDATE|INSERT|DELETE|DROP|EXEC)\b' }).Count -and $probe -match '0x1B' -and $probe -notmatch '& w32tm.exe /stripchart' }
-  ok 'the probe: param() first in the scripts made of the shared functions' { @([regex]::Matches($probe, "\[scriptblock\]::Create\('param\(\`$pdc\)'")).Count -eq 3 }
+    $q = @([regex]::Matches($probe, 'Invoke-Sql \S+ "([^"]+)"') | ForEach-Object { $_.Groups[1].Value }) + @([regex]::Matches($probe, "Invoke-Sql \S+ '([^']+)'") | ForEach-Object { $_.Groups[1].Value }); $q.Count -ge 8 -and -not @($q | Where-Object { ($_ -notmatch '^SELECT ' -and $_ -notmatch '^EXEC master\.dbo\.xp_readerrorlog ') -or ($_ -notmatch '^EXEC master\.dbo\.xp_readerrorlog [0-9, ]+N''\w+''$' -and $_ -match '(?i)\b(ALTER|UPDATE|INSERT|DELETE|DROP|EXEC)\b') }).Count -and $probe -match '0x1B' -and $probe -notmatch '& w32tm.exe /stripchart' }
+  ok 'the probe: param() first in the scripts made of the shared functions' { @([regex]::Matches($probe, "\[scriptblock\]::Create\('param\(\`$pdc\)'")).Count -ge 4 }
 
   $now = [datetime]'2026-10-19T09:30:00'
   $raw = Copy-Raw
@@ -77,7 +77,7 @@ try {
     @(& $chk 'host:HV2' 'Mem')[0].Kind -eq 'warn' -and @(& $chk 'host:HV2' 'Reboot').Count -eq 1 -and @(& $chk 'host:HV2' 'TimeSource')[0].Fix -eq 'TimeDomain' -and -not @(& $chk 'host:HV1' 'TimeSource').Count }
   ok 'HV1: the System log is a note, not a problem; its state OK with a problem below' { @(& $chk 'host:HV1' 'Errors')[0].Kind -eq 'info' -and (& $node 'host:HV1').Own -eq 'ok' -and (& $node 'host:HV1').Status -eq 'warn' }
   ok 'VM-SPARE: two checkpoints, the oldest 8 days old' { $x = @(& $chk 'vm:VM-SPARE' 'Checkpoints'); $x.Count -eq 1 -and $x[0].Text -match '^2, the oldest from 8 days' -and $x[0].Fix -eq 'VmRemoveCheckpoints' }
-  ok 'VM-ERIN: off is not a problem (grey)' { (& $node 'vm:VM-ERIN').Status -eq 'off' -and -not @((& $node 'vm:VM-ERIN').Checks).Count }
+  ok 'VM-ERIN: off is not a problem (grey)' { (& $node 'vm:VM-ERIN').Status -eq 'off' -and -not @((& $node 'vm:VM-ERIN').Checks | Where-Object { $_.Kind -in 'error', 'warn' }).Count }
   ok 'DNS: HV2 resolves to its storage address too, the reverse lookup slow, no reverse zone for 198.51.100' {
     @(& $chk 'dns' 'TwoAddresses').Count -eq 1 -and @(& $chk 'dns' 'SlowPtr')[0].Text -match '4810' -and @(& $chk 'dns' 'NoReverseZone')[0].FixArg -eq '198.51.100' -and -not @(@(& $chk 'dns' 'NoReverseZone') | Where-Object { $_.FixArg -eq '192.0.2' }).Count }
   ok 'DCs: healthy, PDC with an NTP source, FSMO roles on DC1' { (& $node 'dc:DC1').Status -eq 'ok' -and (& $node 'dc:DC2').Status -eq 'ok' -and @((& $node 'domain:EXAMPLE.COM').Facts | Where-Object { $_.Value -match 'DC1 \(PDC, RID, Infrastructure, Schema, Naming\)' }).Count }

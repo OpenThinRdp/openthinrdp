@@ -118,7 +118,8 @@
                                 ],
                         "Error":  null,
                         "Skew":  0.003,
-                        "Boot":  "2026-10-12T03:20:00"
+                        "Boot":  "2026-10-12T03:20:00",
+                        "IsBroker":  true
                     },
                     {
                         "Os":  "Microsoft Windows Server 2025 Datacenter",
@@ -163,7 +164,8 @@
                                 ],
                         "Error":  null,
                         "Skew":  0.003,
-                        "Boot":  "2026-10-12T03:20:00"
+                        "Boot":  "2026-10-12T03:20:00",
+                        "IsBroker":  true
                     },
                     {
                         "Os":  "Microsoft Windows Server 2025 Datacenter",
