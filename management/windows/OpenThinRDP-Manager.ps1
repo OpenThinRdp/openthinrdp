@@ -1529,6 +1529,64 @@ function Get-ConfTextPlan($dev, [string]$text) {
   [pscustomobject]@{ File = $f; Errors = @($err + $plan.Errors); Warnings = @($warn + @($plan.PSObject.Properties['Warnings'] | ForEach-Object Value))
     Notes = $plan.Notes; Changes = @($plan.Changes + $extra); Lines = $lines }
 }
+# ---------------------------------------------------------------------------------------------
+# The folder named in the domain (#82): \\<domain>\NETLOGON\OpenThinRDP\folders.conf, lines <account>=<folder>. A device
+# with a domain account and no folder of its own reads it at every report (report.sh): a new device needs only domain,
+# account and password, and a moved folder is followed. NETLOGON is on every DC and every domain account reads it
+# (no LDAP on the device: signing or a missing LDAPS certificate would refuse it); writing needs a domain admin.
+# ---------------------------------------------------------------------------------------------
+$script:UncRx = '^\\\\[A-Za-z0-9.-]+\\[A-Za-z0-9 ._$\\-]+$'
+function Get-DomainFolderFile {
+  $d = try { [DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain().Name } catch { $null }
+  if ($d) { "\\$d\NETLOGON\OpenThinRDP\folders.conf" }
+}
+# the account of the devices: MGMT_USER of common.conf, without its domain
+function Get-DeviceAccount { $u = [string](Read-ConfFile $script:CommonFile)['MGMT_USER']; (($u -replace '^.*\\', '') -replace '@.*$', '').ToLower() }
+function Get-DomainFolderMap($file) {
+  $h = [ordered]@{}
+  if ($file -and (Test-Path -LiteralPath $file)) { foreach ($l in (Read-Lines $file)) { if ($l -notmatch '^\s*[#;]' -and $l -match '^\s*([^=]+?)\s*=\s*(.*?)\s*$') { $h[$Matches[1].ToLower()] = $Matches[2] } } }
+  $h
+}
+function Set-DomainFolder([string]$account, [string]$folder) {
+  $f = Get-DomainFolderFile; if (-not $f) { throw (Get-Text 'FolderNoDomain') }
+  $dir = Split-Path $f; if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
+  $lines = if (Test-Path -LiteralPath $f) { @(Read-Lines $f | Where-Object { $_ -and $_ -notmatch "^\s*$([regex]::Escape($account))\s*=" }) }
+           else { @('# OpenThinRDP: the management folder of each device account (<account>=<folder>), written by the manager.') }
+  if ($folder) { $lines += "$account=$folder" }
+  [IO.File]::WriteAllText($f, (($lines -join "`r`n") + "`r`n"), $script:Utf8)
+  Add-ChangeLog "domain folder: $account=$folder ($f)"
+}
+# The whole folder copied to $to; every device follows: those with a folder of their own through MGMT_SHARE (in every
+# .conf of both copies, and added to the old common.conf), those on the domain through folders.conf. The old folder
+# stays until every device reports in the new one. Returns what was done, one line each.
+function Move-ManagementFolder([string]$to) {
+  $from = $script:Folder; $to = $to.TrimEnd('\')
+  if ($to -notmatch $script:UncRx) { throw (Get-Text 'FolderMoveBadPath') }
+  if ($to -ieq $from.TrimEnd('\')) { throw (Get-Text 'FolderMoveSame') }
+  if (-not (Test-Path -LiteralPath $to)) { New-Item -ItemType Directory -Path $to | Out-Null }
+  $out = @()
+  $rc = & robocopy.exe $from $to /E /COPY:DAT /R:1 /W:1 /NFL /NDL /NJH /NJS /NP 2>&1; $code = $LASTEXITCODE
+  if ($code -ge 8) { throw "robocopy $code`: $(@($rc) -join ' ')" }
+  $out += Get-Text 'FolderMoveCopied' $from $to
+  foreach ($cd in @((Join-Path $from 'config'), (Join-Path $to 'config'))) {
+    foreach ($c in @(Get-ChildItem -LiteralPath $cd -Filter '*.conf' -File -ErrorAction SilentlyContinue | Where-Object Extension -eq '.conf')) {
+      $ls = @(Read-Lines $c.FullName); $ch = $false
+      for ($i = 0; $i -lt $ls.Count; $i++) { if ($ls[$i] -cmatch '^\s*MGMT_SHARE\s*=' -and $ls[$i] -cne "MGMT_SHARE=$to") { $ls[$i] = "MGMT_SHARE=$to"; $ch = $true } }
+      if ($ch) { [IO.File]::WriteAllText($c.FullName, (($ls -join "`r`n") + "`r`n"), $script:Utf8) }
+    }
+  }
+  if (-not (Read-ConfFile $script:CommonFile).Contains('MGMT_SHARE')) {
+    [IO.File]::AppendAllText($script:CommonFile, "`r`n# moved by the OpenThinRDP manager on $(Get-Date -Format 'yyyy-MM-dd HH:mm')`r`nMGMT_SHARE=$to`r`n", $script:Utf8)
+  }
+  $out += Get-Text 'FolderMoveConf'
+  Add-ChangeLog "management folder moved to $to"
+  $acc = Get-DeviceAccount; $map = Get-DomainFolderMap (Get-DomainFolderFile)
+  if ($acc -and $map.Contains($acc)) { Set-DomainFolder $acc $to; $out += Get-Text 'FolderMoveDomain' $acc }
+  Set-ManagementFolder $to; Save-LastFolder $to
+  Add-ChangeLog "management folder moved here from $from"
+  $out
+}
+
 function Save-ConfText($plan) {
   if (-not (Test-Path -LiteralPath $script:ConfigDir)) { New-Item -ItemType Directory -Path $script:ConfigDir | Out-Null }
   if (Test-Path -LiteralPath $plan.File) { Copy-Item -LiteralPath $plan.File -Destination (Get-BackupPath $plan.File) }
@@ -3145,7 +3203,28 @@ $btnLangSave = New-ActionButton 'BtnSave' 'Save' 'secondary'
 $blkLang = New-VaultBlock 'LangBlock' 'Settings' @($cmbLang, $btnLangSave)
 $btnLocalChoose = New-ActionButton 'BtnLocalChoose' 'Folder' 'secondary'; $btnLocalSync = New-ActionButton 'BtnLocalSync' 'Sync' 'primary'; $btnLocalOpen = New-ActionButton 'BtnLocalOpen' 'Desktop' 'secondary'
 $blkLocal = New-VaultBlock 'LocalBlock' 'Folder' @($btnLocalSync, $btnLocalChoose, $btnLocalOpen)
-$setMgrCard = New-SetCard $tabSetManager; foreach ($b in @($blkLocal, $blkLang, $blkManager)) { $setMgrCard.Controls.Add($b) }
+$btnFolderDom = New-ActionButton 'BtnFolderDomain' 'Shield' 'secondary'; $btnFolderMove = New-ActionButton 'BtnFolderMove' 'Forward' 'secondary'
+$blkFolder = New-VaultBlock 'FolderBlock' 'Folder' @($btnFolderDom, $btnFolderMove)
+$setMgrCard = New-SetCard $tabSetManager; foreach ($b in @($blkFolder, $blkLocal, $blkLang, $blkManager)) { $setMgrCard.Controls.Add($b) }
+$btnFolderDom.add_Click({
+  $acc = Get-DeviceAccount; $f = Get-DomainFolderFile
+  if (-not $acc) { Show-Message (Get-Text 'FolderBlock') (Get-Text 'FolderNoAccount'); return }
+  if (-not $f) { Show-Message (Get-Text 'FolderBlock') (Get-Text 'FolderNoDomain'); return }
+  if ($script:Folder -notmatch $script:UncRx) { Show-Message (Get-Text 'FolderBlock') (Get-Text 'FolderMoveBadPath'); return }
+  if (-not (Confirm-Action (Get-Text 'FolderBlock') (Get-Text 'FolderDomainAsk' $acc $script:Folder $f "`r`n`r`n"))) { return }
+  try { Set-DomainFolder $acc $script:Folder } catch { Show-Message (Get-Text 'FolderBlock') (Get-Text 'FolderDomainFailed' $_.Exception.Message) 'Error'; return }
+  Update-SettingsTabs; $barText.Text = Get-Text 'FolderDomainDone' $acc })
+$btnFolderMove.add_Click({
+  if ($script:LocalMode) { Show-Message (Get-Text 'FolderBlock') (Get-Text 'FolderMoveLocal'); return }
+  Add-Type -AssemblyName Microsoft.VisualBasic
+  $to = [Microsoft.VisualBasic.Interaction]::InputBox((Get-Text 'FolderMoveAsk' $script:Folder), (Get-Text 'BtnFolderMove'), '')
+  if (-not $to) { return }
+  if (-not (Confirm-Action (Get-Text 'BtnFolderMove') (Get-Text 'FolderMoveConfirm' $script:Folder $to.TrimEnd('\')) 'Button2')) { return }
+  $form.Cursor = 'WaitCursor'
+  try { $r = @(Move-ManagementFolder $to) } catch { $form.Cursor = 'Default'; Show-Message (Get-Text 'BtnFolderMove') (Get-Text 'FolderMoveFailed' $_.Exception.Message) 'Error'; return }
+  $form.Cursor = 'Default'
+  Show-Message (Get-Text 'BtnFolderMove') (($r -join "`r`n") + "`r`n`r`n" + (Get-Text 'FolderMoveAfter')) 'Information'
+  Update-SettingsTabs; Update-CommonGrid })
 $btnLangSave.add_Click({
   $m = Read-ManagerSettings; Set-ManagerSetting $m 'Language' ([string]$script:LangCodes[[Math]::Max(0, $cmbLang.SelectedIndex)]); Save-ManagerSettings $m
   Show-Message (Get-Text 'LangBlock') (Get-Text 'LangSaved') 'Information' })
@@ -3193,6 +3272,8 @@ function Update-SettingsTabs {
   $blkSetVdi.Tag.Note.Text = Get-Text 'SetVdiNote' $(if ($vs -and $vs.PSObject.Properties['Brokers'] -and $vs.Brokers) { $vs.Brokers } else { Get-Text 'HcAuto' })
   $cur = $script:LangCodes.IndexOf([string]$(try { (Read-ManagerSettings).Language } catch { '' })); $cmbLang.SelectedIndex = [Math]::Max(0, $cur)
   $blkLang.Tag.Note.Text = Get-Text 'LangNote' $script:Language
+  $acc = Get-DeviceAccount; $dmap = Get-DomainFolderMap (Get-DomainFolderFile)
+  $blkFolder.Tag.Note.Text = (Get-Text 'FolderNote' $script:Folder) + "`r`n" + $(if (-not $acc) { Get-Text 'FolderNoAccount' } elseif ($dmap.Contains($acc)) { Get-Text 'FolderDomainIs' $acc $dmap[$acc] } else { Get-Text 'FolderDomainNone' $acc })
   $lc = Get-LocalCopyPath; $age = Get-LocalCopyAge $lc
   $blkLocal.Tag.Note.Text = (Get-Text 'LocalNote') + "`r`n" + $(if ($script:LocalMode) { Get-Text 'LocalNowLocal' $lc } elseif ($lc) { Get-Text 'LocalIs' $lc $(if ($age) { $age } else { Get-Text 'LocalNever' }) } else { Get-Text 'LocalNotSet' })
   Set-ActionEnabled $btnLocalSync ([bool]$lc -and -not $script:LocalMode); Set-ActionEnabled $btnLocalOpen ([bool]$age -and -not $script:LocalMode)

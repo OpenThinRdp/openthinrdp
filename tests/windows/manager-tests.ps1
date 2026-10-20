@@ -269,7 +269,7 @@ try {
   ok 'SSH keys: no button of their own in the menu, their list on the Vault page' { $src -match '\$vaultWrap\.Controls\.Add\(\$keysCard\)' -and $src -notmatch 'foreach \(\$b in @\([^)]*\$navKeys[^)]*\)\) \{ \$nav\.Controls\.Add' -and $src -match 'if \(\$i -eq 2\) \{ \$i = 4 \}' }
 
   # ---- the Settings page, the Distribution, the local copy
-  ok 'Settings: four tabs (devices, Health Center, manager, custom checks), the manager block there, not on the Updates page' { $src -match '\$setTabs\.TabPages\.Add' -and $src -match 'foreach \(\$b in @\(\$blkLocal, \$blkLang, \$blkManager\)\) \{ \$setMgrCard\.Controls\.Add\(\$b\) \}' -and $src -notmatch '\$updCard\.Controls\.Add\(\$blkManager\)' }
+  ok 'Settings: four tabs (devices, Health Center, manager, custom checks), the manager block there, not on the Updates page' { $src -match '\$setTabs\.TabPages\.Add' -and $src -match 'foreach \(\$b in @\(\$blkFolder, \$blkLocal, \$blkLang, \$blkManager\)\) \{ \$setMgrCard\.Controls\.Add\(\$b\) \}' -and $src -notmatch '\$updCard\.Controls\.Add\(\$blkManager\)' }
   ok 'Desktops: no menu entry of their own, the Distribution of the Health Center; no settings dialog opened from the pages' { $src -notmatch 'navHealth, \$navDesktops' -and $src -match "New-PageHeader \(Get-Text 'HcDistTitle'\)" -and @([regex]::Matches($src, 'add_Click\(\{ Show-(Health|Vdi)SettingsDialog')).Count -eq 2 -and $src -match '\$btnSetHc\.add_Click\(\{ Show-HealthSettingsDialog' -and $src -match '\$btnSetVdi\.add_Click\(\{ Show-VdiSettingsDialog' }
   ok 'Italian: no typographic apostrophe in the texts (it ends a quoted text in PowerShell)' { [IO.File]::ReadAllText((Join-Path $mw 'lang\it.psd1')) -notmatch "[$([char]0x2018)$([char]0x2019)]" }
   $lcFrom = Join-Path $tmp 'share'; $lcTo = Join-Path $tmp 'local'
@@ -296,6 +296,13 @@ try {
   ok 'as text: stored form, new password, unknown key a warning' { -not $p.Errors.Count -and ($p.Lines -contains 'USB_MODE=disks') -and ($p.Lines -contains 'MGMT_PASSWORD=New2') -and $p.Warnings.Count -eq 1 -and $p.Changes.Count -eq 3 }
   Save-ConfText $p
   ok 'as text: saved with its comments, the old file in config\backup' { (Read-Lines $script:CommonFile)[0] -eq '# all' -and (Read-ConfFile $script:CommonFile)['USB_MODE'] -eq 'disks' -and @(Get-ChildItem (Join-Path $tmp 'config\backup') -Filter 'text-test-*').Count -eq 1 }
+  # ---- the folder named in the domain, and moved (#82)
+  [IO.File]::WriteAllText($script:CommonFile, "MGMT_USER=EXAMPLE\Svc-Thin`r`n")
+  ok 'the account of the devices without its domain, in lower case' { (Get-DeviceAccount) -eq 'svc-thin' }
+  $fm = Join-Path $tmp 'folders.conf'; [IO.File]::WriteAllText($fm, "# c`r`nSvc-Thin = \\fs\otr`r`nother=\\x\y`r`n")
+  ok 'folders.conf read as the devices read it (account in any case, # ignored)' { $mm = Get-DomainFolderMap $fm; $mm['svc-thin'] -eq '\\fs\otr' -and $mm.Count -eq 2 }
+  ok 'a folder can only move to a network path, never onto itself' { $e1 = try { Move-ManagementFolder 'C:\otr'; '' } catch { 'refused' }; $e2 = try { Move-ManagementFolder $script:Folder; '' } catch { 'refused' }; $e1 -and $e2 }
+  ok 'device: no folder in the settings + a domain account = the folder named in NETLOGON, the last one kept' { $rs = Get-Content (Join-Path $root 'rootfs\opt\openthinrdp\report.sh') -Raw; $rs -match 'NETLOGON' -and $rs -match 'share_from_domain; RS=\$\(cat "\$FROMDOM"' }
   $script:CommonFile = $keepCommon; $script:Devices = $keepDevices
 
   # ---- Italian

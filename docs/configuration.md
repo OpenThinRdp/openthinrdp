@@ -325,7 +325,7 @@ own to test on. Reports are welcome in the [Discussions](https://github.com/Open
 
 | Key | Default | Meaning |
 |---|---|---|
-| `MGMT_SHARE` | | management folder, e.g. `\\fileserver\thinclients`, see [management.md](management.md) |
+| `MGMT_SHARE` | | management folder, e.g. `\\fileserver\thinclients`, see [management.md](management.md); empty with a domain account (`MGMT_USER`): the folder the manager names for that account in the domain ([manager.md](manager.md#settings--manager-language-and-local-copy)) |
 | `MGMT_USER` | | account of the management folder: `user`, `DOMAIN\user` or `user@domain`. Empty = `smb.cred` of the image |
 | `MGMT_PASSWORD` | | its password. Only in central settings or the dialog; stored only in `/etc/openthinrdp/smb.cred` |
 | `SECURITY_UPDATES` | `on` | Debian security updates, never FreeRDP, never a reboot |
