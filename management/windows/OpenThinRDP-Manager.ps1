@@ -30,8 +30,12 @@
           $env:OTR_MANAGER_VDI_DEMO = <file.json>: the Desktops page and Brokers and hosts from that answer of the probe
           instead of the servers (tests\windows\make-vdi-demo.ps1); $env:OTR_MANAGER_VDI_DRYRUN = 1: their actions
           say what they would do and change nothing; $env:OTR_MANAGER_VDI_ROW = the user selected in a screenshot
-          tests\windows\manager-tests.ps1: the tests of the manager in Windows PowerShell 5.1 (CI)
+          $env:OTR_MANAGER_HEALTH_DEMO = <file.json>: the Health Center from that answer of its probe;
+          $env:OTR_MANAGER_HEALTH_ITEM = the item selected in a screenshot (host:HV1, vm:VM-ALICE...)
+          $env:OTR_MANAGER_SETTINGS = <manager.json>: settings of their own instead of those of the account
+          tests\windows\manager-tests.ps1, health-tests.ps1: the tests of the manager in Windows PowerShell 5.1 (CI)
   Desktops: OtrVdi.ps1 next to this file (brokers, Hyper-V hosts, desktops, sessions; rds\ = the broker self-repair)
+  Health Center: OtrHealth.ps1 next to this file (hosts, cluster, storage, VMs, DCs, DNS, SQL AlwaysOn, devices, backups)
 #>
 param(
   [string]$Folder,

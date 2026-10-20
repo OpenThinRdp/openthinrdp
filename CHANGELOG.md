@@ -5,6 +5,29 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
 
 ## Unreleased
 
+- **Manager: Health Center, the health of the whole Hyper-V and RDS infrastructure**
+  ([#78](https://github.com/OpenThinRdp/openthinrdp/issues/78)). A page under Desktops; details in
+  [docs/manager.md](docs/manager.md#health-center-the-whole-infrastructure).
+  - A tree of the infrastructure (cluster, hosts, VMs; domain, DCs, DNS; SQL AlwaysOn and its replicas; brokers;
+    devices such as a NAS or the witness; backups), each item with its state; the selected one with its facts, its
+    checks (what is wrong and what it means, in one sentence each) and its actions. On top *everything OK* or the
+    problems. Read in the background every 3 minutes.
+  - Checks of hosts (services, stuck services, memory, disks, clock against the PDC emulator, pending restart, errors),
+    of the failover cluster (nodes, witness, failed roles and resources, CSVs, storage pool and disks, repair jobs, live
+    migration networks, vTPM VMs it would save, guardian keys on every node, room for the VMs of a failed node), of the
+    VMs (heartbeat, saved, paused, not watched by the cluster, old checkpoints, stop action, disks inside), of AD and
+    DNS (DC services and start mode, SYSVOL, replication, FSMO owners, DNS servers, names with more than one address,
+    slow reverse lookups, reverse zones), of an optional SQL AlwaysOn group (replicas, databases, services, logins and
+    jobs alike on every replica, backups), of devices (ping, ports, a share) and of an optional backup log. The
+    findings of the Desktops page on brokers and hosts show up there too, read once.
+  - *Diagnosis only* or *Diagnosis and repair*, for the page and for each item: in repair mode only safe repairs run by
+    themselves (start a service a role needs, unblock a stuck service with time limits, resynchronise a clock, the
+    witness online, `OfflineAction` 2, Wake-on-LAN...), each in `config\changes.log`; the others always ask. Never a
+    saved VM, never two DCs, SQL replicas or brokers at once, no SQL failover; a node is drained only with the others
+    up, the witness online, no storage repair and room for its VMs.
+  - Settings of the account (hosts, cluster yes/no, devices to watch, DNS servers, shared broker name, SQL listener,
+    backup log); hosts, cluster nodes, VMs, DCs and brokers are found by themselves.
+  - Tests in Windows PowerShell 5.1 in CI from recorded data (`tests/windows/health-tests.ps1`).
 - **Manager: the Windows side of the desktops** ([#74](https://github.com/OpenThinRdp/openthinrdp/issues/74)).
   For Remote Desktop Services with Hyper-V; details in [docs/manager.md](docs/manager.md#desktops-brokers-and-hyper-v-hosts).
   - A **Desktops** page: each user with the device, the personal desktop, its Hyper-V host, the state of the VM, the

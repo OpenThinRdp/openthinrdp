@@ -189,6 +189,10 @@ on the shared folder the devices report to. No server, no agent, no database: wh
   user with the device, the desktop, its host, the session and the last sign-in; brokers and hosts checked (a broker
   that fails every request, a missing permission, a stuck RDVH agent), each problem with its fix; actions on VMs and
   sessions, always confirmed and logged.
+- **Health Center: the health of the whole Hyper-V and RDS infrastructure from the manager**: hosts, failover cluster,
+  storage, VMs, domain controllers, DNS, SQL AlwaysOn, the NAS and the witness, the backups, in one tree with a state
+  for each item and a plain sentence for each problem; *diagnosis only* or *diagnosis and repair*, where only safe
+  repairs run by themselves.
 - **The history of the fleet**, problems grouped from every event log; a **vault** for the SSH key and the signing key; your
   fleet on **its own signing key**; logo and background; and the manager **updates itself** from the signed releases.
 

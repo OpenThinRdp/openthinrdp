@@ -16,6 +16,7 @@ folder too, with a backup and a line in the change log.
 - [Remote screen](#remote-screen)
 - [History: problems across the fleet](#history-problems-across-the-fleet)
 - [Desktops, brokers and Hyper-V hosts](#desktops-brokers-and-hyper-v-hosts)
+- [Health Center: the whole infrastructure](#health-center-the-whole-infrastructure)
 - [Vault, keys and the site key](#vault-keys-and-the-site-key)
 - [Logo, background, SSH keys, permissions](#logo-background-ssh-keys-permissions)
 - [The manager updates itself](#the-manager-updates-itself)
@@ -234,6 +235,95 @@ again. `management/windows/rds/Broker-SelfRepair.ps1` does that by itself, as a 
 of that fault, at most once every 15 minutes. **Install** in Brokers and hosts (Desktops page) installs or updates it; by hand:
 `Install-BrokerSelfRepair.ps1 -Broker rdcb1.example.com, rdcb2.example.com` (`-Remove` takes it away). A broker that
 already has a self-repair task of its own is left as it is.
+
+## Health Center: the whole infrastructure
+
+The Desktops page answers "who cannot sign in, and which broker or host stops them". The **Health Center** looks one
+step further, at what all of it stands on: the Hyper-V hosts and their failover cluster, the storage, the VMs, the
+domain controllers, DNS, an SQL AlwaysOn group, the NAS or the witness, the backups. One page instead of Failover
+Cluster Manager, Hyper-V Manager, Server Manager, SQL Server Management Studio and the event logs.
+
+<p align="center">
+<img src="screenshots/manager-health.png" alt="Health Center: on the left the tree of the infrastructure with a dot for each item, on the right the selected host with its facts, its checks and their Fix buttons" width="100%">
+</p>
+
+- **On the left a tree**: cluster, its hosts and their VMs (or *Hyper-V hosts* without a cluster); the domain with its
+  DCs and DNS; the SQL listener with its replicas; *Remote Desktop* with the brokers; the devices; the backups. Each
+  item has a dot and a word (*Saved with a vTPM*, *Free memory*, *to see: 3*), never the colour alone.
+- **On the right the selected item**: what is wrong in one sentence, its facts (up since, Windows, memory, disks,
+  clock, addresses, VMs...), its checks (each: what is wrong, with its numbers, and what it means in plain words) with a
+  **Fix** button where a fix exists, and its actions (*Drain the node*, *Resume the node*, *Start VM*, *Restart VM*,
+  *Shut down VM*, *Resynchronise the clock*, *Replicate now*, *Wake up*...). A button that cannot be used now is grey and
+  its tooltip says why.
+- **On top** the headline (*Everything OK: 2 hosts, 16 VMs, 2 domain controllers*, or the problems), when it was read,
+  and the mode. Read in the background every 3 minutes from the start: the menu shows the count of problems on any page.
+- **With the Desktops page**: the findings of the brokers and hosts there show up on the same items here (read once,
+  fixed the same way); *Open in Desktops* on a personal desktop or a broker, *Show in Health Center* with a right click
+  on a host, a broker or a user there.
+
+<p align="center">
+<img src="screenshots/manager-health-cluster.png" alt="Health Center, the cluster selected: nodes, witness, shared volume, storage pool, live migration, the VMs with a vTPM it would save and the room left if a node fails" width="100%">
+</p>
+
+### What it checks
+
+| Item | Checks |
+|---|---|
+| **Every server** (host, DC, broker, SQL replica) | free memory and disk, services stuck in *StopPending*/*StartPending*, automatic services stopped with an error, a restart pending (updates), critical events and errors of the last day, the clock against the PDC emulator (SNTP) and where it takes its time from, the secure channel with the domain, active adapters with a 169.254 address |
+| **Hyper-V host** | `vmms`, the cluster service, the RDVH agent (when the Desktops page does not watch it), its state in the cluster (up, paused, down), the guardian keys a VM with a vTPM needs on every node |
+| **Cluster** | nodes up, the witness online (and its share answering), roles and resources failed, CSVs online and their free space, the storage pool, virtual and physical disks (disks in maintenance while a node is paused are said so), storage repair jobs, cluster networks and the ones live migration may use, *DrainOnShutdown*, VMs with a vTPM it would **save** (`OfflineAction` 1), room on the other nodes for the VMs of each node |
+| **VM** | state, heartbeat (not responding), saved (a problem with a vTPM), paused, a running VM whose cluster role is offline (not watched), not a role of the cluster, checkpoints older than 3 days, the stop action of a VM outside a cluster, the disks inside when it answers WinRM by its name |
+| **Domain and DCs** | the domain ports from this PC (LDAP, Kerberos, DNS, SMB, global catalog, ADWS), the DC services and their start mode (a *disabled* one is said so), SYSVOL and NETLOGON, inbound replication, the owners of the FSMO roles answering, 127.0.0.1 first in the DNS servers of a DC, the DCs alike (services, DNS zones) |
+| **DNS** | every DNS server answers and how fast, every server name resolves to one address of its own and back (a storage or APIPA address registered under the name is the classic way of losing seconds at every connection), reverse lookups that are slow, reverse zones for the networks of the servers |
+| **SQL AlwaysOn** (when configured) | the listener and the primary, every replica connected and healthy, every database synchronized (or synchronizing on an asynchronous replica) and not suspended, the SQL services of every replica, the same active logins and SQL Agent jobs on every replica (AlwaysOn copies databases, not logins), failed jobs of the last 3 days, Windows-only authentication on one replica, the last full backup of every database |
+| **Devices** | ping, the TCP ports given, an SMB share; the host of a file share witness is watched by itself |
+| **Backups** (when configured) | the newest file of a log folder, or the newest one with the text of a success, not older than the hours given |
+
+### Diagnosis only, or diagnosis and repair
+
+The **Mode** on top is for the page; **This item** on the right changes one item and what is under it (a cluster and
+its hosts, the domain and its DCs). In *Diagnosis only* nothing is changed without a click and a confirmation. In
+*Diagnosis and repair* the **safe** repairs of the items in that mode run by themselves after each reading, one after
+the other, and each goes into `config\changes.log` (`health: automatic repair: ...: done`); the headline says what was
+repaired last. A repair that was tried waits 30 minutes before it is tried again.
+
+| Safe: runs by itself in repair mode | Always asks |
+|---|---|
+| Start a service a role needs (`vmms`, the RDVH agent, the cluster service, the DC services, the SQL services of a replica), unless it is **disabled** | Start a disabled service (someone may have disabled it on purpose), or another automatic service that stopped |
+| Unblock `vmms`, the RDVH agent or the time service stuck in *StopPending*: stopped with a time limit, its process ended, started again (never `Restart-Service`, which waits for ever) | Unblock any other service; a service of a DC only while another DC is healthy |
+| Resynchronise a clock; restart Netlogon when the secure channel is broken | Take the time from the domain again (`w32tm /config /syncfromflags:domhier`) |
+| Bring the witness online | Start a failed cluster role; *DrainOnShutdown* = 1 |
+| `OfflineAction` 2 for VMs with a vTPM (nothing running is touched) | Drain a node, resume it |
+| Wake-on-LAN of a device that does not answer | Start, restart, shut down or resume a VM; bring its cluster role online; remove its old checkpoints; its stop action |
+| The safe fixes of the Desktops page: restart the services of a broker (only while another broker is healthy), repair the permissions of the brokers on a host, unblock the RDVH agent | Replicate AD now; create a reverse DNS zone; resume the data movement of a database |
+
+Never, by hand or by itself: a VM saved or switched off (a VM is shut down, Windows closes inside it), two DCs, two SQL
+replicas or two brokers acted on within 10 minutes, SQL Server ended or failed over, a server restarted. **Drain the
+node** refuses while another node is not up, the witness is not online (or a two-node cluster has none), a storage
+repair runs, or the other nodes have not the memory for its VMs: then it moves them live and pauses the node, which can
+be restarted; **Resume** puts it back with its VMs. One action at a time on both pages; what stops something is not
+offered on data older than 5 minutes; `OTR_MANAGER_VDI_DRYRUN=1` makes every action say what it would run.
+
+### Settings and what it needs
+
+**Settings...** on the page, kept for your account on your PC (`%APPDATA%\OpenThinRDP\manager.json`), not in the
+folder. Most of it is found by itself: the hosts of the Desktops page and the nodes of their clusters, the VMs, the
+domain controllers and the FSMO owners from AD, the brokers from the devices and the deployment, the witness from the
+cluster. To give:
+
+- **Hyper-V hosts** not found that way, and whether they form a **failover cluster** (*as the hosts say*, *yes*: a host
+  outside a cluster is said so, *no*: single hosts);
+- **devices to watch**, one per line: `name address [ports] [\\server\share] [MAC]`, e.g.
+  `nas 192.0.2.9 445,5001 \\nas\backup 00-11-32-AA-BB-CC` (with a MAC, Wake-on-LAN);
+- more **DNS servers**, the **shared name of the brokers** when the devices do not use it (the Desktops page reads it
+  too), the **SQL AlwaysOn listener** (`sqlha.example.com` or `sqlha.example.com,1433`; empty: no SQL checks), the
+  **backup log** (a file or a folder, the text of a success, the maximum age in hours).
+
+The manager runs as an account that administers the servers, with **WinRM** (5985) to the hosts, DCs, brokers and SQL
+replicas, NTP (UDP 123) from them to the PDC emulator, and a login on every SQL replica (Windows authentication). The
+probe only reads: `Get-*` commands, `repadmin /showrepl`, `w32tm /query`, `SELECT` on SQL; how it reads and why:
+the comments at the top of `management/windows/OtrHealth.ps1`. Without rights on a server the item says so in one
+sentence and the rest goes on.
 
 ## Vault, keys and the site key
 
