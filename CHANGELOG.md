@@ -3,6 +3,33 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.2.3 (2026-10-20)
+
+- **Dutch interface** (`LANGUAGE=nl`), translated by @wvanommen
+  ([#83](https://github.com/OpenThinRdp/openthinrdp/issues/83)); the start screen shows day and month in Dutch too.
+  Every language file is now checked: only `KEY="text"` lines, no unknown key, the same `%s` as English.
+- **First start: a device always gets its own name** ([#80](https://github.com/OpenThinRdp/openthinrdp/issues/80)).
+  One invalid setting (a hand-written `openthinrdp.conf`, an image built with settings of its own) made the rename
+  fail silently and the device stayed `thinclient`; now the name is set anyway and the event log says which setting
+  to fix.
+- **Zero-touch from the domain account** ([#82](https://github.com/OpenThinRdp/openthinrdp/issues/82)). A device with
+  a domain account and no folder of its own finds the management folder in
+  `\\<domain>\NETLOGON\OpenThinRDP\folders.conf`, written by the manager (Settings > Manager > *Name it in the
+  domain*): a new device needs only domain, account and password, and follows the folder when it moves.
+- **Manager: move the management folder** in one step (Settings > Manager > *Move the folder...*): everything is
+  copied, every device follows at its next report, the manager goes on in the new folder.
+- **Manager: correct the permissions of the devices' account.** *Check permissions*, when it finds a problem, offers
+  (after asking) to give the account what it needs and no more: read on the folder, modify on `status\` only; write
+  rights of its own elsewhere are removed, rights through groups only reported.
+- **Manager: the configuration as text** ([#82](https://github.com/OpenThinRdp/openthinrdp/issues/82)).
+  **Edit as text...** opens `common.conf` or a device's file as plain text, comments included; it is saved after the
+  same checks as the page, in the form the page writes, with a backup. Passwords show as `********`.
+- **Health Center: switch checks on and off** in Settings > Health Center; an unticked check is neither performed nor
+  shown. The Server Manager list check is gone.
+- **Health Center: fewer false warnings.** Names are looked up in the DNS itself: the computer running the manager no
+  longer sees its own storage, cluster and APIPA addresses under its name. VMs of one role on one node are a warning
+  only when the cluster has a free node for one of them (three brokers on two nodes always share one).
+
 ## 0.2.2 (2026-10-20)
 
 - **Manager: the access code first.** A copy of the manager with a vault asks its access code before anything else, in a
