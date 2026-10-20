@@ -449,8 +449,8 @@ function Get-VdiUserKey([string]$u) {
 function Get-VdiDeviceUser($s) { if ([string]$s['SESSION'] -match '^active \((.+)\)$') { return $Matches[1] }; [string]$s['DEFAULT_USER'] }
 function Get-VdiShort([string]$n) { if ($n -match '^\d{1,3}(\.\d{1,3}){3}$') { return $n }; ("$n" -split '\.')[0].ToUpper() }
 # "45 min", "3 hours": the words of the window
-function Format-VdiAge([datetime]$from, [datetime]$now) { Format-Minutes ([Math]::Max(0, [int]($now - $from).TotalMinutes)) }
-function Format-VdiClock([datetime]$t, [datetime]$now) { if ($t.Date -eq $now.Date) { $t.ToString('HH:mm') } else { $t.ToString('dd/MM HH:mm') } }
+function Format-VdiAge($from, [datetime]$now) { if (-not $from) { return '-' }; $from = [datetime]$from; Format-Minutes ([Math]::Max(0, [int]($now - $from).TotalMinutes)) }
+function Format-VdiClock($t, [datetime]$now) { if (-not $t) { return '-' }; $t = [datetime]$t; if ($t.Date -eq $now.Date) { $t.ToString('HH:mm') } else { $t.ToString('dd/MM HH:mm') } }
 
 # The sign-ins a device logged (kiosk.sh), oldest first. The broker is the server the device really reached: the
 # "broker X: connecting to Y" line just before (X is the shared name, Y the broker behind it).
@@ -1057,7 +1057,7 @@ $script:VdiJobRunner = {
   }
 }
 function Test-VdiDryRun { $env:OTR_MANAGER_VDI_DRYRUN -eq '1' }
-function Test-VdiStale([datetime]$received, [datetime]$now) { (-not $received) -or ($now - $received).TotalMinutes -gt $script:VdiStaleMinutes }
+function Test-VdiStale($received, [datetime]$now) { if (-not $received) { return $true }; ($now - [datetime]$received).TotalMinutes -gt $script:VdiStaleMinutes }   # no read finished yet = stale (no actions), never an exception
 
 # Kind: BrokerRestart, BrokerPurge, BrokerSelfRepair, BrokerAddToGroup, HostPermissions, HostUnblock, HostOfflineAction
 # (Target = the broker or host name, Arg = the service for HostUnblock); VmStart, VmRestart, VmShutdown, SessionLogoff,

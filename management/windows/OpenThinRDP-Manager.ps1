@@ -4093,7 +4093,7 @@ function Start-VdiRefresh([switch]$Queue) {
   $t.Start()
 }
 function Complete-VdiRefresh($raw) {
-  $now = if ($raw -and $raw.Taken) { ConvertFrom-VdiTime $raw.Taken } else { $null }
+  $now = if ($raw -and $raw.Taken) { ConvertFrom-VdiTime $raw.Taken }; if (-not $now) { $now = Get-Date }   # a partial read (progress) has no Taken yet
   if (-not $now) { $now = Get-Date }
   try { $script:Vdi.Model = ConvertTo-VdiModel $raw $script:Devices $now (Get-VdiSettings); $script:Vdi.Received = Get-Date }
   catch { $script:Vdi.Error = "$($_.Exception.Message) (line $($_.InvocationInfo.ScriptLineNumber))" }
@@ -4512,7 +4512,7 @@ function Complete-HealthRefresh($raw) {
 # the model from the last reading and the last model of the Desktops page
 function Update-HealthModel {
   $raw = $script:Health.Raw
-  $now = if ($raw -and $raw.Taken) { ConvertFrom-VdiTime $raw.Taken } else { $null }
+  $now = if ($raw -and $raw.Taken) { ConvertFrom-VdiTime $raw.Taken }; if (-not $now) { $now = Get-Date }   # a partial read (progress) has no Taken yet
   if (-not $now) { $now = Get-Date }
   try { $script:Health.Model = ConvertTo-HealthModel $raw $script:Vdi.Model $now (Get-HealthSettings) }
   catch { $script:Health.Error = "$($_.Exception.Message) (line $($_.InvocationInfo.ScriptLineNumber))" }
@@ -4757,7 +4757,7 @@ function Show-HealthLaps($n) {
   try { Add-ChangeLog "LAPS: password of the local administrator of $name read$(if (-not $pw) { " (not found: $err)" })" } catch { }
   if (-not $pw) { Show-Message $title (Get-Text 'LapsNone' $name $(if ($err) { $err } else { '-' })) 'Information'; return }
   try { [System.Windows.Forms.Clipboard]::SetText($pw) } catch { }
-  Show-Message $title (Get-Text 'LapsText' $name $pw $(if ($exp) { ([datetime]$exp).ToString('g') } else { '-' })) 'Information'
+  Show-Message $title (Get-Text 'LapsText' $name $pw $(if ($exp) { try { $(if ("$exp" -match '^\d{15,}$') { [datetime]::FromFileTime([int64]"$exp") } else { [datetime]$exp }).ToString('g') } catch { "$exp" } } else { '-' })) 'Information'
 }
 function Show-HealthInDesktops($n) {
   Select-Page 6
