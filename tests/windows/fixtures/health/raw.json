@@ -1,0 +1,1518 @@
+{
+    "Domain":  {
+                   "Rid":  "DC1.example.com",
+                   "Naming":  "DC1.example.com",
+                   "Name":  "example.com",
+                   "Dcs":  [
+                               {
+                                   "Ip":  "192.0.2.5",
+                                   "Name":  "DC1.example.com",
+                                   "Site":  "Default-First-Site-Name"
+                               },
+                               {
+                                   "Ip":  "192.0.2.6",
+                                   "Name":  "DC2.example.com",
+                                   "Site":  "Default-First-Site-Name"
+                               }
+                           ],
+                   "Error":  null,
+                   "Infra":  "DC1.example.com",
+                   "Schema":  "DC1.example.com",
+                   "Pdc":  "DC1.example.com"
+               },
+    "Devices":  [
+                    {
+                        "ShareOk":  1,
+                        "Ping":  true,
+                        "Ports":  [
+                                      {
+                                          "Open":  true,
+                                          "Port":  445
+                                      },
+                                      {
+                                          "Open":  true,
+                                          "Port":  5001
+                                      }
+                                  ],
+                        "Mac":  "",
+                        "Name":  "nas",
+                        "Address":  "nas.example.com",
+                        "Share":  "\\\\nas.example.com\\backup",
+                        "Ms":  1,
+                        "Auto":  false
+                    },
+                    {
+                        "ShareOk":  null,
+                        "Ping":  false,
+                        "Ports":  [
+                                      {
+                                          "Open":  false,
+                                          "Port":  445
+                                      }
+                                  ],
+                        "Mac":  "00-11-32-AA-BB-CC",
+                        "Name":  "nas2",
+                        "Address":  "192.0.2.42",
+                        "Share":  "",
+                        "Ms":  null,
+                        "Auto":  false
+                    },
+                    {
+                        "ShareOk":  null,
+                        "Ping":  true,
+                        "Ports":  [
+                                      {
+                                          "Open":  true,
+                                          "Port":  443
+                                      }
+                                  ],
+                        "Mac":  "",
+                        "Name":  "switch1",
+                        "Address":  "192.0.2.2",
+                        "Share":  "",
+                        "Ms":  1,
+                        "Auto":  false
+                    }
+                ],
+    "Servers":  [
+                    {
+                        "Os":  "Microsoft Windows Server 2025 Datacenter",
+                        "Reachable":  true,
+                        "MemTotalMB":  8192,
+                        "Name":  "RDCB1",
+                        "MemFreeMB":  3100,
+                        "SecureChannel":  true,
+                        "TimeSource":  "DC1.example.com",
+                        "Build":  "26100",
+                        "ErrorCount":  0,
+                        "Fqdn":  "rdcb1.example.com",
+                        "Disks":  [
+                                      {
+                                          "FreeGB":  52,
+                                          "Drive":  "C:",
+                                          "SizeGB":  100
+                                      }
+                                  ],
+                        "Reboot":  [
+
+                                   ],
+                        "SkewError":  null,
+                        "Critical":  0,
+                        "Stuck":  [
+
+                                  ],
+                        "Errors":  [
+
+                                   ],
+                        "Apipa":  [
+
+                                  ],
+                        "Failed":  [
+
+                                   ],
+                        "Ips":  [
+                                    {
+                                        "Skip":  false,
+                                        "Ip":  "192.0.2.11"
+                                    }
+                                ],
+                        "Error":  null,
+                        "Skew":  0.003,
+                        "Boot":  "2026-10-12T03:20:00",
+                        "IsBroker":  true
+                    },
+                    {
+                        "Os":  "Microsoft Windows Server 2025 Datacenter",
+                        "Reachable":  true,
+                        "MemTotalMB":  8192,
+                        "Name":  "RDCB2",
+                        "MemFreeMB":  3100,
+                        "SecureChannel":  true,
+                        "TimeSource":  "DC1.example.com",
+                        "Build":  "26100",
+                        "ErrorCount":  0,
+                        "Fqdn":  "rdcb2.example.com",
+                        "Disks":  [
+                                      {
+                                          "FreeGB":  52,
+                                          "Drive":  "C:",
+                                          "SizeGB":  100
+                                      }
+                                  ],
+                        "Reboot":  [
+
+                                   ],
+                        "SkewError":  null,
+                        "Critical":  0,
+                        "Stuck":  [
+
+                                  ],
+                        "Errors":  [
+
+                                   ],
+                        "Apipa":  [
+
+                                  ],
+                        "Failed":  [
+
+                                   ],
+                        "Ips":  [
+                                    {
+                                        "Skip":  false,
+                                        "Ip":  "192.0.2.12"
+                                    }
+                                ],
+                        "Error":  null,
+                        "Skew":  0.003,
+                        "Boot":  "2026-10-12T03:20:00",
+                        "IsBroker":  true
+                    },
+                    {
+                        "Os":  "Microsoft Windows Server 2025 Datacenter",
+                        "Reachable":  true,
+                        "MemTotalMB":  24576,
+                        "Name":  "SQL1",
+                        "MemFreeMB":  4200,
+                        "SecureChannel":  true,
+                        "TimeSource":  "DC1.example.com",
+                        "Build":  "26100",
+                        "ErrorCount":  0,
+                        "Fqdn":  "sql1.example.com",
+                        "Disks":  [
+                                      {
+                                          "FreeGB":  52,
+                                          "Drive":  "C:",
+                                          "SizeGB":  100
+                                      }
+                                  ],
+                        "Reboot":  [
+
+                                   ],
+                        "SkewError":  null,
+                        "Critical":  0,
+                        "Stuck":  [
+
+                                  ],
+                        "Errors":  [
+
+                                   ],
+                        "Apipa":  [
+
+                                  ],
+                        "Failed":  [
+
+                                   ],
+                        "Ips":  [
+                                    {
+                                        "Skip":  false,
+                                        "Ip":  "192.0.2.21"
+                                    }
+                                ],
+                        "Error":  null,
+                        "Skew":  0.003,
+                        "Boot":  "2026-10-12T03:20:00"
+                    },
+                    {
+                        "Os":  "Microsoft Windows Server 2025 Datacenter",
+                        "Reachable":  true,
+                        "MemTotalMB":  24576,
+                        "Name":  "SQL2",
+                        "MemFreeMB":  5600,
+                        "SecureChannel":  true,
+                        "TimeSource":  "DC1.example.com",
+                        "Build":  "26100",
+                        "ErrorCount":  0,
+                        "Fqdn":  "sql2.example.com",
+                        "Disks":  [
+                                      {
+                                          "FreeGB":  52,
+                                          "Drive":  "C:",
+                                          "SizeGB":  100
+                                      }
+                                  ],
+                        "Reboot":  [
+
+                                   ],
+                        "SkewError":  null,
+                        "Critical":  0,
+                        "Stuck":  [
+
+                                  ],
+                        "Errors":  [
+
+                                   ],
+                        "Apipa":  [
+
+                                  ],
+                        "Failed":  [
+
+                                   ],
+                        "Ips":  [
+                                    {
+                                        "Skip":  false,
+                                        "Ip":  "192.0.2.22"
+                                    }
+                                ],
+                        "Error":  null,
+                        "Skew":  0.003,
+                        "Boot":  "2026-10-12T03:20:00"
+                    }
+                ],
+    "Clusters":  [
+                     {
+                         "BadDisks":  [
+
+                                      ],
+                         "Name":  "VDICL",
+                         "DiskCount":  8,
+                         "Witness":  {
+                                         "Path":  "\\\\nas.example.com\\VDICL-Witness",
+                                         "Name":  "File Share Witness",
+                                         "Type":  "File Share Witness",
+                                         "State":  "Online"
+                                     },
+                         "MigrationExcluded":  [
+                                                   "n2"
+                                               ],
+                         "VirtualDisks":  [
+                                              {
+                                                  "Name":  "Data",
+                                                  "Oper":  "OK",
+                                                  "Health":  "Healthy"
+                                              },
+                                              {
+                                                  "Name":  "ClusterPerformanceHistory",
+                                                  "Oper":  "OK",
+                                                  "Health":  "Healthy"
+                                              }
+                                          ],
+                         "DrainOnShutdown":  1,
+                         "Node":  "HV1",
+                         "Failed":  [
+
+                                    ],
+                         "Jobs":  [
+
+                                  ],
+                         "Reachable":  true,
+                         "Pools":  [
+                                       {
+                                           "FreeGB":  3200,
+                                           "Name":  "S2D on VDICL",
+                                           "Oper":  "OK",
+                                           "Health":  "Healthy",
+                                           "SizeGB":  23800
+                                       }
+                                   ],
+                         "Networks":  [
+                                          {
+                                              "State":  "Up",
+                                              "Name":  "Storage",
+                                              "Id":  "n1",
+                                              "Role":  1
+                                          },
+                                          {
+                                              "State":  "Up",
+                                              "Name":  "Management",
+                                              "Id":  "n2",
+                                              "Role":  3
+                                          }
+                                      ],
+                         "Nodes":  [
+                                       {
+                                           "State":  "Up",
+                                           "Name":  "HV1"
+                                       },
+                                       {
+                                           "State":  "Up",
+                                           "Name":  "HV2"
+                                       }
+                                   ],
+                         "Groups":  [
+                                        {
+                                            "Name":  "Cluster Group",
+                                            "Owner":  "HV1",
+                                            "Type":  "Cluster",
+                                            "State":  "Online"
+                                        },
+                                        {
+                                            "Name":  "Available Storage",
+                                            "Owner":  "HV1",
+                                            "Type":  "AvailableStorage",
+                                            "State":  "Offline"
+                                        }
+                                    ],
+                         "QuorumType":  "NodeAndFileShareMajority",
+                         "Csvs":  [
+                                      {
+                                          "Name":  "Cluster Virtual Disk (Data)",
+                                          "Owner":  "HV1",
+                                          "SizeGB":  6144,
+                                          "Path":  "C:\\ClusterStorage\\Data",
+                                          "FreeGB":  2140,
+                                          "State":  "Online"
+                                      }
+                                  ]
+                     }
+                 ],
+    "Notes":  [
+
+              ],
+    "Sql":  {
+                "Error":  null,
+                "Nodes":  [
+                              {
+                                  "IntegratedOnly":  0,
+                                  "Logins":  [
+                                                 {
+                                                     "Name":  "EXAMPLE\\RDS-Brokers",
+                                                     "Type":  "G",
+                                                     "Disabled":  0
+                                                 },
+                                                 {
+                                                     "Name":  "EXAMPLE\\SQL-Admins",
+                                                     "Type":  "G",
+                                                     "Disabled":  0
+                                                 },
+                                                 {
+                                                     "Name":  "app_reader",
+                                                     "Type":  "S",
+                                                     "Disabled":  0
+                                                 },
+                                                 {
+                                                     "Name":  "sa",
+                                                     "Type":  "S",
+                                                     "Disabled":  1
+                                                 }
+                                             ],
+                                  "Server":  "SQL1",
+                                  "Reachable":  true,
+                                  "Jobs":  [
+                                               "Backup - Full",
+                                               "Backup - Logs",
+                                               "Maintenance - Indexes"
+                                           ],
+                                  "Error":  null,
+                                  "Services":  [
+                                                   {
+                                                       "Name":  "MSSQLSERVER",
+                                                       "StartMode":  "Auto",
+                                                       "State":  "Running"
+                                                   },
+                                                   {
+                                                       "Name":  "SQLSERVERAGENT",
+                                                       "StartMode":  "Auto",
+                                                       "State":  "Running"
+                                                   },
+                                                   {
+                                                       "Name":  "ClusSvc",
+                                                       "StartMode":  "Auto",
+                                                       "State":  "Running"
+                                                   }
+                                               ],
+                                  "FailedJobs":  [
+
+                                                 ],
+                                  "Instance":  "",
+                                  "Replica":  "SQL1",
+                                  "LastFull":  [
+                                                   {
+                                                       "Db":  "RDCB",
+                                                       "Last":  "2026-10-19T01:10:00"
+                                                   },
+                                                   {
+                                                       "Db":  "AppDB",
+                                                       "Last":  "2026-10-19T01:25:00"
+                                                   }
+                                               ]
+                              },
+                              {
+                                  "IntegratedOnly":  0,
+                                  "Logins":  [
+                                                 {
+                                                     "Name":  "EXAMPLE\\RDS-Brokers",
+                                                     "Type":  "G",
+                                                     "Disabled":  0
+                                                 },
+                                                 {
+                                                     "Name":  "EXAMPLE\\SQL-Admins",
+                                                     "Type":  "G",
+                                                     "Disabled":  0
+                                                 },
+                                                 {
+                                                     "Name":  "app_reader",
+                                                     "Type":  "S",
+                                                     "Disabled":  0
+                                                 },
+                                                 {
+                                                     "Name":  "sa",
+                                                     "Type":  "S",
+                                                     "Disabled":  1
+                                                 }
+                                             ],
+                                  "Server":  "SQL2",
+                                  "Reachable":  true,
+                                  "Jobs":  [
+                                               "Backup - Full",
+                                               "Maintenance - Indexes"
+                                           ],
+                                  "Error":  null,
+                                  "Services":  [
+                                                   {
+                                                       "Name":  "MSSQLSERVER",
+                                                       "StartMode":  "Auto",
+                                                       "State":  "Running"
+                                                   },
+                                                   {
+                                                       "Name":  "SQLSERVERAGENT",
+                                                       "StartMode":  "Auto",
+                                                       "State":  "Running"
+                                                   },
+                                                   {
+                                                       "Name":  "ClusSvc",
+                                                       "StartMode":  "Auto",
+                                                       "State":  "Running"
+                                                   }
+                                               ],
+                                  "FailedJobs":  [
+
+                                                 ],
+                                  "Instance":  "",
+                                  "Replica":  "SQL2",
+                                  "LastFull":  [
+
+                                               ]
+                              }
+                          ],
+                "Databases":  [
+                                  {
+                                      "Ag":  "AG1",
+                                      "Replica":  "SQL1",
+                                      "Db":  "RDCB",
+                                      "Suspended":  0,
+                                      "Sync":  "SYNCHRONIZED",
+                                      "Reason":  null,
+                                      "Mode":  "SYNCHRONOUS_COMMIT"
+                                  },
+                                  {
+                                      "Ag":  "AG1",
+                                      "Replica":  "SQL1",
+                                      "Db":  "AppDB",
+                                      "Suspended":  0,
+                                      "Sync":  "SYNCHRONIZED",
+                                      "Reason":  null,
+                                      "Mode":  "SYNCHRONOUS_COMMIT"
+                                  },
+                                  {
+                                      "Ag":  "AG1",
+                                      "Replica":  "SQL2",
+                                      "Db":  "RDCB",
+                                      "Suspended":  0,
+                                      "Sync":  "SYNCHRONIZED",
+                                      "Reason":  null,
+                                      "Mode":  "SYNCHRONOUS_COMMIT"
+                                  },
+                                  {
+                                      "Ag":  "AG1",
+                                      "Replica":  "SQL2",
+                                      "Db":  "AppDB",
+                                      "Suspended":  0,
+                                      "Sync":  "SYNCHRONIZED",
+                                      "Reason":  null,
+                                      "Mode":  "SYNCHRONOUS_COMMIT"
+                                  }
+                              ],
+                "Listener":  "sqlha.example.com",
+                "Replicas":  [
+                                 {
+                                     "Ag":  "AG1",
+                                     "Replica":  "SQL1",
+                                     "Health":  "HEALTHY",
+                                     "Connected":  "CONNECTED",
+                                     "Role":  "PRIMARY",
+                                     "Mode":  "SYNCHRONOUS_COMMIT"
+                                 },
+                                 {
+                                     "Ag":  "AG1",
+                                     "Replica":  "SQL2",
+                                     "Health":  "HEALTHY",
+                                     "Connected":  "CONNECTED",
+                                     "Role":  "SECONDARY",
+                                     "Mode":  "SYNCHRONOUS_COMMIT"
+                                 }
+                             ],
+                "Reachable":  true,
+                "Primary":  "SQL1"
+            },
+    "Backup":  {
+                   "Text":  "completed successfully",
+                   "Error":  null,
+                   "Path":  "\\\\nas.example.com\\backup\\logs",
+                   "Matched":  true,
+                   "Time":  "2026-10-19T02:41:00",
+                   "File":  "\\\\nas.example.com\\backup\\logs\\backup-2026-10-19.log"
+               },
+    "Dcs":  [
+                {
+                    "Fqdn":  "dc1.example.com",
+                    "Shares":  [
+                                   "NETLOGON",
+                                   "SYSVOL"
+                               ],
+                    "Failed":  [
+
+                               ],
+                    "Reachable":  true,
+                    "Name":  "DC1",
+                    "Reboot":  [
+
+                               ],
+                    "DnsOrder":  [
+                                     "192.0.2.6",
+                                     "127.0.0.1"
+                                 ],
+                    "Critical":  0,
+                    "Error":  null,
+                    "Zones":  [
+                                  {
+                                      "Reverse":  false,
+                                      "Type":  "Primary",
+                                      "Name":  "_msdcs.example.com",
+                                      "Ad":  true
+                                  },
+                                  {
+                                      "Reverse":  false,
+                                      "Type":  "Primary",
+                                      "Name":  "example.com",
+                                      "Ad":  true
+                                  },
+                                  {
+                                      "Reverse":  true,
+                                      "Type":  "Primary",
+                                      "Name":  "2.0.192.in-addr.arpa",
+                                      "Ad":  true
+                                  }
+                              ],
+                    "Os":  "Microsoft Windows Server 2025 Datacenter",
+                    "Stuck":  [
+
+                              ],
+                    "TimeSource":  "pool.ntp.org,0x8",
+                    "Ports":  {
+                                  "88":  true,
+                                  "9389":  true,
+                                  "3268":  true,
+                                  "389":  true,
+                                  "445":  true,
+                                  "53":  true
+                              },
+                    "SkewError":  null,
+                    "Skew":  null,
+                    "Services":  [
+                                     {
+                                         "Name":  "NTDS",
+                                         "StartMode":  "Auto",
+                                         "State":  "Running"
+                                     },
+                                     {
+                                         "Name":  "DNS",
+                                         "StartMode":  "Auto",
+                                         "State":  "Running"
+                                     },
+                                     {
+                                         "Name":  "kdc",
+                                         "StartMode":  "Auto",
+                                         "State":  "Running"
+                                     },
+                                     {
+                                         "Name":  "Netlogon",
+                                         "StartMode":  "Auto",
+                                         "State":  "Running"
+                                     },
+                                     {
+                                         "Name":  "ADWS",
+                                         "StartMode":  "Auto",
+                                         "State":  "Running"
+                                     },
+                                     {
+                                         "Name":  "W32Time",
+                                         "StartMode":  "Auto",
+                                         "State":  "Running"
+                                     },
+                                     {
+                                         "Name":  "DFSR",
+                                         "StartMode":  "Auto",
+                                         "State":  "Running"
+                                     }
+                                 ],
+                    "SecureChannel":  null,
+                    "Boot":  "2026-10-12T03:05:00",
+                    "MemTotalMB":  8192,
+                    "Build":  "26100",
+                    "ErrorCount":  0,
+                    "Disks":  [
+                                  {
+                                      "FreeGB":  41,
+                                      "Drive":  "C:",
+                                      "SizeGB":  80
+                                  }
+                              ],
+                    "Errors":  [
+
+                               ],
+                    "Ip":  "192.0.2.5",
+                    "Ips":  [
+                                {
+                                    "Skip":  false,
+                                    "Ip":  "192.0.2.5"
+                                }
+                            ],
+                    "MemFreeMB":  3900,
+                    "Apipa":  [
+
+                              ],
+                    "Replication":  [
+                                        {
+                                            "Source":  "DC2",
+                                            "Failures":  0,
+                                            "LastSuccess":  "2026-10-19 09:24:10",
+                                            "Context":  "DC=example,DC=com",
+                                            "LastFailure":  "0",
+                                            "Status":  "0"
+                                        }
+                                    ]
+                },
+                {
+                    "Fqdn":  "dc2.example.com",
+                    "Shares":  [
+                                   "NETLOGON",
+                                   "SYSVOL"
+                               ],
+                    "Failed":  [
+
+                               ],
+                    "Reachable":  true,
+                    "Name":  "DC2",
+                    "Reboot":  [
+
+                               ],
+                    "DnsOrder":  [
+                                     "192.0.2.5",
+                                     "127.0.0.1"
+                                 ],
+                    "Critical":  0,
+                    "Error":  null,
+                    "Zones":  [
+                                  {
+                                      "Reverse":  false,
+                                      "Type":  "Primary",
+                                      "Name":  "_msdcs.example.com",
+                                      "Ad":  true
+                                  },
+                                  {
+                                      "Reverse":  false,
+                                      "Type":  "Primary",
+                                      "Name":  "example.com",
+                                      "Ad":  true
+                                  },
+                                  {
+                                      "Reverse":  true,
+                                      "Type":  "Primary",
+                                      "Name":  "2.0.192.in-addr.arpa",
+                                      "Ad":  true
+                                  }
+                              ],
+                    "Os":  "Microsoft Windows Server 2025 Datacenter",
+                    "Stuck":  [
+
+                              ],
+                    "TimeSource":  "DC1.example.com",
+                    "Ports":  {
+                                  "88":  true,
+                                  "9389":  true,
+                                  "3268":  true,
+                                  "389":  true,
+                                  "445":  true,
+                                  "53":  true
+                              },
+                    "SkewError":  null,
+                    "Skew":  0.002,
+                    "Services":  [
+                                     {
+                                         "Name":  "NTDS",
+                                         "StartMode":  "Auto",
+                                         "State":  "Running"
+                                     },
+                                     {
+                                         "Name":  "DNS",
+                                         "StartMode":  "Auto",
+                                         "State":  "Running"
+                                     },
+                                     {
+                                         "Name":  "kdc",
+                                         "StartMode":  "Auto",
+                                         "State":  "Running"
+                                     },
+                                     {
+                                         "Name":  "Netlogon",
+                                         "StartMode":  "Auto",
+                                         "State":  "Running"
+                                     },
+                                     {
+                                         "Name":  "ADWS",
+                                         "StartMode":  "Auto",
+                                         "State":  "Running"
+                                     },
+                                     {
+                                         "Name":  "W32Time",
+                                         "StartMode":  "Auto",
+                                         "State":  "Running"
+                                     },
+                                     {
+                                         "Name":  "DFSR",
+                                         "StartMode":  "Auto",
+                                         "State":  "Running"
+                                     }
+                                 ],
+                    "SecureChannel":  null,
+                    "Boot":  "2026-10-12T03:05:00",
+                    "MemTotalMB":  8192,
+                    "Build":  "26100",
+                    "ErrorCount":  0,
+                    "Disks":  [
+                                  {
+                                      "FreeGB":  41,
+                                      "Drive":  "C:",
+                                      "SizeGB":  80
+                                  }
+                              ],
+                    "Errors":  [
+
+                               ],
+                    "Ip":  "192.0.2.6",
+                    "Ips":  [
+                                {
+                                    "Skip":  false,
+                                    "Ip":  "192.0.2.6"
+                                }
+                            ],
+                    "MemFreeMB":  3900,
+                    "Apipa":  [
+
+                              ],
+                    "Replication":  [
+                                        {
+                                            "Source":  "DC1",
+                                            "Failures":  0,
+                                            "LastSuccess":  "2026-10-19 09:24:10",
+                                            "Context":  "DC=example,DC=com",
+                                            "LastFailure":  "0",
+                                            "Status":  "0"
+                                        }
+                                    ]
+                }
+            ],
+    "Guests":  [
+                   {
+                       "Vm":  "DC1",
+                       "Disks":  [
+                                     {
+                                         "FreeGB":  41,
+                                         "Drive":  "C:",
+                                         "SizeGB":  80
+                                     }
+                                 ]
+                   },
+                   {
+                       "Vm":  "SQL1",
+                       "Disks":  [
+                                     {
+                                         "FreeGB":  38,
+                                         "Drive":  "C:",
+                                         "SizeGB":  100
+                                     },
+                                     {
+                                         "FreeGB":  210,
+                                         "Drive":  "D:",
+                                         "SizeGB":  500
+                                     }
+                                 ]
+                   },
+                   {
+                       "Vm":  "SQL2",
+                       "Disks":  [
+                                     {
+                                         "FreeGB":  37,
+                                         "Drive":  "C:",
+                                         "SizeGB":  100
+                                     },
+                                     {
+                                         "FreeGB":  214,
+                                         "Drive":  "D:",
+                                         "SizeGB":  500
+                                     }
+                                 ]
+                   },
+                   {
+                       "Vm":  "VM-ALICE",
+                       "Disks":  [
+                                     {
+                                         "FreeGB":  31,
+                                         "Drive":  "C:",
+                                         "SizeGB":  128
+                                     }
+                                 ]
+                   }
+               ],
+    "Hosts":  [
+                  {
+                      "Os":  "Microsoft Windows Server 2025 Datacenter",
+                      "Reachable":  true,
+                      "MemTotalMB":  524288,
+                      "Guardians":  [
+                                        {
+                                            "Guardian":  "HV1",
+                                            "Thumbprint":  "A1B2C3D4E5F60718293A4B5C6D7E8F9012345678"
+                                        },
+                                        {
+                                            "Guardian":  "HV1",
+                                            "Thumbprint":  "B1B2C3D4E5F60718293A4B5C6D7E8F9012345678"
+                                        },
+                                        {
+                                            "Guardian":  "HV2",
+                                            "Thumbprint":  "C1B2C3D4E5F60718293A4B5C6D7E8F9012345678"
+                                        },
+                                        {
+                                            "Guardian":  "HV2",
+                                            "Thumbprint":  "D1B2C3D4E5F60718293A4B5C6D7E8F9012345678"
+                                        }
+                                    ],
+                      "Name":  "HV1",
+                      "Services":  [
+                                       {
+                                           "Name":  "vmms",
+                                           "StartMode":  "Auto",
+                                           "State":  "Running"
+                                       },
+                                       {
+                                           "Name":  "VmHostAgent",
+                                           "StartMode":  "Auto",
+                                           "State":  "Running"
+                                       },
+                                       {
+                                           "Name":  "ClusSvc",
+                                           "StartMode":  "Auto",
+                                           "State":  "Running"
+                                       },
+                                       {
+                                           "Name":  "WinRM",
+                                           "StartMode":  "Auto",
+                                           "State":  "Running"
+                                       }
+                                   ],
+                      "MemFreeMB":  196608,
+                      "SecureChannel":  true,
+                      "TimeSource":  "DC1.example.com",
+                      "Build":  "26100",
+                      "ErrorCount":  3,
+                      "Fqdn":  "hv1.example.com",
+                      "Disks":  [
+                                    {
+                                        "FreeGB":  182,
+                                        "Drive":  "C:",
+                                        "SizeGB":  446
+                                    }
+                                ],
+                      "Cluster":  "VDICL",
+                      "Reboot":  [
+
+                                 ],
+                      "SkewError":  null,
+                      "Critical":  0,
+                      "Stuck":  [
+
+                                ],
+                      "Errors":  [
+                                     {
+                                         "Id":  15,
+                                         "Last":  "2026-10-19T07:12:00",
+                                         "Source":  "Microsoft-Windows-Hyper-V-VmSwitch",
+                                         "Level":  2,
+                                         "Count":  3,
+                                         "Text":  "Failed to restore configuration for port (Friendly Name: Network Adapter) on switch."
+                                     }
+                                 ],
+                      "Apipa":  [
+
+                                ],
+                      "Vms":  [
+                                  {
+                                      "CheckpointOldest":  null,
+                                      "StartupMB":  8192,
+                                      "ResourceState":  "Online",
+                                      "Checkpoints":  0,
+                                      "State":  "Running",
+                                      "UptimeMin":  1300,
+                                      "Tpm":  true,
+                                      "Name":  "VM-ALICE",
+                                      "Heartbeat":  "OkApplicationsHealthy",
+                                      "Clustered":  true,
+                                      "MemoryMB":  8192,
+                                      "Status":  "Operating normally",
+                                      "GroupState":  "Online",
+                                      "OfflineAction":  2,
+                                      "StopAction":  "Save"
+                                  },
+                                  {
+                                      "CheckpointOldest":  null,
+                                      "StartupMB":  8192,
+                                      "ResourceState":  "Online",
+                                      "Checkpoints":  0,
+                                      "State":  "Running",
+                                      "UptimeMin":  1300,
+                                      "Tpm":  true,
+                                      "Name":  "VM-DAVE",
+                                      "Heartbeat":  "OkApplicationsHealthy",
+                                      "Clustered":  true,
+                                      "MemoryMB":  8192,
+                                      "Status":  "Operating normally",
+                                      "GroupState":  "Online",
+                                      "OfflineAction":  2,
+                                      "StopAction":  "Save"
+                                  },
+                                  {
+                                      "CheckpointOldest":  null,
+                                      "StartupMB":  8192,
+                                      "ResourceState":  "Online",
+                                      "Checkpoints":  0,
+                                      "State":  "Running",
+                                      "UptimeMin":  1300,
+                                      "Tpm":  true,
+                                      "Name":  "VM-FRANK",
+                                      "Heartbeat":  "OkApplicationsHealthy",
+                                      "Clustered":  true,
+                                      "MemoryMB":  8192,
+                                      "Status":  "Operating normally",
+                                      "GroupState":  "Online",
+                                      "OfflineAction":  2,
+                                      "StopAction":  "Save"
+                                  },
+                                  {
+                                      "CheckpointOldest":  null,
+                                      "StartupMB":  8192,
+                                      "ResourceState":  "Online",
+                                      "Checkpoints":  0,
+                                      "State":  "Running",
+                                      "UptimeMin":  1300,
+                                      "Tpm":  true,
+                                      "Name":  "VM-GRACE",
+                                      "Heartbeat":  "OkApplicationsHealthy",
+                                      "Clustered":  true,
+                                      "MemoryMB":  8192,
+                                      "Status":  "Operating normally",
+                                      "GroupState":  "Online",
+                                      "OfflineAction":  2,
+                                      "StopAction":  "Save"
+                                  },
+                                  {
+                                      "CheckpointOldest":  "2026-10-10T18:02:00",
+                                      "StartupMB":  8192,
+                                      "ResourceState":  "Offline",
+                                      "Checkpoints":  2,
+                                      "State":  "Off",
+                                      "UptimeMin":  0,
+                                      "Tpm":  true,
+                                      "Name":  "VM-SPARE",
+                                      "Heartbeat":  "",
+                                      "Clustered":  true,
+                                      "MemoryMB":  0,
+                                      "Status":  "Operating normally",
+                                      "GroupState":  "Offline",
+                                      "OfflineAction":  2,
+                                      "StopAction":  "Save"
+                                  },
+                                  {
+                                      "CheckpointOldest":  null,
+                                      "StartupMB":  6144,
+                                      "ResourceState":  "Online",
+                                      "Checkpoints":  0,
+                                      "State":  "Running",
+                                      "UptimeMin":  20000,
+                                      "Tpm":  true,
+                                      "Name":  "DC1",
+                                      "Heartbeat":  "OkApplicationsHealthy",
+                                      "Clustered":  true,
+                                      "MemoryMB":  6144,
+                                      "Status":  "Operating normally",
+                                      "GroupState":  "Online",
+                                      "OfflineAction":  2,
+                                      "StopAction":  "Save"
+                                  },
+                                  {
+                                      "CheckpointOldest":  null,
+                                      "StartupMB":  8192,
+                                      "ResourceState":  "Online",
+                                      "Checkpoints":  0,
+                                      "State":  "Running",
+                                      "UptimeMin":  20000,
+                                      "Tpm":  true,
+                                      "Name":  "RDCB1",
+                                      "Heartbeat":  "OkApplicationsHealthy",
+                                      "Clustered":  true,
+                                      "MemoryMB":  8192,
+                                      "Status":  "Operating normally",
+                                      "GroupState":  "Online",
+                                      "OfflineAction":  2,
+                                      "StopAction":  "Save"
+                                  },
+                                  {
+                                      "CheckpointOldest":  null,
+                                      "StartupMB":  24576,
+                                      "ResourceState":  "Online",
+                                      "Checkpoints":  0,
+                                      "State":  "Running",
+                                      "UptimeMin":  20000,
+                                      "Tpm":  true,
+                                      "Name":  "SQL1",
+                                      "Heartbeat":  "OkApplicationsHealthy",
+                                      "Clustered":  true,
+                                      "MemoryMB":  24576,
+                                      "Status":  "Operating normally",
+                                      "GroupState":  "Online",
+                                      "OfflineAction":  2,
+                                      "StopAction":  "Save"
+                                  }
+                              ],
+                      "Failed":  [
+
+                                 ],
+                      "Ips":  [
+                                  {
+                                      "Skip":  false,
+                                      "Ip":  "192.0.2.31"
+                                  },
+                                  {
+                                      "Skip":  false,
+                                      "Ip":  "198.51.100.1"
+                                  }
+                              ],
+                      "Error":  null,
+                      "Skew":  0.004,
+                      "Boot":  "2026-10-05T22:10:00"
+                  },
+                  {
+                      "Os":  "Microsoft Windows Server 2025 Datacenter",
+                      "Reachable":  true,
+                      "MemTotalMB":  262144,
+                      "Guardians":  [
+                                        {
+                                            "Guardian":  "HV1",
+                                            "Thumbprint":  "A1B2C3D4E5F60718293A4B5C6D7E8F9012345678"
+                                        },
+                                        {
+                                            "Guardian":  "HV1",
+                                            "Thumbprint":  "B1B2C3D4E5F60718293A4B5C6D7E8F9012345678"
+                                        },
+                                        {
+                                            "Guardian":  "HV2",
+                                            "Thumbprint":  "C1B2C3D4E5F60718293A4B5C6D7E8F9012345678"
+                                        },
+                                        {
+                                            "Guardian":  "HV2",
+                                            "Thumbprint":  "D1B2C3D4E5F60718293A4B5C6D7E8F9012345678"
+                                        }
+                                    ],
+                      "Name":  "HV2",
+                      "Services":  [
+                                       {
+                                           "Name":  "vmms",
+                                           "StartMode":  "Auto",
+                                           "State":  "Running"
+                                       },
+                                       {
+                                           "Name":  "VmHostAgent",
+                                           "StartMode":  "Auto",
+                                           "State":  "Running"
+                                       },
+                                       {
+                                           "Name":  "ClusSvc",
+                                           "StartMode":  "Auto",
+                                           "State":  "Running"
+                                       },
+                                       {
+                                           "Name":  "WinRM",
+                                           "StartMode":  "Auto",
+                                           "State":  "Running"
+                                       }
+                                   ],
+                      "MemFreeMB":  22528,
+                      "SecureChannel":  true,
+                      "TimeSource":  "time.windows.com,0x8",
+                      "Build":  "26100",
+                      "ErrorCount":  0,
+                      "Fqdn":  "hv2.example.com",
+                      "Disks":  [
+                                    {
+                                        "FreeGB":  61,
+                                        "Drive":  "C:",
+                                        "SizeGB":  446
+                                    }
+                                ],
+                      "Cluster":  "VDICL",
+                      "Reboot":  [
+                                     "updates"
+                                 ],
+                      "SkewError":  null,
+                      "Critical":  0,
+                      "Stuck":  [
+
+                                ],
+                      "Errors":  [
+
+                                 ],
+                      "Apipa":  [
+
+                                ],
+                      "Vms":  [
+                                  {
+                                      "CheckpointOldest":  null,
+                                      "StartupMB":  8192,
+                                      "ResourceState":  "Online",
+                                      "Checkpoints":  0,
+                                      "State":  "Running",
+                                      "UptimeMin":  1300,
+                                      "Tpm":  true,
+                                      "Name":  "VM-BOB",
+                                      "Heartbeat":  "OkApplicationsHealthy",
+                                      "Clustered":  true,
+                                      "MemoryMB":  8192,
+                                      "Status":  "Operating normally",
+                                      "GroupState":  "Online",
+                                      "OfflineAction":  2,
+                                      "StopAction":  "Save"
+                                  },
+                                  {
+                                      "CheckpointOldest":  null,
+                                      "StartupMB":  8192,
+                                      "ResourceState":  "Offline",
+                                      "Checkpoints":  0,
+                                      "State":  "Saved",
+                                      "UptimeMin":  0,
+                                      "Tpm":  true,
+                                      "Name":  "VM-CAROL",
+                                      "Heartbeat":  "",
+                                      "Clustered":  true,
+                                      "MemoryMB":  0,
+                                      "Status":  "Saved",
+                                      "GroupState":  "Offline",
+                                      "OfflineAction":  1,
+                                      "StopAction":  "Save"
+                                  },
+                                  {
+                                      "CheckpointOldest":  null,
+                                      "StartupMB":  8192,
+                                      "ResourceState":  "Offline",
+                                      "Checkpoints":  0,
+                                      "State":  "Off",
+                                      "UptimeMin":  0,
+                                      "Tpm":  true,
+                                      "Name":  "VM-ERIN",
+                                      "Heartbeat":  "",
+                                      "Clustered":  true,
+                                      "MemoryMB":  0,
+                                      "Status":  "Operating normally",
+                                      "GroupState":  "Offline",
+                                      "OfflineAction":  2,
+                                      "StopAction":  "Save"
+                                  },
+                                  {
+                                      "CheckpointOldest":  null,
+                                      "StartupMB":  8192,
+                                      "ResourceState":  "Online",
+                                      "Checkpoints":  0,
+                                      "State":  "Running",
+                                      "UptimeMin":  1300,
+                                      "Tpm":  true,
+                                      "Name":  "VM-IVAN",
+                                      "Heartbeat":  "OkApplicationsHealthy",
+                                      "Clustered":  true,
+                                      "MemoryMB":  8192,
+                                      "Status":  "Operating normally",
+                                      "GroupState":  "Online",
+                                      "OfflineAction":  2,
+                                      "StopAction":  "Save"
+                                  },
+                                  {
+                                      "CheckpointOldest":  null,
+                                      "StartupMB":  8192,
+                                      "ResourceState":  "Online",
+                                      "Checkpoints":  0,
+                                      "State":  "Running",
+                                      "UptimeMin":  1300,
+                                      "Tpm":  true,
+                                      "Name":  "VM-JUDY",
+                                      "Heartbeat":  "OkApplicationsHealthy",
+                                      "Clustered":  true,
+                                      "MemoryMB":  8192,
+                                      "Status":  "Operating normally",
+                                      "GroupState":  "Online",
+                                      "OfflineAction":  2,
+                                      "StopAction":  "Save"
+                                  },
+                                  {
+                                      "CheckpointOldest":  null,
+                                      "StartupMB":  6144,
+                                      "ResourceState":  "Online",
+                                      "Checkpoints":  0,
+                                      "State":  "Running",
+                                      "UptimeMin":  20000,
+                                      "Tpm":  true,
+                                      "Name":  "DC2",
+                                      "Heartbeat":  "OkApplicationsHealthy",
+                                      "Clustered":  true,
+                                      "MemoryMB":  6144,
+                                      "Status":  "Operating normally",
+                                      "GroupState":  "Online",
+                                      "OfflineAction":  2,
+                                      "StopAction":  "Save"
+                                  },
+                                  {
+                                      "CheckpointOldest":  null,
+                                      "StartupMB":  8192,
+                                      "ResourceState":  "Online",
+                                      "Checkpoints":  0,
+                                      "State":  "Running",
+                                      "UptimeMin":  20000,
+                                      "Tpm":  true,
+                                      "Name":  "RDCB2",
+                                      "Heartbeat":  "OkApplicationsHealthy",
+                                      "Clustered":  true,
+                                      "MemoryMB":  8192,
+                                      "Status":  "Operating normally",
+                                      "GroupState":  "Online",
+                                      "OfflineAction":  2,
+                                      "StopAction":  "Save"
+                                  },
+                                  {
+                                      "CheckpointOldest":  null,
+                                      "StartupMB":  24576,
+                                      "ResourceState":  "Online",
+                                      "Checkpoints":  0,
+                                      "State":  "Running",
+                                      "UptimeMin":  20000,
+                                      "Tpm":  true,
+                                      "Name":  "SQL2",
+                                      "Heartbeat":  "OkApplicationsHealthy",
+                                      "Clustered":  true,
+                                      "MemoryMB":  24576,
+                                      "Status":  "Operating normally",
+                                      "GroupState":  "Online",
+                                      "OfflineAction":  2,
+                                      "StopAction":  "Save"
+                                  }
+                              ],
+                      "Failed":  [
+
+                                 ],
+                      "Ips":  [
+                                  {
+                                      "Skip":  false,
+                                      "Ip":  "192.0.2.32"
+                                  },
+                                  {
+                                      "Skip":  false,
+                                      "Ip":  "198.51.100.2"
+                                  }
+                              ],
+                      "Error":  null,
+                      "Skew":  0.21,
+                      "Boot":  "2026-09-28T23:40:00"
+                  }
+              ],
+    "Dns":  {
+                "Names":  [
+                              {
+                                  "Name":  "hv1.example.com",
+                                  "Reverse":  [
+                                                  {
+                                                      "Ip":  "192.0.2.31",
+                                                      "Name":  "hv1.example.com",
+                                                      "Ms":  2
+                                                  }
+                                              ],
+                                  "Own":  [
+                                              "192.0.2.31",
+                                              "198.51.100.1"
+                                          ],
+                                  "Kind":  "host",
+                                  "Ips":  [
+                                              "192.0.2.31"
+                                          ],
+                                  "Ms":  1
+                              },
+                              {
+                                  "Name":  "hv2.example.com",
+                                  "Reverse":  [
+                                                  {
+                                                      "Ip":  "192.0.2.32",
+                                                      "Name":  "hv2.example.com",
+                                                      "Ms":  2
+                                                  },
+                                                  {
+                                                      "Ip":  "198.51.100.2",
+                                                      "Name":  null,
+                                                      "Ms":  4810
+                                                  }
+                                              ],
+                                  "Own":  [
+                                              "192.0.2.32",
+                                              "198.51.100.2"
+                                          ],
+                                  "Kind":  "host",
+                                  "Ips":  [
+                                              "192.0.2.32",
+                                              "198.51.100.2"
+                                          ],
+                                  "Ms":  1
+                              },
+                              {
+                                  "Name":  "dc1.example.com",
+                                  "Reverse":  [
+                                                  {
+                                                      "Ip":  "192.0.2.5",
+                                                      "Name":  "dc1.example.com",
+                                                      "Ms":  2
+                                                  }
+                                              ],
+                                  "Own":  [
+                                              "192.0.2.5"
+                                          ],
+                                  "Kind":  "dc",
+                                  "Ips":  [
+                                              "192.0.2.5"
+                                          ],
+                                  "Ms":  1
+                              },
+                              {
+                                  "Name":  "dc2.example.com",
+                                  "Reverse":  [
+                                                  {
+                                                      "Ip":  "192.0.2.6",
+                                                      "Name":  "dc2.example.com",
+                                                      "Ms":  2
+                                                  }
+                                              ],
+                                  "Own":  [
+                                              "192.0.2.6"
+                                          ],
+                                  "Kind":  "dc",
+                                  "Ips":  [
+                                              "192.0.2.6"
+                                          ],
+                                  "Ms":  1
+                              },
+                              {
+                                  "Name":  "rdcb1.example.com",
+                                  "Reverse":  [
+                                                  {
+                                                      "Ip":  "192.0.2.11",
+                                                      "Name":  "rdcb1.example.com",
+                                                      "Ms":  2
+                                                  }
+                                              ],
+                                  "Own":  [
+                                              "192.0.2.11"
+                                          ],
+                                  "Kind":  "server",
+                                  "Ips":  [
+                                              "192.0.2.11"
+                                          ],
+                                  "Ms":  1
+                              },
+                              {
+                                  "Name":  "rdcb2.example.com",
+                                  "Reverse":  [
+                                                  {
+                                                      "Ip":  "192.0.2.12",
+                                                      "Name":  "rdcb2.example.com",
+                                                      "Ms":  2
+                                                  }
+                                              ],
+                                  "Own":  [
+                                              "192.0.2.12"
+                                          ],
+                                  "Kind":  "server",
+                                  "Ips":  [
+                                              "192.0.2.12"
+                                          ],
+                                  "Ms":  1
+                              },
+                              {
+                                  "Name":  "sql1.example.com",
+                                  "Reverse":  [
+                                                  {
+                                                      "Ip":  "192.0.2.21",
+                                                      "Name":  "sql1.example.com",
+                                                      "Ms":  2
+                                                  }
+                                              ],
+                                  "Own":  [
+                                              "192.0.2.21"
+                                          ],
+                                  "Kind":  "server",
+                                  "Ips":  [
+                                              "192.0.2.21"
+                                          ],
+                                  "Ms":  1
+                              },
+                              {
+                                  "Name":  "sql2.example.com",
+                                  "Reverse":  [
+                                                  {
+                                                      "Ip":  "192.0.2.22",
+                                                      "Name":  "sql2.example.com",
+                                                      "Ms":  2
+                                                  }
+                                              ],
+                                  "Own":  [
+                                              "192.0.2.22"
+                                          ],
+                                  "Kind":  "server",
+                                  "Ips":  [
+                                              "192.0.2.22"
+                                          ],
+                                  "Ms":  1
+                              },
+                              {
+                                  "Name":  "rdbroker.example.com",
+                                  "Reverse":  [
+
+                                              ],
+                                  "Own":  [
+
+                                          ],
+                                  "Kind":  "shared",
+                                  "Ips":  [
+                                              "192.0.2.11",
+                                              "192.0.2.12"
+                                          ],
+                                  "Ms":  1
+                              }
+                          ],
+                "Servers":  [
+                                {
+                                    "Ok":  true,
+                                    "Server":  "192.0.2.5",
+                                    "Error":  null,
+                                    "Ms":  3
+                                },
+                                {
+                                    "Ok":  true,
+                                    "Server":  "192.0.2.6",
+                                    "Error":  null,
+                                    "Ms":  2
+                                }
+                            ]
+            },
+    "Taken":  "2026-10-19T09:30:00"
+}

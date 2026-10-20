@@ -1,0 +1,1062 @@
+{
+    "Taken":  "2026-10-19T09:30:00",
+    "Names":  [
+                  {
+                      "Name":  "rdbroker.example.com",
+                      "IsIp":  false,
+                      "Addresses":  [
+                                        {
+                                            "Ip":  "192.0.2.11",
+                                            "Fqdn":  "rdcb1.example.com",
+                                            "Rdp":  true
+                                        },
+                                        {
+                                            "Ip":  "192.0.2.12",
+                                            "Fqdn":  "rdcb2.example.com",
+                                            "Rdp":  true
+                                        }
+                                    ]
+                  },
+                  {
+                      "Name":  "192.0.2.11",
+                      "IsIp":  true,
+                      "Addresses":  [
+                                        {
+                                            "Ip":  "192.0.2.11",
+                                            "Fqdn":  "rdcb1.example.com",
+                                            "Rdp":  true
+                                        }
+                                    ]
+                  },
+                  {
+                      "Name":  "192.0.2.12",
+                      "IsIp":  true,
+                      "Addresses":  [
+                                        {
+                                            "Ip":  "192.0.2.12",
+                                            "Fqdn":  "rdcb2.example.com",
+                                            "Rdp":  true
+                                        }
+                                    ]
+                  }
+              ],
+    "Brokers":  [
+                    {
+                        "Name":  "RDCB1",
+                        "Fqdn":  "rdcb1.example.com",
+                        "Reachable":  true,
+                        "Error":  null,
+                        "Ips":  [
+                                    "192.0.2.11"
+                                ],
+                        "Services":  [
+                                         {
+                                             "Name":  "Tssdis",
+                                             "State":  "Running",
+                                             "Since":  "2026-10-12T06:00:12"
+                                         },
+                                         {
+                                             "Name":  "RDMS",
+                                             "State":  "Running",
+                                             "Since":  null
+                                         },
+                                         {
+                                             "Name":  "TScPubRPC",
+                                             "State":  "Running",
+                                             "Since":  null
+                                         }
+                                     ],
+                        "Since":  "2026-10-19T00:00:00",
+                        "Restarted":  false,
+                        "Received":  9,
+                        "Failed":  0,
+                        "Denied":  0,
+                        "DbErrors":  0,
+                        "Requests":  [
+                                         {
+                                             "Time":  "2026-10-19T07:55:28",
+                                             "User":  "EXAMPLE\\grace",
+                                             "Vm":  "VM-GRACE",
+                                             "Ok":  true,
+                                             "Why":  ""
+                                         },
+                                         {
+                                             "Time":  "2026-10-19T08:02:00",
+                                             "User":  "EXAMPLE\\alice",
+                                             "Vm":  "VM-ALICE",
+                                             "Ok":  true,
+                                             "Why":  ""
+                                         },
+                                         {
+                                             "Time":  "2026-10-19T08:05:08",
+                                             "User":  "EXAMPLE\\dave",
+                                             "Vm":  "VM-DAVE",
+                                             "Ok":  true,
+                                             "Why":  ""
+                                         },
+                                         {
+                                             "Time":  "2026-10-19T08:15:18",
+                                             "User":  "EXAMPLE\\ivan",
+                                             "Vm":  "VM-IVAN",
+                                             "Ok":  true,
+                                             "Why":  ""
+                                         },
+                                         {
+                                             "Time":  "2026-10-19T08:20:38",
+                                             "User":  "EXAMPLE\\judy",
+                                             "Vm":  "VM-JUDY",
+                                             "Ok":  true,
+                                             "Why":  ""
+                                         },
+                                         {
+                                             "Time":  "2026-10-19T08:40:14",
+                                             "User":  "EXAMPLE\\frank",
+                                             "Vm":  "VM-FRANK",
+                                             "Ok":  true,
+                                             "Why":  ""
+                                         },
+                                         {
+                                             "Time":  "2026-10-19T09:15:30",
+                                             "User":  "EXAMPLE\\carol",
+                                             "Vm":  "VM-CAROL",
+                                             "Ok":  true,
+                                             "Why":  ""
+                                         }
+                                     ],
+                        "Signature":  0,
+                        "SignatureLast":  null,
+                        "Unknown":  0,
+                        "ActiveServer":  "rdcb1.example.com",
+                        "IsActive":  true,
+                        "Sessions":  [
+                                         {
+                                             "User":  "ALICE",
+                                             "Domain":  "EXAMPLE",
+                                             "Vm":  "VM-ALICE",
+                                             "Host":  "HV1.example.com",
+                                             "Ip":  "192.0.2.100",
+                                             "State":  0,
+                                             "Id":  2,
+                                             "Created":  "2026-10-19T08:02:01",
+                                             "Collection":  "VDI",
+                                             "Type":  2
+                                         },
+                                         {
+                                             "User":  "DAVE",
+                                             "Domain":  "EXAMPLE",
+                                             "Vm":  "VM-DAVE",
+                                             "Host":  "HV1.example.com",
+                                             "Ip":  "192.0.2.100",
+                                             "State":  1,
+                                             "Id":  3,
+                                             "Created":  "2026-10-19T08:05:10",
+                                             "Collection":  "VDI",
+                                             "Type":  2
+                                         },
+                                         {
+                                             "User":  "FRANK",
+                                             "Domain":  "EXAMPLE",
+                                             "Vm":  "VM-FRANK",
+                                             "Host":  "HV1.example.com",
+                                             "Ip":  "192.0.2.100",
+                                             "State":  0,
+                                             "Id":  2,
+                                             "Created":  "2026-10-19T08:40:15",
+                                             "Collection":  "VDI",
+                                             "Type":  2
+                                         },
+                                         {
+                                             "User":  "GRACE",
+                                             "Domain":  "EXAMPLE",
+                                             "Vm":  "VM-GRACE",
+                                             "Host":  "HV1.example.com",
+                                             "Ip":  "192.0.2.100",
+                                             "State":  0,
+                                             "Id":  2,
+                                             "Created":  "2026-10-19T07:55:30",
+                                             "Collection":  "VDI",
+                                             "Type":  2
+                                         },
+                                         {
+                                             "User":  "IVAN",
+                                             "Domain":  "EXAMPLE",
+                                             "Vm":  "VM-IVAN",
+                                             "Host":  "HV2.example.com",
+                                             "Ip":  "192.0.2.100",
+                                             "State":  0,
+                                             "Id":  2,
+                                             "Created":  "2026-10-19T08:15:20",
+                                             "Collection":  "VDI",
+                                             "Type":  2
+                                         },
+                                         {
+                                             "User":  "JUDY",
+                                             "Domain":  "EXAMPLE",
+                                             "Vm":  "VM-JUDY",
+                                             "Host":  "HV2.example.com",
+                                             "Ip":  "192.0.2.100",
+                                             "State":  0,
+                                             "Id":  2,
+                                             "Created":  "2026-10-19T08:20:40",
+                                             "Collection":  "VDI",
+                                             "Type":  2
+                                         }
+                                     ],
+                        "Assignments":  [
+                                            {
+                                                "User":  "ALICE",
+                                                "Domain":  "EXAMPLE",
+                                                "Vm":  "VM-ALICE",
+                                                "Collection":  "VDI"
+                                            },
+                                            {
+                                                "User":  "BOB",
+                                                "Domain":  "EXAMPLE",
+                                                "Vm":  "VM-BOB",
+                                                "Collection":  "VDI"
+                                            },
+                                            {
+                                                "User":  "CAROL",
+                                                "Domain":  "EXAMPLE",
+                                                "Vm":  "VM-CAROL",
+                                                "Collection":  "VDI"
+                                            },
+                                            {
+                                                "User":  "DAVE",
+                                                "Domain":  "EXAMPLE",
+                                                "Vm":  "VM-DAVE",
+                                                "Collection":  "VDI"
+                                            },
+                                            {
+                                                "User":  "ERIN",
+                                                "Domain":  "EXAMPLE",
+                                                "Vm":  "VM-ERIN",
+                                                "Collection":  "VDI"
+                                            },
+                                            {
+                                                "User":  "FRANK",
+                                                "Domain":  "EXAMPLE",
+                                                "Vm":  "VM-FRANK",
+                                                "Collection":  "VDI"
+                                            },
+                                            {
+                                                "User":  "GRACE",
+                                                "Domain":  "EXAMPLE",
+                                                "Vm":  "VM-GRACE",
+                                                "Collection":  "VDI"
+                                            },
+                                            {
+                                                "User":  "IVAN",
+                                                "Domain":  "EXAMPLE",
+                                                "Vm":  "VM-IVAN",
+                                                "Collection":  "VDI"
+                                            },
+                                            {
+                                                "User":  "JUDY",
+                                                "Domain":  "EXAMPLE",
+                                                "Vm":  "VM-JUDY",
+                                                "Collection":  "VDI"
+                                            }
+                                        ],
+                        "Desktops":  [
+                                         {
+                                             "Name":  "VM-ALICE",
+                                             "Host":  "HV1.example.com",
+                                             "Collection":  "VDI",
+                                             "User":  "ALICE",
+                                             "Domain":  "EXAMPLE"
+                                         },
+                                         {
+                                             "Name":  "VM-BOB",
+                                             "Host":  "HV2.example.com",
+                                             "Collection":  "VDI",
+                                             "User":  "BOB",
+                                             "Domain":  "EXAMPLE"
+                                         },
+                                         {
+                                             "Name":  "VM-CAROL",
+                                             "Host":  "HV2.example.com",
+                                             "Collection":  "VDI",
+                                             "User":  "CAROL",
+                                             "Domain":  "EXAMPLE"
+                                         },
+                                         {
+                                             "Name":  "VM-DAVE",
+                                             "Host":  "HV1.example.com",
+                                             "Collection":  "VDI",
+                                             "User":  "DAVE",
+                                             "Domain":  "EXAMPLE"
+                                         },
+                                         {
+                                             "Name":  "VM-ERIN",
+                                             "Host":  "HV2.example.com",
+                                             "Collection":  "VDI",
+                                             "User":  "ERIN",
+                                             "Domain":  "EXAMPLE"
+                                         },
+                                         {
+                                             "Name":  "VM-FRANK",
+                                             "Host":  "HV1.example.com",
+                                             "Collection":  "VDI",
+                                             "User":  "FRANK",
+                                             "Domain":  "EXAMPLE"
+                                         },
+                                         {
+                                             "Name":  "VM-GRACE",
+                                             "Host":  "HV1.example.com",
+                                             "Collection":  "VDI",
+                                             "User":  "GRACE",
+                                             "Domain":  "EXAMPLE"
+                                         },
+                                         {
+                                             "Name":  "VM-IVAN",
+                                             "Host":  "HV2.example.com",
+                                             "Collection":  "VDI",
+                                             "User":  "IVAN",
+                                             "Domain":  "EXAMPLE"
+                                         },
+                                         {
+                                             "Name":  "VM-JUDY",
+                                             "Host":  "HV2.example.com",
+                                             "Collection":  "VDI",
+                                             "User":  "JUDY",
+                                             "Domain":  "EXAMPLE"
+                                         },
+                                         {
+                                             "Name":  "VM-SPARE",
+                                             "Host":  "HV1.example.com",
+                                             "Collection":  "VDI",
+                                             "User":  "",
+                                             "Domain":  ""
+                                         }
+                                     ],
+                        "Nodes":  [
+                                      {
+                                          "Fqdn":  "rdcb1.example.com",
+                                          "Rdcb":  true,
+                                          "Rdvh":  false,
+                                          "Rdsh":  false
+                                      },
+                                      {
+                                          "Fqdn":  "rdcb2.example.com",
+                                          "Rdcb":  true,
+                                          "Rdvh":  false,
+                                          "Rdsh":  false
+                                      },
+                                      {
+                                          "Fqdn":  "HV1.example.com",
+                                          "Rdcb":  false,
+                                          "Rdvh":  true,
+                                          "Rdsh":  false
+                                      },
+                                      {
+                                          "Fqdn":  "HV2.example.com",
+                                          "Rdcb":  false,
+                                          "Rdvh":  true,
+                                          "Rdsh":  false
+                                      }
+                                  ],
+                        "Collections":  [
+                                            {
+                                                "Alias":  "VDI",
+                                                "Name":  "Personal desktops",
+                                                "Kind":  "vm"
+                                            }
+                                        ],
+                        "Rdsh":  [
+
+                                 ],
+                        "Task":  {
+                                     "Names":  [
+                                                   "OpenThinRDP - Broker self-repair"
+                                               ],
+                                     "Ours":  true,
+                                     "State":  "Ready",
+                                     "Hash":  "CURRENT"
+                                 }
+                    },
+                    {
+                        "Name":  "RDCB2",
+                        "Fqdn":  "rdcb2.example.com",
+                        "Reachable":  true,
+                        "Error":  null,
+                        "Ips":  [
+                                    "192.0.2.12"
+                                ],
+                        "Services":  [
+                                         {
+                                             "Name":  "Tssdis",
+                                             "State":  "Running",
+                                             "Since":  "2026-10-12T06:00:09"
+                                         },
+                                         {
+                                             "Name":  "RDMS",
+                                             "State":  "Running",
+                                             "Since":  null
+                                         },
+                                         {
+                                             "Name":  "TScPubRPC",
+                                             "State":  "Running",
+                                             "Since":  null
+                                         }
+                                     ],
+                        "Since":  "2026-10-19T00:00:00",
+                        "Restarted":  false,
+                        "Received":  5,
+                        "Failed":  5,
+                        "Denied":  5,
+                        "DbErrors":  0,
+                        "Requests":  [
+                                         {
+                                             "Time":  "2026-10-19T08:40:02",
+                                             "User":  "EXAMPLE\\frank",
+                                             "Vm":  "",
+                                             "Ok":  false,
+                                             "Why":  "Access is denied."
+                                         },
+                                         {
+                                             "Time":  "2026-10-19T09:15:01",
+                                             "User":  "EXAMPLE\\carol",
+                                             "Vm":  "",
+                                             "Ok":  false,
+                                             "Why":  "Access is denied."
+                                         },
+                                         {
+                                             "Time":  "2026-10-19T09:24:02",
+                                             "User":  "EXAMPLE\\bob",
+                                             "Vm":  "",
+                                             "Ok":  false,
+                                             "Why":  "Access is denied."
+                                         },
+                                         {
+                                             "Time":  "2026-10-19T09:24:10",
+                                             "User":  "EXAMPLE\\bob",
+                                             "Vm":  "",
+                                             "Ok":  false,
+                                             "Why":  "Access is denied."
+                                         },
+                                         {
+                                             "Time":  "2026-10-19T07:40:11",
+                                             "User":  "EXAMPLE\\judy",
+                                             "Vm":  "",
+                                             "Ok":  false,
+                                             "Why":  "Access is denied."
+                                         }
+                                     ],
+                        "Signature":  5,
+                        "SignatureLast":  "2026-10-19T09:24:10",
+                        "Unknown":  5,
+                        "ActiveServer":  "rdcb1.example.com",
+                        "IsActive":  false,
+                        "Sessions":  [
+                                         {
+                                             "User":  "ALICE",
+                                             "Domain":  "EXAMPLE",
+                                             "Vm":  "VM-ALICE",
+                                             "Host":  "HV1.example.com",
+                                             "Ip":  "192.0.2.100",
+                                             "State":  0,
+                                             "Id":  2,
+                                             "Created":  "2026-10-19T08:02:01",
+                                             "Collection":  "VDI",
+                                             "Type":  2
+                                         },
+                                         {
+                                             "User":  "DAVE",
+                                             "Domain":  "EXAMPLE",
+                                             "Vm":  "VM-DAVE",
+                                             "Host":  "HV1.example.com",
+                                             "Ip":  "192.0.2.100",
+                                             "State":  1,
+                                             "Id":  3,
+                                             "Created":  "2026-10-19T08:05:10",
+                                             "Collection":  "VDI",
+                                             "Type":  2
+                                         },
+                                         {
+                                             "User":  "FRANK",
+                                             "Domain":  "EXAMPLE",
+                                             "Vm":  "VM-FRANK",
+                                             "Host":  "HV1.example.com",
+                                             "Ip":  "192.0.2.100",
+                                             "State":  0,
+                                             "Id":  2,
+                                             "Created":  "2026-10-19T08:40:15",
+                                             "Collection":  "VDI",
+                                             "Type":  2
+                                         },
+                                         {
+                                             "User":  "GRACE",
+                                             "Domain":  "EXAMPLE",
+                                             "Vm":  "VM-GRACE",
+                                             "Host":  "HV1.example.com",
+                                             "Ip":  "192.0.2.100",
+                                             "State":  0,
+                                             "Id":  2,
+                                             "Created":  "2026-10-19T07:55:30",
+                                             "Collection":  "VDI",
+                                             "Type":  2
+                                         },
+                                         {
+                                             "User":  "IVAN",
+                                             "Domain":  "EXAMPLE",
+                                             "Vm":  "VM-IVAN",
+                                             "Host":  "HV2.example.com",
+                                             "Ip":  "192.0.2.100",
+                                             "State":  0,
+                                             "Id":  2,
+                                             "Created":  "2026-10-19T08:15:20",
+                                             "Collection":  "VDI",
+                                             "Type":  2
+                                         },
+                                         {
+                                             "User":  "JUDY",
+                                             "Domain":  "EXAMPLE",
+                                             "Vm":  "VM-JUDY",
+                                             "Host":  "HV2.example.com",
+                                             "Ip":  "192.0.2.100",
+                                             "State":  0,
+                                             "Id":  2,
+                                             "Created":  "2026-10-19T08:20:40",
+                                             "Collection":  "VDI",
+                                             "Type":  2
+                                         }
+                                     ],
+                        "Assignments":  [
+                                            {
+                                                "User":  "ALICE",
+                                                "Domain":  "EXAMPLE",
+                                                "Vm":  "VM-ALICE",
+                                                "Collection":  "VDI"
+                                            },
+                                            {
+                                                "User":  "BOB",
+                                                "Domain":  "EXAMPLE",
+                                                "Vm":  "VM-BOB",
+                                                "Collection":  "VDI"
+                                            },
+                                            {
+                                                "User":  "CAROL",
+                                                "Domain":  "EXAMPLE",
+                                                "Vm":  "VM-CAROL",
+                                                "Collection":  "VDI"
+                                            },
+                                            {
+                                                "User":  "DAVE",
+                                                "Domain":  "EXAMPLE",
+                                                "Vm":  "VM-DAVE",
+                                                "Collection":  "VDI"
+                                            },
+                                            {
+                                                "User":  "ERIN",
+                                                "Domain":  "EXAMPLE",
+                                                "Vm":  "VM-ERIN",
+                                                "Collection":  "VDI"
+                                            },
+                                            {
+                                                "User":  "FRANK",
+                                                "Domain":  "EXAMPLE",
+                                                "Vm":  "VM-FRANK",
+                                                "Collection":  "VDI"
+                                            },
+                                            {
+                                                "User":  "GRACE",
+                                                "Domain":  "EXAMPLE",
+                                                "Vm":  "VM-GRACE",
+                                                "Collection":  "VDI"
+                                            },
+                                            {
+                                                "User":  "IVAN",
+                                                "Domain":  "EXAMPLE",
+                                                "Vm":  "VM-IVAN",
+                                                "Collection":  "VDI"
+                                            },
+                                            {
+                                                "User":  "JUDY",
+                                                "Domain":  "EXAMPLE",
+                                                "Vm":  "VM-JUDY",
+                                                "Collection":  "VDI"
+                                            }
+                                        ],
+                        "Desktops":  [
+
+                                     ],
+                        "Nodes":  [
+
+                                  ],
+                        "Collections":  [
+
+                                        ],
+                        "Rdsh":  [
+
+                                 ],
+                        "Task":  {
+                                     "Names":  [
+
+                                               ],
+                                     "Ours":  false,
+                                     "State":  "",
+                                     "Hash":  null
+                                 }
+                    }
+                ],
+    "Hosts":  [
+                  {
+                      "Name":  "HV1",
+                      "Fqdn":  "hv1.example.com",
+                      "Reachable":  true,
+                      "Error":  null,
+                      "Services":  [
+                                       {
+                                           "Name":  "VmHostAgent",
+                                           "State":  "Running",
+                                           "Since":  null
+                                       },
+                                       {
+                                           "Name":  "vmms",
+                                           "State":  "Running",
+                                           "Since":  null
+                                       },
+                                       {
+                                           "Name":  "ClusSvc",
+                                           "State":  "Running",
+                                           "Since":  null
+                                       }
+                                   ],
+                      "AgentBrokers":  "rdcb1.example.com;rdcb2.example.com",
+                      "AgentLinks":  [
+                                         "192.0.2.11"
+                                     ],
+                      "AgentLast":  {
+                                        "Time":  "2026-10-12T06:01:02",
+                                        "Attached":  true,
+                                        "Broker":  "rdcb1.example.com"
+                                    },
+                      "Groups":  [
+                                     {
+                                         "Sid":  "S-1-5-32-576",
+                                         "Read":  true,
+                                         "Members":  [
+                                                         {
+                                                             "Sid":  "S-1-5-21-1000-2000-3000-3001",
+                                                             "Name":  "EXAMPLE\\RDS-Brokers"
+                                                         }
+                                                     ]
+                                     },
+                                     {
+                                         "Sid":  "S-1-5-32-577",
+                                         "Read":  true,
+                                         "Members":  [
+                                                         {
+                                                             "Sid":  "S-1-5-21-1000-2000-3000-3001",
+                                                             "Name":  "EXAMPLE\\RDS-Brokers"
+                                                         }
+                                                     ]
+                                     },
+                                     {
+                                         "Sid":  "S-1-5-32-578",
+                                         "Read":  true,
+                                         "Members":  [
+                                                         {
+                                                             "Sid":  "S-1-5-21-1000-2000-3000-3001",
+                                                             "Name":  "EXAMPLE\\RDS-Brokers"
+                                                         }
+                                                     ]
+                                     }
+                                 ],
+                      "Vms":  [
+                                  {
+                                      "Name":  "VM-ALICE",
+                                      "State":  "Running",
+                                      "Heartbeat":  "OkApplicationsHealthy",
+                                      "UptimeMin":  2900,
+                                      "Clustered":  true,
+                                      "Tpm":  true,
+                                      "OfflineAction":  2
+                                  },
+                                  {
+                                      "Name":  "VM-DAVE",
+                                      "State":  "Running",
+                                      "Heartbeat":  "OkApplicationsHealthy",
+                                      "UptimeMin":  2900,
+                                      "Clustered":  true,
+                                      "Tpm":  true,
+                                      "OfflineAction":  2
+                                  },
+                                  {
+                                      "Name":  "VM-FRANK",
+                                      "State":  "Running",
+                                      "Heartbeat":  "OkApplicationsHealthy",
+                                      "UptimeMin":  2900,
+                                      "Clustered":  true,
+                                      "Tpm":  true,
+                                      "OfflineAction":  2
+                                  },
+                                  {
+                                      "Name":  "VM-GRACE",
+                                      "State":  "Running",
+                                      "Heartbeat":  "OkApplicationsHealthy",
+                                      "UptimeMin":  2900,
+                                      "Clustered":  true,
+                                      "Tpm":  true,
+                                      "OfflineAction":  2
+                                  },
+                                  {
+                                      "Name":  "VM-SPARE",
+                                      "State":  "Off",
+                                      "Heartbeat":  "Disabled",
+                                      "UptimeMin":  0,
+                                      "Clustered":  true,
+                                      "Tpm":  true,
+                                      "OfflineAction":  2
+                                  }
+                              ],
+                      "Cluster":  "VDICL",
+                      "ClusterNodes":  [
+                                           "HV1",
+                                           "HV2"
+                                       ]
+                  },
+                  {
+                      "Name":  "HV2",
+                      "Fqdn":  "hv2.example.com",
+                      "Reachable":  true,
+                      "Error":  null,
+                      "Services":  [
+                                       {
+                                           "Name":  "VmHostAgent",
+                                           "State":  "Running",
+                                           "Since":  null
+                                       },
+                                       {
+                                           "Name":  "vmms",
+                                           "State":  "Running",
+                                           "Since":  null
+                                       },
+                                       {
+                                           "Name":  "ClusSvc",
+                                           "State":  "Running",
+                                           "Since":  null
+                                       }
+                                   ],
+                      "AgentBrokers":  "rdcb1.example.com;rdcb2.example.com",
+                      "AgentLinks":  [
+                                         "192.0.2.11"
+                                     ],
+                      "AgentLast":  {
+                                        "Time":  "2026-10-12T06:01:05",
+                                        "Attached":  true,
+                                        "Broker":  "rdcb1.example.com"
+                                    },
+                      "Groups":  [
+                                     {
+                                         "Sid":  "S-1-5-32-576",
+                                         "Read":  true,
+                                         "Members":  [
+                                                         {
+                                                             "Sid":  "S-1-5-21-1000-2000-3000-1101",
+                                                             "Name":  "EXAMPLE\\RDCB1$"
+                                                         }
+                                                     ]
+                                     },
+                                     {
+                                         "Sid":  "S-1-5-32-577",
+                                         "Read":  true,
+                                         "Members":  [
+                                                         {
+                                                             "Sid":  "S-1-5-21-1000-2000-3000-3001",
+                                                             "Name":  "EXAMPLE\\RDS-Brokers"
+                                                         }
+                                                     ]
+                                     },
+                                     {
+                                         "Sid":  "S-1-5-32-578",
+                                         "Read":  true,
+                                         "Members":  [
+                                                         {
+                                                             "Sid":  "S-1-5-21-1000-2000-3000-3001",
+                                                             "Name":  "EXAMPLE\\RDS-Brokers"
+                                                         }
+                                                     ]
+                                     }
+                                 ],
+                      "Vms":  [
+                                  {
+                                      "Name":  "VM-BOB",
+                                      "State":  "Running",
+                                      "Heartbeat":  "OkApplicationsHealthy",
+                                      "UptimeMin":  2900,
+                                      "Clustered":  true,
+                                      "Tpm":  true,
+                                      "OfflineAction":  2
+                                  },
+                                  {
+                                      "Name":  "VM-CAROL",
+                                      "State":  "Saved",
+                                      "Heartbeat":  "Disabled",
+                                      "UptimeMin":  0,
+                                      "Clustered":  true,
+                                      "Tpm":  true,
+                                      "OfflineAction":  1
+                                  },
+                                  {
+                                      "Name":  "VM-ERIN",
+                                      "State":  "Off",
+                                      "Heartbeat":  "Disabled",
+                                      "UptimeMin":  0,
+                                      "Clustered":  true,
+                                      "Tpm":  true,
+                                      "OfflineAction":  2
+                                  },
+                                  {
+                                      "Name":  "VM-IVAN",
+                                      "State":  "Running",
+                                      "Heartbeat":  "OkApplicationsHealthy",
+                                      "UptimeMin":  2900,
+                                      "Clustered":  true,
+                                      "Tpm":  true,
+                                      "OfflineAction":  2
+                                  },
+                                  {
+                                      "Name":  "VM-JUDY",
+                                      "State":  "Running",
+                                      "Heartbeat":  "OkApplicationsHealthy",
+                                      "UptimeMin":  2900,
+                                      "Clustered":  true,
+                                      "Tpm":  true,
+                                      "OfflineAction":  2
+                                  }
+                              ],
+                      "Cluster":  "VDICL",
+                      "ClusterNodes":  [
+                                           "HV1",
+                                           "HV2"
+                                       ]
+                  }
+              ],
+    "BrokerSids":  [
+                       {
+                           "Broker":  "RDCB1",
+                           "Sids":  [
+                                        "S-1-5-21-1000-2000-3000-1101",
+                                        "S-1-5-21-1000-2000-3000-3001",
+                                        "S-1-5-21-1000-2000-3000-515"
+                                    ]
+                       },
+                       {
+                           "Broker":  "RDCB2",
+                           "Sids":  [
+                                        "S-1-5-21-1000-2000-3000-1102",
+                                        "S-1-5-21-1000-2000-3000-3001",
+                                        "S-1-5-21-1000-2000-3000-515"
+                                    ]
+                       }
+                   ],
+    "Group":  null,
+    "Wts":  [
+                {
+                    "Vm":  "VM-ALICE",
+                    "Ok":  true,
+                    "Error":  null,
+                    "Sessions":  [
+                                     {
+                                         "Id":  2,
+                                         "State":  0,
+                                         "User":  "alice",
+                                         "Domain":  "EXAMPLE",
+                                         "Logon":  "2026-10-19T08:02:01",
+                                         "LastInput":  "2026-10-19T09:28:40",
+                                         "Disconnect":  {
+
+                                                        },
+                                         "Now":  "2026-10-19T09:30:00"
+                                     }
+                                 ]
+                },
+                {
+                    "Vm":  "VM-BOB",
+                    "Ok":  true,
+                    "Error":  null,
+                    "Sessions":  [
+
+                                 ]
+                },
+                {
+                    "Vm":  "VM-DAVE",
+                    "Ok":  true,
+                    "Error":  null,
+                    "Sessions":  [
+                                     {
+                                         "Id":  3,
+                                         "State":  4,
+                                         "User":  "dave",
+                                         "Domain":  "EXAMPLE",
+                                         "Logon":  "2026-10-19T08:05:10",
+                                         "LastInput":  "2026-10-19T08:50:58",
+                                         "Disconnect":  "2026-10-19T08:51:00",
+                                         "Now":  "2026-10-19T09:30:00"
+                                     }
+                                 ]
+                },
+                {
+                    "Vm":  "VM-FRANK",
+                    "Ok":  true,
+                    "Error":  null,
+                    "Sessions":  [
+                                     {
+                                         "Id":  2,
+                                         "State":  0,
+                                         "User":  "frank",
+                                         "Domain":  "EXAMPLE",
+                                         "Logon":  "2026-10-19T08:40:15",
+                                         "LastInput":  "2026-10-19T09:29:51",
+                                         "Disconnect":  {
+
+                                                        },
+                                         "Now":  "2026-10-19T09:30:00"
+                                     }
+                                 ]
+                },
+                {
+                    "Vm":  "VM-GRACE",
+                    "Ok":  true,
+                    "Error":  null,
+                    "Sessions":  [
+                                     {
+                                         "Id":  2,
+                                         "State":  0,
+                                         "User":  "grace",
+                                         "Domain":  "EXAMPLE",
+                                         "Logon":  "2026-10-19T07:55:30",
+                                         "LastInput":  "2026-10-19T09:08:12",
+                                         "Disconnect":  {
+
+                                                        },
+                                         "Now":  "2026-10-19T09:30:00"
+                                     }
+                                 ]
+                },
+                {
+                    "Vm":  "VM-IVAN",
+                    "Ok":  true,
+                    "Error":  null,
+                    "Sessions":  [
+                                     {
+                                         "Id":  2,
+                                         "State":  0,
+                                         "User":  "ivan",
+                                         "Domain":  "EXAMPLE",
+                                         "Logon":  "2026-10-19T08:15:20",
+                                         "LastInput":  "2026-10-19T09:29:59",
+                                         "Disconnect":  {
+
+                                                        },
+                                         "Now":  "2026-10-19T09:30:00"
+                                     }
+                                 ]
+                },
+                {
+                    "Vm":  "VM-JUDY",
+                    "Ok":  true,
+                    "Error":  null,
+                    "Sessions":  [
+                                     {
+                                         "Id":  2,
+                                         "State":  0,
+                                         "User":  "judy",
+                                         "Domain":  "EXAMPLE",
+                                         "Logon":  "2026-10-19T08:20:40",
+                                         "LastInput":  "2026-10-19T09:27:02",
+                                         "Disconnect":  {
+
+                                                        },
+                                         "Now":  "2026-10-19T09:30:00"
+                                     }
+                                 ]
+                }
+            ],
+    "Events":  [
+                   {
+                       "Device":  "thinclient1",
+                       "Lines":  [
+                                     "2026-10-19 07:00:02 kiosk started",
+                                     "2026-10-19 08:01:55 broker rdbroker.example.com: connecting to rdcb1.example.com (Kerberos)",
+                                     "2026-10-19 08:02:04 session of alice opened (broker rdbroker.example.com)"
+                                 ]
+                   },
+                   {
+                       "Device":  "thinclient2",
+                       "Lines":  [
+                                     "2026-10-19 07:00:02 kiosk started",
+                                     "2026-10-19 09:24:00 broker rdbroker.example.com: connecting to rdcb2.example.com (Kerberos)",
+                                     "2026-10-19 09:24:03 attempt 1 for bob on rdbroker.example.com failed after 2s (code 131, broker): [kerberos] error",
+                                     "2026-10-19 09:24:08 broker rdbroker.example.com: connecting to rdcb2.example.com (Kerberos)",
+                                     "2026-10-19 09:24:11 attempt 2 for bob on rdbroker.example.com failed after 2s (code 131, broker): [kerberos] error",
+                                     "2026-10-19 09:24:12 desktop not available for bob after 2 attempts: broker"
+                                 ]
+                   },
+                   {
+                       "Device":  "thinclient3",
+                       "Lines":  [
+                                     "2026-10-19 07:00:02 kiosk started",
+                                     "2026-10-19 09:15:00 broker rdbroker.example.com: connecting to rdcb2.example.com (Kerberos)",
+                                     "2026-10-19 09:15:03 attempt 1 for carol on rdbroker.example.com failed after 2s (code 131, broker): [kerberos] error",
+                                     "2026-10-19 09:15:28 broker 192.0.2.11: connecting to rdcb1.example.com (Kerberos)",
+                                     "2026-10-19 09:16:10 attempt 2 for carol on 192.0.2.11 failed after 41s (code 147, vm): the virtual machine could not be started",
+                                     "2026-10-19 09:16:11 desktop not available for carol after 2 attempts: vm"
+                                 ]
+                   },
+                   {
+                       "Device":  "thinclient4",
+                       "Lines":  [
+                                     "2026-10-19 07:00:02 kiosk started",
+                                     "2026-10-19 08:05:01 broker rdbroker.example.com: connecting to rdcb1.example.com (Kerberos)",
+                                     "2026-10-19 08:05:12 session of dave opened (broker rdbroker.example.com)",
+                                     "2026-10-19 08:51:02 session of dave disconnected after 46 min while its VM still runs (code 1): taken over by another device or disconnected on the server, no reconnection"
+                                 ]
+                   },
+                   {
+                       "Device":  "thinclient5",
+                       "Lines":  [
+                                     "2026-10-19 07:00:02 kiosk started"
+                                 ]
+                   },
+                   {
+                       "Device":  "thinclient6",
+                       "Lines":  [
+                                     "2026-10-19 07:00:02 kiosk started",
+                                     "2026-10-19 08:40:00 broker rdbroker.example.com: connecting to rdcb2.example.com (Kerberos)",
+                                     "2026-10-19 08:40:03 attempt 1 for frank on rdbroker.example.com failed after 2s (code 131, broker): [kerberos] error",
+                                     "2026-10-19 08:40:09 broker 192.0.2.11: connecting to rdcb1.example.com (Kerberos)",
+                                     "2026-10-19 08:40:18 session of frank opened (broker 192.0.2.11)"
+                                 ]
+                   },
+                   {
+                       "Device":  "reception1",
+                       "Lines":  [
+                                     "2026-10-19 07:00:02 kiosk started"
+                                 ]
+                   },
+                   {
+                       "Device":  "thinclient9",
+                       "Lines":  [
+                                     "2026-10-19 07:00:02 kiosk started",
+                                     "2026-10-19 08:15:12 broker rdbroker.example.com: connecting to rdcb1.example.com (Kerberos)",
+                                     "2026-10-19 08:15:22 session of ivan opened (broker rdbroker.example.com)"
+                                 ]
+                   },
+                   {
+                       "Device":  "thinclient10",
+                       "Lines":  [
+                                     "2026-10-19 07:00:02 kiosk started",
+                                     "2026-10-19 07:40:08 broker rdbroker.example.com: connecting to rdcb2.example.com (Kerberos)",
+                                     "2026-10-19 07:40:12 attempt 1 for judy on rdbroker.example.com failed after 2s (code 131, broker): [kerberos] error",
+                                     "2026-10-19 08:20:32 broker rdbroker.example.com: connecting to rdcb1.example.com (Kerberos)",
+                                     "2026-10-19 08:20:42 session of judy opened (broker rdbroker.example.com)"
+                                 ]
+                   }
+               ],
+    "Notes":  [
+
+              ]
+}

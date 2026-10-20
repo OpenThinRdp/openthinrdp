@@ -1,0 +1,6 @@
+2026-10-19 07:00:02 kiosk started
+2026-10-19 09:24:00 broker rdbroker.example.com: connecting to rdcb2.example.com (Kerberos)
+2026-10-19 09:24:03 attempt 1 for bob on rdbroker.example.com failed after 2s (code 131, broker): [kerberos] error
+2026-10-19 09:24:08 broker rdbroker.example.com: connecting to rdcb2.example.com (Kerberos)
+2026-10-19 09:24:11 attempt 2 for bob on rdbroker.example.com failed after 2s (code 131, broker): [kerberos] error
+2026-10-19 09:24:12 desktop not available for bob after 2 attempts: broker

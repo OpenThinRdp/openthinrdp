@@ -5,6 +5,72 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
 
 ## Unreleased
 
+- **Manager: the access code first.** A copy of the manager with a vault asks its access code before anything else, in a
+  window of its own: no folder, no device, no window behind it. A wrong code can be typed again (after three, each try
+  waits longer); Exit ends the manager; the right code keeps the vault open for the session. Without a vault, as before.
+- **Manager: the SSH keys of the devices are on the Vault page**, under the SSH key of the manager; the menu has no
+  SSH keys page any more. Same list, same buttons, same file (`config\authorized_keys`).
+- **Manager: Health Center, the health of the whole Hyper-V and RDS infrastructure**
+  ([#78](https://github.com/OpenThinRdp/openthinrdp/issues/78)). A page under Desktops; details in
+  [docs/manager.md](docs/manager.md#health-center-the-whole-infrastructure).
+- **Health Center: every check with its result.** Each item lists every check it ran, OK ones included, with one short
+  line; new checks: RD Gateway and RD Web (service, certificate, policies, port 443, failed connections), network
+  adapters and their drivers, UPS, the cluster volumes from each node, the witness on its device; new actions: move all
+  VMs to the other node, restart or shut down a server with its guards, the LAPS password (read only), and on a
+  personal desktop the session actions. Which check of the original runbook script is where:
+  [docs/health-center-coverage.md](docs/health-center-coverage.md).
+- **Health Center: every server entered by its role, nothing found by itself.** Settings > Health Center has one list
+  per role (Hyper-V hosts with or without a cluster, DCs, DNS, brokers, RD Gateway, RD Web, SQL listener and replicas or
+  single SQL servers, file servers, other servers, devices), each entry with a note; an empty part says *not
+  configured* with a button to the settings. The settings of before move into the lists by themselves.
+- **Health Center: the reading shows its steps** with a progress bar, and the first one fills the tree part by part.
+  Without a backup log in the settings the backups are not judged: one note *source not configured*, never a false
+  *no recent backup*.
+- **Health Center: custom checks.** Your own diagnostic and repair scripts, on the servers you choose, shown in the tree
+  like the others; kept in `config\health-checks` of the management folder, with a warning when people other than the
+  administrators can write there.
+- **Manager: the Desktops page is the Distribution view of the Health Center**: one table, searchable, user -> device ->
+  desktop -> host -> VM -> session; who cannot sign in opens the headline of the Health Center.
+- **Manager: Settings with tabs**: Devices (the common settings), Health Center (with the desktops and the thresholds),
+  Manager (its updates, its language, a local copy of the management folder for when the file server is down), Custom
+  checks.  - A tree of the infrastructure (cluster, hosts, VMs; domain, DCs, DNS; SQL AlwaysOn and its replicas; brokers;
+    devices such as a NAS or the witness; backups), each item with its state; the selected one with its facts, its
+    checks (what is wrong and what it means, in one sentence each) and its actions. On top *everything OK* or the
+    problems. Read in the background every 3 minutes.
+  - Checks of hosts (services, stuck services, memory, disks, clock against the PDC emulator, pending restart, errors),
+    of the failover cluster (nodes, witness, failed roles and resources, CSVs, storage pool and disks, repair jobs, live
+    migration networks, vTPM VMs it would save, guardian keys on every node, room for the VMs of a failed node), of the
+    VMs (heartbeat, saved, paused, not watched by the cluster, old checkpoints, stop action, disks inside), of AD and
+    DNS (DC services and start mode, SYSVOL, replication, FSMO owners, DNS servers, names with more than one address,
+    slow reverse lookups, reverse zones), of an optional SQL AlwaysOn group (replicas, databases, services, logins and
+    jobs alike on every replica, backups), of devices (ping, ports, a share) and of an optional backup log. The
+    findings of the Desktops page on brokers and hosts show up there too, read once.
+  - *Diagnosis only* or *Diagnosis and repair*, for the page and for each item: in repair mode only safe repairs run by
+    themselves (start a service a role needs, unblock a stuck service with time limits, resynchronise a clock, the
+    witness online, `OfflineAction` 2, Wake-on-LAN...), each in `config\changes.log`; the others always ask. Never a
+    saved VM, never two DCs, SQL replicas or brokers at once, no SQL failover; a node is drained only with the others
+    up, the witness online, no storage repair and room for its VMs.
+  - Settings of the account (hosts, cluster yes/no, devices to watch, DNS servers, shared broker name, SQL listener,
+    backup log); hosts, cluster nodes, VMs, DCs and brokers are found by themselves.
+  - Tests in Windows PowerShell 5.1 in CI from recorded data (`tests/windows/health-tests.ps1`).
+- **Manager: the Windows side of the desktops** ([#74](https://github.com/OpenThinRdp/openthinrdp/issues/74)).
+  For Remote Desktop Services with Hyper-V; details in [docs/manager.md](docs/manager.md#desktops-brokers-and-hyper-v-hosts).
+  - A **Desktops** page: each user with the device, the personal desktop, its Hyper-V host, the state of the VM, the
+    Windows session (active, idle, disconnected) and the last sign-in (which broker, ok or failed, second try). Who
+    cannot sign in now is on top. Read in the background every 2 minutes.
+  - **Brokers and hosts** at the top of the same page: sign-ins ok and failed per broker, a broker that fails every request
+    (with its known signature, event 4648 of `tssdis.exe` without the `$`), stuck services, the self-repair task, the
+    shared name answering on every address; on each host the brokers in the three local groups (through groups too),
+    a stuck RDVH agent or vmms, the broker the agent is attached to, VMs with a vTPM the cluster would save. Each
+    problem in one sentence, with a Fix button when a safe fix exists.
+  - Actions, each confirmed with what happens and to whom, and logged in `config\changes.log`: restart the broker
+    services (only while another broker is healthy, never two at once), purge its tickets, repair the host
+    permissions, install the broker self-repair (`management/windows/rds`), unblock the RDVH agent; start, restart
+    and shut down a VM (never saved); log off, disconnect, message, shadow; assign a personal desktop.
+  - No rights on the servers: one sentence, and the rest of the manager as before.
+  - The **Problems** page is now **History**: the past problems of the devices, from their event logs; what is wrong
+    now is on Desktops.
+  - Tests of the manager in Windows PowerShell 5.1 in CI, from recorded data (`tests/windows`).
 - The settings dialog accepts spaces in the collection (`LOAD_BALANCE_INFO`), as in `tsv://MS Terminal Services Plugin.1.<collection>` for RDS session collections (#76).
 - **Raspberry Pi 4 (arm64), experimental** ([#61](https://github.com/OpenThinRdp/openthinrdp/issues/61)).
   - `image/build-rpi.sh` makes an SD card image: Debian 13 arm64 with Debian's kernel and `raspi-firmware`, the same
