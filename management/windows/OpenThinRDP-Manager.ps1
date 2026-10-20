@@ -1816,7 +1816,7 @@ function Save-LastFolder($path) {
 # down. A mirror made in the background at every start and by hand, without the packages of the old versions (large,
 # and only the file server publishes them). What is changed in the copy stays in the copy.
 function Get-LocalCopyPath { try { $s = Read-ManagerSettings; if ($s.PSObject.Properties['LocalCopy']) { return [string]$s.LocalCopy } } catch { }; '' }
-function Get-LocalCopyAge([string]$dir) { $f = Join-Path $dir 'local-copy.txt'; if ($dir -and (Test-Path -LiteralPath $f)) { [string](Get-Content -LiteralPath $f -TotalCount 1) } else { '' } }
+function Get-LocalCopyAge([string]$dir) { if (-not $dir) { return '' }; $f = Join-Path $dir 'local-copy.txt'; if (Test-Path -LiteralPath $f) { [string](Get-Content -LiteralPath $f -TotalCount 1) } else { '' } }
 $script:LocalSync = $null
 function Get-LocalCopyArgs([string]$from, [string]$to) { @($from, $to, '/MIR', '/R:1', '/W:1', '/NP', '/NFL', '/NDL', '/NJH', '/XD', (Join-Path $from 'updates\versions'), (Join-Path $from 'previous')) }
 function Start-LocalCopySync([string]$from, [string]$to) {
@@ -2652,7 +2652,7 @@ $tabSetDevices = New-Object System.Windows.Forms.TabPage (Get-Text 'SetTabDevice
 $tabSetManager = New-Object System.Windows.Forms.TabPage (Get-Text 'SetTabManager'); $tabSetCustom = New-Object System.Windows.Forms.TabPage (Get-Text 'SetTabCustom')
 foreach ($tp in @($tabSetDevices, $tabSetHealth, $tabSetManager, $tabSetCustom)) { $tp.BackColor = $Theme.Page; $tp.Padding = New-Object System.Windows.Forms.Padding(0, 10, 0, 0); [void]$setTabs.TabPages.Add($tp) }
 $comWrap.Padding = New-Object System.Windows.Forms.Padding(0)
-$lblComNote = New-Label (Get-Text 'PageCommonNote' (Get-Text 'ColManagedHere')) $fontBase $Theme.Muted; $lblComNote.AutoSize = $false; $lblComNote.Dock = 'Top'; $lblComNote.Height = 30
+$lblComNote = New-Label (Get-Text 'PageCommonNote' (Get-Text 'ColManagedHere')) $fontBase $Theme.Muted; $lblComNote.AutoSize = $false; $lblComNote.Dock = 'Top'; $lblComNote.Height = 48
 $tabSetDevices.Controls.Add($comWrap); $tabSetDevices.Controls.Add($lblComNote)
 $setWrap = New-Panel 'Fill' $Theme.Page; $setWrap.Padding = New-Object System.Windows.Forms.Padding(12, 0, 12, 12); $setWrap.Controls.Add($setTabs)
 $pageCommon.Controls.Add($setWrap); $pageCommon.Controls.Add((New-PageHeader (Get-Text 'NavCommon') (Get-Text 'PageSettingsNote')))
@@ -3120,6 +3120,8 @@ $btnCuDel.add_Click({
   try { Remove-HealthCustomCheck $c.Id } catch { Show-Message (Get-Text 'SetTabCustom') $_.Exception.Message 'Error' }; Update-SettingsTabs })
 $lvCustom.add_SelectedIndexChanged({ $on = $lvCustom.SelectedItems.Count -gt 0; Set-ActionEnabled $btnCuEdit $on; Set-ActionEnabled $btnCuDel $on })
 $setTabs.add_SelectedIndexChanged({ Update-SettingsTabs })
+# the screenshots of the documentation: a tab of the Settings page
+if ($env:OTR_MANAGER_SET_TAB) { $setTabs.SelectedIndex = [Math]::Min(3, [int]$env:OTR_MANAGER_SET_TAB) }
 foreach ($cd in @($setHcCard, $setMgrCard)) { $cd.add_Resize({ Set-SettingsHeights }) }
 function Set-SettingsHeights { Set-BlockHeights $setHcCard @($blkSetHc, $blkSetVdi); Set-BlockHeights $setMgrCard @($blkManager, $blkLang, $blkLocal) }
 # the notes of the blocks and the list of the custom checks, as they are now
@@ -3175,6 +3177,7 @@ function Select-Page([int]$i) {
   if ($i -eq 3) { Update-ProblemView }
   if ($i -eq 4) { Update-VaultView }
   if ($i -eq 5) { Update-UpdatesView }
+  if ($i -eq 1) { Update-SettingsTabs }
   if ($i -eq 6) { Set-DskSplitFit; Update-DesktopsView; if (-not $script:Vdi.Model) { Start-VdiRefresh } }
   if ($i -eq 7) { Set-HcSplitFit; Update-HealthView; if (-not $script:Health.Model -and -not $script:Health.Busy) { Start-HealthRefresh } }
 }
@@ -4332,6 +4335,7 @@ function Update-VdiBrokersView {
   $m = $script:Vdi.Model
   $show = $script:VdiLoaded -and $m -and $m.Access -notin 'off', 'nobroker'
   # the brokers and the hosts are items of the Health Center tree: the Distribution shows the users only
+  $dskOuter.Panel1Collapsed = $true
   if (-not $show) { return }
   $all = @($m.Findings); $bad = @($all | Where-Object { $_.Kind -ne 'ok' })
   if ($bad.Count) {

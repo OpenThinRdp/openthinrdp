@@ -171,6 +171,10 @@ sign-in (**Health Center** goes back to the tree). It works with Remote Desktop 
 desktops, and session hosts when there are some).
 
 <p align="center">
+<img src="screenshots/manager-health-vm.png" alt="Health Center, a personal desktop selected: the user, the Windows session, the last sign-in, the thin client, every check with OK, and the session actions" width="100%">
+</p>
+
+<p align="center">
 <img src="screenshots/manager-desktops.png" alt="Health Center, Distribution: one row per user with the device, the desktop, its host, the state of the VM, the session and the last sign-in" width="100%">
 </p>
 
@@ -335,6 +339,11 @@ The settings of the desktops (brokers, collections) are in the same tab, *Deskto
 ### Custom checks
 
 **Settings > Custom checks** adds your own checks, shown in the tree like the others, on the server they ran on:
+
+<p align="center">
+<img src="screenshots/manager-settings-custom.png" alt="Settings, Custom checks: the list with where each check runs, how often, how its repair runs, and the buttons New check, Change, Open folder, Delete" width="100%">
+</p>
+
 
 - a **name**, **where** it runs (`hosts`, `dcs`, `brokers`, `sql`, `servers`, or names of servers), **every** how many
   minutes (at least 3), what it means;

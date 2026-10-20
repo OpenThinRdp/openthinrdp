@@ -39,13 +39,23 @@ $hjson = Join-Path $Out 'health-demo.json'
 if (-not $Shots) { return }
 $env:OTR_MANAGER_VDI_DEMO = $json; $env:OTR_MANAGER_HEALTH_DEMO = $hjson; $env:OTR_MANAGER_SIZE = $Size; $env:OTR_MANAGER_VAULT = Join-Path $Out 'no-vault.otr'
 $env:OTR_MANAGER_SETTINGS = Join-Path $Out 'manager.json'
+# two custom checks of the Health Center (the examples of docs/manager.md)
+$hcd = Join-Path $dest 'config\health-checks'; New-Item -ItemType Directory -Path $hcd -Force | Out-Null
+[IO.File]::WriteAllText((Join-Path $hcd 'print-spooler.json'), '{ "Name": "Print spooler", "Where": "servers", "Risky": false, "IntervalMin": 15, "Description": "The spooler must run on the print servers." }')
+[IO.File]::WriteAllText((Join-Path $hcd 'print-spooler.check.ps1'), "`$s = Get-Service Spooler -ErrorAction SilentlyContinue`r`nif (-not `$s -or `$s.Status -eq 'Running') { @{ State = 'ok'; Text = 'running' } } else { @{ State = 'error'; Text = `"Spooler is `$(`$s.Status)`" } }")
+[IO.File]::WriteAllText((Join-Path $hcd 'print-spooler.repair.ps1'), 'Start-Service Spooler')
+[IO.File]::WriteAllText((Join-Path $hcd 'web-app.json'), '{ "Name": "Web application", "Where": "web1", "Risky": false, "IntervalMin": 5, "Description": "The intranet answers its health page." }')
+[IO.File]::WriteAllText((Join-Path $hcd 'web-app.check.ps1'), "try { `$r = Invoke-WebRequest -Uri 'https://localhost:5001/healthz' -UseBasicParsing -TimeoutSec 10; @{ State = 'ok'; Text = `"HTTP `$(`$r.StatusCode)`" } } catch { @{ State = 'error'; Text = `$_.Exception.Message } }")
+# as it should be: only administrators (and the system) write there
+$null = & icacls.exe $hcd /inheritance:r /grant '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-18:(OI)(CI)F'
 $mgr = (Resolve-Path (Join-Path $mw 'OpenThinRDP-Manager.ps1')).Path
 foreach ($s in @(@{ Name = 'manager-desktops'; Tab = 6; Row = 'bob'; Lang = 'en' }, @{ Name = 'manager-history'; Tab = 3; Row = ''; Lang = 'en' },
   @{ Name = 'manager-desktops-it'; Tab = 6; Row = 'bob'; Lang = 'it' }, @{ Name = 'manager-history-it'; Tab = 3; Row = ''; Lang = 'it' },
   @{ Name = 'manager-health'; Tab = 7; Item = 'host:HV2'; Lang = 'en' }, @{ Name = 'manager-health-it'; Tab = 7; Item = 'host:HV2'; Lang = 'it' },
-  @{ Name = 'manager-health-cluster'; Tab = 7; Item = 'cluster:VDICL'; Lang = 'en' })) {
+  @{ Name = 'manager-health-cluster'; Tab = 7; Item = 'cluster:VDICL'; Lang = 'en' }, @{ Name = 'manager-health-vm'; Tab = 7; Item = 'vm:VM-ALICE'; Lang = 'en' },
+  @{ Name = 'manager-common'; Tab = 1; Lang = 'en' }, @{ Name = 'manager-settings-custom'; Tab = 1; SetTab = 3; Lang = 'en' })) {
   $env:OTR_MANAGER_SCREENSHOT = Join-Path $Out "$($s.Name).png"; $env:OTR_MANAGER_TAB = "$($s.Tab)"; $env:OTR_MANAGER_VDI_ROW = "$($s.Row)"
-  $env:OTR_MANAGER_HEALTH_ITEM = "$($s.Item)"
+  $env:OTR_MANAGER_HEALTH_ITEM = "$($s.Item)"; $env:OTR_MANAGER_SET_TAB = "$($s.SetTab)"
   & powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File $mgr -Folder $dest -Language $s.Lang
   $env:OTR_MANAGER_SCREENSHOT
 }
