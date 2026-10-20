@@ -1541,7 +1541,12 @@ function Get-DomainFolderFile {
   if ($d) { "\\$d\NETLOGON\OpenThinRDP\folders.conf" }
 }
 # the account of the devices: MGMT_USER of common.conf, without its domain
-function Get-DeviceAccount { $u = [string](Read-ConfFile $script:CommonFile)['MGMT_USER']; (($u -replace '^.*\\', '') -replace '@.*$', '').ToLower() }
+# (else the one the devices report: the account is often set on each device, not in common.conf)
+function Get-DeviceAccount {
+  $u = [string](Read-ConfFile $script:CommonFile)['MGMT_USER']
+  if (-not $u) { $u = [string]@(Get-MgmtAccounts $script:Devices)[0] }
+  (($u -replace '^.*\\', '') -replace '@.*$', '').ToLower()
+}
 function Get-DomainFolderMap($file) {
   $h = [ordered]@{}
   if ($file -and (Test-Path -LiteralPath $file)) { foreach ($l in (Read-Lines $file)) { if ($l -notmatch '^\s*[#;]' -and $l -match '^\s*([^=]+?)\s*=\s*(.*?)\s*$') { $h[$Matches[1].ToLower()] = $Matches[2] } } }
@@ -1549,10 +1554,15 @@ function Get-DomainFolderMap($file) {
 }
 function Set-DomainFolder([string]$account, [string]$folder) {
   $f = Get-DomainFolderFile; if (-not $f) { throw (Get-Text 'FolderNoDomain') }
+  if ($account -notmatch '^[A-Za-z0-9._-]+$') { throw (Get-Text 'FolderNoAccount') }
   $dir = Split-Path $f; if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
-  $lines = if (Test-Path -LiteralPath $f) { @(Read-Lines $f | Where-Object { $_ -and $_ -notmatch "^\s*$([regex]::Escape($account))\s*=" }) }
-           else { @('# OpenThinRDP: the management folder of each device account (<account>=<folder>), written by the manager.') }
-  if ($folder) { $lines += "$account=$folder" }
+  # a List: with one line, $lines += would join two strings into one line instead of adding one
+  $lines = New-Object Collections.Generic.List[string]
+  if (Test-Path -LiteralPath $f) { foreach ($l in (Read-Lines $f)) { if ($l -and $l -notmatch "^\s*$([regex]::Escape($account))\s*=" -and $l -notmatch '^\s*=') { $lines.Add($l) } } }
+  if (-not @($lines | Where-Object { $_ -match '^\s*#' }).Count) { $lines.Insert(0, '# OpenThinRDP: the management folder of each device account (<account>=<folder>), written by the manager.') }
+  # an older manager glued the first entry to this comment: the comment alone
+  for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -match '^(#.*?written by the manager\.)=') { $lines[$i] = $Matches[1] } }
+  if ($folder) { $lines.Add("$account=$folder") }
   [IO.File]::WriteAllText($f, (($lines -join "`r`n") + "`r`n"), $script:Utf8)
   Add-ChangeLog "domain folder: $account=$folder ($f)"
 }

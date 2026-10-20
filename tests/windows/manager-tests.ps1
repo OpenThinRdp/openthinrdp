@@ -301,6 +301,15 @@ try {
   ok 'the account of the devices without its domain, in lower case' { (Get-DeviceAccount) -eq 'svc-thin' }
   $fm = Join-Path $tmp 'folders.conf'; [IO.File]::WriteAllText($fm, "# c`r`nSvc-Thin = \\fs\otr`r`nother=\\x\y`r`n")
   ok 'folders.conf read as the devices read it (account in any case, # ignored)' { $mm = Get-DomainFolderMap $fm; $mm['svc-thin'] -eq '\\fs\otr' -and $mm.Count -eq 2 }
+  # folders.conf written: one entry per line, also the first one (a single comment line once swallowed it)
+  function Get-DomainFolderFile { Join-Path $tmp 'nl-folders.conf' }
+  Set-DomainFolder 'svc-thin' '\\fs\otr'; Set-DomainFolder 'svc-b' '\\fs\b'; Set-DomainFolder 'svc-thin' '\\fs\new'
+  ok 'folders.conf: comment, then one line per account, the last value kept' { $fl = @(Read-Lines (Get-DomainFolderFile) | Where-Object { $_ }); $fl.Count -eq 3 -and $fl[0] -like '#*written by the manager.' -and ($fl -contains 'svc-thin=\\fs\new') -and ($fl -contains 'svc-b=\\fs\b') }
+  ok 'folders.conf: no entry without an account' { try { Set-DomainFolder '' '\\fs\x'; $false } catch { $true } }
+  [IO.File]::WriteAllText($script:CommonFile, "BROKER=x`r`n"); $keepDev2 = $script:Devices; $script:Devices = @([pscustomobject]@{ S = @{ MGMT_ACCOUNT = 'EX\Svc-Rep' } })
+  ok 'the account the devices report when common.conf has none' { (Get-DeviceAccount) -eq 'svc-rep' }
+  $script:Devices = $keepDev2; Remove-Item Function:\Get-DomainFolderFile
+  [IO.File]::WriteAllText($script:CommonFile, "MGMT_USER=EXAMPLE\Svc-Thin`r`n")
   ok 'a folder can only move to a network path, never onto itself' { $e1 = try { Move-ManagementFolder 'C:\otr'; '' } catch { 'refused' }; $e2 = try { Move-ManagementFolder $script:Folder; '' } catch { 'refused' }; $e1 -and $e2 }
   ok 'device: no folder in the settings + a domain account = the folder named in NETLOGON, the last one kept' { $rs = Get-Content (Join-Path $root 'rootfs\opt\openthinrdp\report.sh') -Raw; $rs -match 'NETLOGON' -and $rs -match 'share_from_domain; RS=\$\(cat "\$FROMDOM"' }
   $script:CommonFile = $keepCommon; $script:Devices = $keepDevices
