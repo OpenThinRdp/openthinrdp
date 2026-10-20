@@ -282,6 +282,22 @@ try {
   $lang = & powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "`$env:OTR_MANAGER_SETTINGS = '$lsf'; . '$(Join-Path $mw 'OpenThinRDP-Manager.ps1')' -Folder '$tmp' -FunctionsOnly; `$script:Language"
   ok 'the language chosen in Settings > Manager when -Language is not given' { "$lang".Trim() -eq 'it' }
 
+  # ---- a .conf as text (#82): masked secrets, the checks of the page, the stored form
+  $keepCommon = $script:CommonFile; $keepDevices = $script:Devices
+  $script:CommonFile = Join-Path $tmp 'config\text-test.conf'; $script:Devices = @()
+  [IO.File]::WriteAllText($script:CommonFile, "# all`r`n`r`nBROKER=rdbroker.example.local`r`nMGMT_PASSWORD=Secret1`r`nSESSION_THRESHOLD=60`r`n")
+  $masked = @(ConvertTo-MaskedConf (Read-Lines $script:CommonFile)) -join "`r`n"
+  ok 'as text: a password never shows' { $masked -notmatch 'Secret1' -and $masked -match 'MGMT_PASSWORD=\*{8}' }
+  $p = Get-ConfTextPlan $null $masked
+  ok 'as text: unchanged text = no change, the password kept' { -not $p.Errors.Count -and -not $p.Changes.Count -and ($p.Lines -contains 'MGMT_PASSWORD=Secret1') }
+  ok 'as text: a bad value refused as on the page' { (Get-ConfTextPlan $null ($masked -replace 'SESSION_THRESHOLD=60', 'SESSION_THRESHOLD=200')).Errors.Count -eq 1 }
+  ok 'as text: a host-only key and a line that is no setting refused' { (Get-ConfTextPlan $null ($masked + "`r`nHOSTNAME=x1`r`nsomething wrong")).Errors.Count -eq 2 }
+  $p = Get-ConfTextPlan $null (($masked -replace '\*{8}', 'New2') + "`r`nFOO=1`r`nUSB_MODE=Disks")
+  ok 'as text: stored form, new password, unknown key a warning' { -not $p.Errors.Count -and ($p.Lines -contains 'USB_MODE=disks') -and ($p.Lines -contains 'MGMT_PASSWORD=New2') -and $p.Warnings.Count -eq 1 -and $p.Changes.Count -eq 3 }
+  Save-ConfText $p
+  ok 'as text: saved with its comments, the old file in config\backup' { (Read-Lines $script:CommonFile)[0] -eq '# all' -and (Read-ConfFile $script:CommonFile)['USB_MODE'] -eq 'disks' -and @(Get-ChildItem (Join-Path $tmp 'config\backup') -Filter 'text-test-*').Count -eq 1 }
+  $script:CommonFile = $keepCommon; $script:Devices = $keepDevices
+
   # ---- Italian
   $script:Text = Read-LanguageTexts $script:LangDir 'it'
   $mi = ConvertTo-VdiModel $raw $devs $now
