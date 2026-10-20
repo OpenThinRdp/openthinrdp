@@ -3,7 +3,7 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
-## Unreleased
+## 0.2.2 (2026-10-20)
 
 - **Manager: the access code first.** A copy of the manager with a vault asks its access code before anything else, in a
   window of its own: no folder, no device, no window behind it. A wrong code can be typed again (after three, each try
