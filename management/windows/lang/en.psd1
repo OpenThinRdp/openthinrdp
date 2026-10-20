@@ -395,7 +395,7 @@
   Label_POWER_ON_DAYS       = 'Power on days'
   Help_POWER_ON_DAYS        = 'Digits of the days: 1 = Monday ... 7 = Sunday (e.g. 12345 = Monday to Friday).'
   Label_LANGUAGE            = 'Language'
-  Help_LANGUAGE             = 'Two letters: en or it, or any language file added to the image.'
+  Help_LANGUAGE             = 'Two letters: en, it or nl, or any language file added to the image.'
   Label_KEYBOARD            = 'Keyboard'
   Help_KEYBOARD             = 'Keyboard layout (X11/console), e.g. us, it, de, fr.'
   Label_TITLE               = 'Title'

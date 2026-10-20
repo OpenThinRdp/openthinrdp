@@ -58,6 +58,20 @@ ok "bad days refused" '! check x "POWER_ON_DAYS=1289"'
 ok "bad time refused" '! check x "POWER_ON_TIME=25:00"'
 ok "bad USB id refused" '! check x "USB_REDIRECT=1eaf:00x9"'
 ok "unknown language refused" '! check x "LANGUAGE=xx"'
+ok "Dutch accepted" 'check x "LANGUAGE=nl"'
+# every translation: only plain KEY="text" lines (it is sourced as root), the keys of en.sh, the same %s
+LANG_EN=/src/rootfs/opt/openthinrdp/lang/en.sh
+lang_plain(){ ! grep -vE '^\s*(#.*)?$|^[A-Z][A-Z0-9_]*="([^"\\`$]|\\.)*"\s*$' "$1" | grep -q .; }
+lang_keys(){ grep -oE '^[A-Z][A-Z0-9_]*=' "$1" | sort -u; }
+lang_known(){ [ -z "$(comm -13 <(lang_keys "$LANG_EN") <(lang_keys "$1"))" ]; }
+# key and number of %s/%d, one line per key
+lang_fmt(){ grep -E '^[A-Z]' "$1" | while IFS= read -r l; do printf '%s %s\n' "${l%%=*}" "$(grep -oE '%[sd]' <<< "${l#*=}" | wc -l)"; done | sort; }
+lang_same_fmt(){ [ -z "$(join <(lang_fmt "$LANG_EN") <(lang_fmt "$1") | awk '$2 != $3')" ]; }
+for L in /src/rootfs/opt/openthinrdp/lang/*.sh; do
+  ok "lang/${L##*/}: only KEY=\"text\" lines" 'lang_plain "$L"'
+  ok "lang/${L##*/}: no key unknown to en.sh" 'lang_known "$L"'
+  ok "lang/${L##*/}: the same %s and %d as en.sh" 'lang_same_fmt "$L"'
+done
 ok "RDP_EXTRA with shell characters refused" '! check x "RDP_EXTRA=/foo;reboot"'
 # the messages follow the language the device is using now
 printf 'LANGUAGE=it\n' > /etc/openthinrdp/openthinrdp.conf; printf 'HOSTNAME=12345\n' > "$T"
