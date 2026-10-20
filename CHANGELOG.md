@@ -3,6 +3,12 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.2.5 (2026-10-20)
+
+- **Manager: power and commands for a device.** In the header of a device, *Power and commands*: power on with
+  Wake-on-LAN (to the broadcast of the network it reported), restart, switch off, send its status now, run a command
+  and see its output. Over SSH with the key of the vault; restart and switch off warn when someone is working on it.
+
 ## 0.2.4 (2026-10-20)
 
 - **Manager: *Name it in the domain* works on a real domain.** Found in the first real use of 0.2.3: the account of
