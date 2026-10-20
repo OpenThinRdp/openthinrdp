@@ -1,7 +1,5 @@
 # Frequently asked questions
 
-*[Italiano](faq.it.md)*
-
 ## The project
 
 ### What is OpenThinRDP?

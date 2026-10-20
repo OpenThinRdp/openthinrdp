@@ -1,13 +1,12 @@
 <p align="center"><img src="docs/logo.png" alt="OpenThinRDP" width="480"></p>
 
-<p align="center"><b>The open source thin client OS with RDP over UDP<br>
-for Windows Remote Desktop, RDS and VDI: FreeRDP with the UDP transport that upstream does not ship yet.</b></p>
+<p align="center"><b>The free thin client OS for Windows Remote Desktop, RDS and VDI.<br>
+RDP over UDP that keeps working where TCP freezes, and a whole fleet managed from one Windows window.</b></p>
 
 <p align="center">
 <a href="https://github.com/OpenThinRdp/openthinrdp/releases/latest"><b>⬇ Download the ISO (latest release)</b></a>
 &nbsp;·&nbsp; <a href="#try-it-in-five-minutes">Try it live, nothing installed</a>
 &nbsp;·&nbsp; <a href="https://openthinrdp.github.io/">Website</a>
-&nbsp;·&nbsp; <a href="README.it.md">Italiano</a>
 </p>
 
 <p align="center">
@@ -16,54 +15,61 @@ for Windows Remote Desktop, RDS and VDI: FreeRDP with the UDP transport that ups
 <img src="docs/screenshots/settings.png" alt="Settings of the device" width="32%">
 </p>
 
-OpenThinRDP turns small PCs and old thin clients into kiosks that boot straight into a sign-in form and connect
-to Windows: through an RD Connection Broker to the user's desktop or VM, or straight to a session host or to any
-Windows PC with Remote Desktop turned on, **on premises or in the cloud** (Azure, AWS, any provider). They are
-managed from a shared folder with a small Windows manager: status of every device, central settings, logo, signed
-updates, and the screen of any device in your browser. No agent, no management server, no cloud service to depend
-on, no licence per device.
+**Turn any PC or old thin client into a locked-down Remote Desktop kiosk in five minutes.** It boots straight into
+a sign-in form and connects to Windows: through an RD Connection Broker to the user's desktop or VM, or straight to
+a session host or any Windows PC, **on premises or in the cloud**. No licence per device, no management server, no
+agent, no cloud service to depend on: a shared folder and a small Windows manager are all it takes.
+
+| | |
+|---|---|
+| **Smooth on bad lines** | RDP over UDP: on a line losing half of the packets the desktop still runs at 19-21 frames per second, where TCP has already frozen ([numbers below](#rdp-over-udp-that-keeps-going-on-a-bad-line)) |
+| **Zero-touch setup** | a new device needs a domain account and nothing else: it finds its management folder in the domain by itself ([how](docs/manager.md#settings--manager-language-and-local-copy)) |
+| **The whole fleet in one window** | state of every device, central settings, signed updates with pilot devices and rollback, power on (Wake-on-LAN), restart, remote screen |
+| **The Windows side too** | Health Center: brokers, Hyper-V hosts and cluster, VMs, DCs, DNS, SQL AlwaysOn and backups, with a plain sentence and a fix for each problem |
+| **Any x86-64 hardware** | UEFI with Secure Boot or legacy BIOS, complete Debian 13 kernel and firmware, from 2 GB of RAM |
+| **Open source** | Apache 2.0, Debian underneath, every client script readable in `rootfs/opt/openthinrdp` |
+
+> **In production every day.** OpenThinRDP runs the whole thin client fleet of the company it was built for:
+> 14 Dell OptiPlex 3000 Thin Clients at desks, tills, a laboratory, weighing stations and a wall screen on Wi-Fi,
+> on a Windows 11 VDI on Hyper-V behind two RD Connection Brokers. Every release reaches them through their
+> management folder and installs while people work, applied when the session is over. FreeRDP security releases
+> reach OpenThinRDP [within 7 days](SECURITY.md#freerdp-security-fixes); the ISO is tested in QEMU/KVM with Secure
+> Boot at every release and the system tests run on every commit
+> ([CI](https://github.com/OpenThinRdp/openthinrdp/actions/workflows/tests.yml)). What is in production, what is only
+> tested and what does not exist yet: **[docs/status.md](docs/status.md)**.
 
 > **Not openthinclient.** OpenThinRDP is a new, independent project, not affiliated with openthinclient: the names
-> sound alike, nothing else is shared. openthinclient is an older project whose devices boot over the network (PXE)
-> from its management server; OpenThinRDP is installed on each device or runs live from a USB stick, needs no server
-> and is built around RDP with FreeRDP's UDP transport.
-
-It grew out of a real migration away from a commercial thin client OS, on a fleet of Dell OptiPlex 3000 Thin
-Clients connected to a Windows 11 VDI on Hyper-V, where the system it comes from runs every day.
-
-> **Status: in production every day.** It runs the whole thin client fleet of the company it comes from: 14 Dell
-> OptiPlex 3000 Thin Clients at desks, tills, a laboratory, weighing stations and a wall screen on Wi-Fi, on a
-> Windows 11 VDI on Hyper-V behind two RD Connection Brokers, signing in with Kerberos and NTLM as fallback. The
-> devices were converted in place from the system they ran before and take every release through their management
-> folder (the manager checks each GitHub release and signs it again with the key of the site), installed during
-> sessions and applied when the session is over. FreeRDP security releases reach OpenThinRDP [within 7 days](SECURITY.md#freerdp-security-fixes)
-> (3.32.2: four hours). The ISO is tested in QEMU/KVM with Secure Boot at every release and the system tests run on
-> every commit ([CI](https://github.com/OpenThinRdp/openthinrdp/actions/workflows/tests.yml)). What is in production,
-> what is only tested and what does not exist yet:
-> **[docs/status.md](docs/status.md)**. Try it live, then on one device, before rolling it out.
+> sound alike, nothing else is shared. openthinclient boots its devices over the network (PXE) from its management
+> server; OpenThinRDP is installed on each device or runs live from a USB stick, needs no server and is built around
+> RDP with FreeRDP's UDP transport.
 
 ## RDP over UDP that keeps going on a bad line
 
-It started with a faulty switch port losing 43% of the large packets: over TCP the remote desktop froze. We
-reproduced that line, then raised the loss on every packet from the virtual machine step by step (Windows 11 VDI,
-full-screen load changing every pixel, frame rate measured by the server):
+Over TCP, every lost packet stops the screen until it is sent again: a lossy Wi-Fi, a VPN or a faulty cable is
+enough to freeze the remote desktop. Over UDP, Windows drops what is late and lowers the quality instead, and the
+desktop keeps moving. Measured on a Windows 11 VDI with a full-screen load changing every pixel, frame rate counted
+by the server, loss applied to every packet from the virtual machine:
 
 | packets lost | over TCP | **OpenThinRDP over UDP** |
 |---|---|---|
-| 20% | 0.6 frames per second: the screen barely moves | not measured (19-21 fps at 50%) |
-| 43% of the large packets\* (the faulty port) | 0-0.1 fps | **16-21 fps**, 7 minutes in a row |
-| 50% | not measured (0.2 fps already at 30%) | **19-21 fps**, as on a clean line |
-| 70% | not measured | **18-19 fps**\*\* |
-| 80% | not measured | 4 fps, then the tunnel gives up |
+| 0% | | **15-21 fps** |
+| 5% | 7-12 fps | |
+| 10% | 6 fps | |
+| 20% | 0.6 fps: the screen barely moves | |
+| 30% | 0.2 fps: frozen | |
+| 50% | | **19-21 fps**, as on a clean line |
+| 60% | | **14-21 fps** |
+| 70% | | **18-19 fps** |
+| 80% | | 4 fps, then the tunnel gives up |
 
-\* The other rows lose that share of every packet; this one 43% of the large packets and 5% of the small ones.
-\*\* At 70% the TCP connection RDP keeps beside the tunnel may end the session after 20 s without an
-acknowledgement. One environment (Dell OptiPlex 3000 Thin Client, Windows 11 VDI on Hyper-V), loss emulated with
-netem: [the method and the scripts](tests/udp-bench/README.md), to get your own numbers.
+Empty cells were not measured: TCP was already frozen at 30%, and UDP at 50% ran as on a clean line. One
+environment (Dell OptiPlex 3000 Thin Client, Windows 11 VDI on Hyper-V), loss emulated with netem:
+[the method and the scripts](tests/udp-bench/README.md) to get your own numbers, and every step in
+[docs/udp.md](docs/udp.md#on-a-lossy-line).
 
-Getting there took a fix to FreeRDP's UDP transport, which we found and reported in
-[#13608](https://github.com/FreeRDP/FreeRDP/pull/13608), and which is now part of it. Every step and the TCP
-numbers: [docs/udp.md](docs/udp.md#on-a-lossy-line).
+The UDP transport comes from our work in FreeRDP: we found and fixed what made it fail on lossy lines, and it was
+merged upstream as [#13608](https://github.com/FreeRDP/FreeRDP/pull/13608). Upstream ships it switched off;
+OpenThinRDP has it on, with `TRANSPORT=tcp` one setting away.
 
 ## Who it is for
 
@@ -121,8 +127,8 @@ What the device needs: [Requirements](#requirements).
 ## What it does
 
 - **Remote desktop over UDP.** Windows sends the graphics (and USB, sound and camera) over UDP and adapts frame rate and quality to the line
-  instead of queueing: smoother on busy servers, lossy Wi-Fi and VPNs. The image ships FreeRDP built with the UDP
-  transport that is still under review upstream ([FreeRDP #13608](https://github.com/FreeRDP/FreeRDP/pull/13608)).
+  instead of queueing: smoother on busy servers, lossy Wi-Fi and VPNs. The image ships FreeRDP with the UDP
+  transport switched on ([FreeRDP #13608](https://github.com/FreeRDP/FreeRDP/pull/13608), merged upstream, off there by default).
   Per device: `auto` (UDP, TCP when UDP is blocked), `udp` (UDP only) or `tcp`. In our 3-hour test with packet
   loss, bandwidth limits, network cuts and killed clients the session stayed on UDP the whole time
   ([results](https://github.com/FreeRDP/FreeRDP/pull/13608#issuecomment-6110587552)). See [docs/udp.md](docs/udp.md).
@@ -175,9 +181,17 @@ on the shared folder the devices report to. No server, no agent, no database: wh
 <p align="center">
 <img src="docs/screenshots/manager-devices.png" alt="Manager: every device, its state, user and version, and its settings" width="49%">
 <img src="docs/screenshots/manager-updates.png" alt="Manager, Updates page: all devices on one version, a pilot device on the newest" width="49%">
+<img src="docs/screenshots/manager-health.png" alt="Health Center: hosts, cluster, VMs, domain controllers, SQL and backups in one tree" width="49%">
+<img src="docs/screenshots/manager-desktops.png" alt="Desktops: who cannot sign in now and why, with brokers and Hyper-V hosts" width="49%">
 </p>
 
 - **Every device at a glance**: state, user, version, last report, a readable summary and the event log of each.
+- **Power and commands**: power on with Wake-on-LAN, restart, switch off, send its status now, run a command and see
+  its output.
+- **Zero-touch from the domain**: *Name it in the domain* and a new device needs only a domain account; *Move the
+  folder* moves the whole fleet to a new share in one step; *Check permissions* gives the devices' account exactly
+  the rights it needs.
+- **The configuration as text** too: `common.conf` and each device's file, checked like the pages before saving.
 - **Settings for all devices or one**, checked before saving, with the value in use on each device and what is
   still on its way.
 - **A new version on a few devices first, then on all**: *Release from GitHub* asks *pilot devices only* or *all
@@ -227,10 +241,10 @@ change how sessions, USB devices, smart cards or the graphics behave, and on a f
 at the same moment. So FreeRDP comes with OpenThinRDP releases, after testing on real devices, and you can still
 keep it as it is on one device (`/etc/openthinrdp/freerdp-pinned`).
 
-**Why UDP from a pull request that is not merged yet.** Over TCP, a busy server or a lossy line makes the screen
-fall behind; over UDP, Windows lowers quality instead. The pull request is solid in our tests, and the only way
-it gets merged is people using it and reporting. `TRANSPORT=tcp` is one setting away, and the image follows the
-upstream code as it changes.
+**Why UDP on by default.** Over TCP, a busy server or a lossy line makes the screen fall behind; over UDP, Windows
+lowers quality instead. The transport is now part of FreeRDP ([#13608](https://github.com/FreeRDP/FreeRDP/pull/13608),
+merged after weeks of tests on our fleet), switched off there by default; OpenThinRDP switches it on, and
+`TRANSPORT=tcp` is one setting away.
 
 **Why a shared folder instead of a management server.** Every Windows network already has a file share and
 someone who can manage permissions on it. The devices only read and write files there, so there is nothing to
@@ -284,7 +298,7 @@ The result is `out/openthinrdp-<version>.iso`. See [docs/building.md](docs/build
 - [CHANGELOG.md](CHANGELOG.md): what changed in each release.
 - [docs/status.md](docs/status.md): what is in production, what is only tested, what does not exist yet.
 - [docs/configuration.md](docs/configuration.md): every setting.
-- [docs/faq.md](docs/faq.md): frequently asked questions ([italiano](docs/faq.it.md)).
+- [docs/faq.md](docs/faq.md): frequently asked questions.
 - Guides: [replacing Dell ThinOS on Dell thin clients](docs/guides/replace-dell-thinos.md), [turning an old PC into a thin client](docs/guides/old-pc-thin-client.md).
 - [docs/alternatives.md](docs/alternatives.md): compared with Linux Mint + Remmina, IGEL OS, Dell ThinOS, Stratodesk, ThinStation, openthinclient.
 - [docs/manager.md](docs/manager.md): the Windows manager, page by page: devices, settings, pilot devices and going back.

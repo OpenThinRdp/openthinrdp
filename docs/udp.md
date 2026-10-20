@@ -4,9 +4,9 @@ Windows sends Remote Desktop graphics over UDP when the client supports MS-RDPEM
 server or a lossy line makes the screen fall behind: every lost packet holds up everything after it. Over UDP
 the server measures the line and lowers frame rate and quality instead, so the session stays responsive.
 
-FreeRDP does not ship UDP support yet: it is under review upstream
-([FreeRDP pull request #13608](https://github.com/FreeRDP/FreeRDP/pull/13608)). OpenThinRDP ships FreeRDP
-built with it, so it works out of the box.
+The UDP transport is part of FreeRDP since [pull request #13608](https://github.com/FreeRDP/FreeRDP/pull/13608),
+which came out of this project, but upstream ships it switched off. OpenThinRDP ships FreeRDP with it switched on,
+so it works out of the box.
 
 ## What travels over UDP
 
@@ -47,9 +47,8 @@ Nothing to install. UDP must be allowed:
 
 ## On a lossy line
 
-It started with a switch port with a faulty transceiver, losing **43% of the large packets** (5% of the small
-ones). We reproduced it with netem on the thin client, on the traffic from the virtual machine only, then raised
-the loss on every packet step by step until the session gave up. Windows 11 VDI behind the broker, full-screen
+Loss emulated with netem on the thin client, on the traffic from the virtual machine only, raised step by step
+until the session gave up. Windows 11 VDI behind the broker, full-screen
 load that changes every pixel at 30 frames per second; frame rate and loss as reported by the server; 90-120 s per
 step.
 
@@ -60,21 +59,18 @@ step.
 | 10% | not measured | 6 fps |
 | 20% | not measured | **0.6 fps**, the screen barely moves |
 | 30% | not measured | 0.2 fps, 26 frames a second dropped by the server |
-| 43% of the large packets only\* (the faulty port) | **16-21 fps**, 7 minutes in a row | 0-0.1 fps |
 | 50% | **19-21 fps** | not measured (already at 0.2 fps with 30%) |
 | 60% | 14-21 fps | not measured |
 | **70%** | **18-19 fps**\*\* | not measured |
 | 80% | 4 fps, then the tunnel gives up after 18 s | not measured |
 
-\* Every other row loses that share of all the packets from the virtual machine; this one, as on the faulty port,
-43% of the large packets and 5% of the small ones.
 \*\* With the FreeRDP of OpenThinRDP 0.1.5 (no 1 s freeze at every wrap of the channel sequence; 9-13 fps
 before). At 70% the first thing to give up is the TCP connection that RDP keeps beside the UDP tunnel: after
 20 s without an acknowledgement (`/timeout`, set by the kiosk) it ends the session, which happened once after
 100 s and not in another run of 150 s.
 
 On UDP no frame was dropped by the server for network reasons up to 70%. A session opened when the line is
-already bad is set up over UDP too (14-19 fps at 43%).
+already bad is set up over UDP too.
 
 **Limits of these numbers:** one environment (Dell OptiPlex 3000 Thin Client, Windows 11 VDI on Hyper-V behind an
 RD Connection Broker), one kind of load, loss emulated with netem on the client. The method and the scripts are
