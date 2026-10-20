@@ -1834,6 +1834,31 @@ function Test-FolderPermissions([string]$account) {
   if (-not @($out | Where-Object Problem).Count) { & $add $false (Get-Text 'PermReadOnlyOk') }
   $out
 }
+# The rights the account needs and no more (docs/management.md#account): read on the folder and below, modify on
+# status\. Write rights given to the account itself outside status\ (its own explicit rules) become read; rights
+# through groups (Everyone, Domain Users...) are only reported: other people may need them. Returns the changes.
+function Repair-FolderPermissions([string]$account) {
+  $sid = (New-Object Security.Principal.NTAccount $account).Translate([Security.Principal.SecurityIdentifier])
+  $inh = [Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'; $none = [Security.AccessControl.PropagationFlags]::None
+  $rx = [Security.AccessControl.FileSystemRights]::ReadAndExecute; $mod = [Security.AccessControl.FileSystemRights]::Modify
+  $done = @()
+  foreach ($p in @($script:Folder, $script:ConfigDir, (Join-Path $script:Folder 'updates'))) {
+    if (-not (Test-Path -LiteralPath $p)) { continue }
+    $acl = Get-Acl -LiteralPath $p; $ch = $false
+    foreach ($r in @($acl.GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier]) | Where-Object { $_.IdentityReference -eq $sid -and $_.AccessControlType -eq 'Allow' -and ((Get-RuleMask $_) -band $script:WriteMask) })) {
+      [void]$acl.RemoveAccessRuleSpecific($r); $ch = $true; $done += Get-Text 'PermFixNoWrite' $p
+    }
+    if ($p -eq $script:Folder) { $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($sid, $rx, $inh, $none, 'Allow'))); $ch = $true }
+    if ($ch) { Set-Acl -LiteralPath $p -AclObject $acl }
+  }
+  $done += Get-Text 'PermFixRead' $script:Folder
+  if (-not (Test-Path -LiteralPath $script:StatusDir)) { New-Item -ItemType Directory -Path $script:StatusDir | Out-Null }
+  $acl = Get-Acl -LiteralPath $script:StatusDir
+  $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($sid, $mod, $inh, $none, 'Allow'))); Set-Acl -LiteralPath $script:StatusDir -AclObject $acl
+  $done += Get-Text 'PermFixStatus' $script:StatusDir
+  Add-ChangeLog "permissions of $account corrected: $($done -join '; ')"
+  $done
+}
 
 # ---------------------------------------------------------------------------------------------
 # Problems: the event logs of all devices (status\<hostname>-events.log) read together, so that a broker refusing
@@ -4209,7 +4234,15 @@ $btnPerm.add_Click({
     }
     $lines += Get-Text 'PermFooter'
   } catch { $bad = $true; $lines = @($_.Exception.Message) } finally { $form.Cursor = 'Default' }
-  Show-Message (Get-Text 'PermTitle') ($lines -join "`r`n") $(if ($bad) { 'Warning' } else { 'Information' })
+  if (-not $bad) { Show-Message (Get-Text 'PermTitle') ($lines -join "`r`n") 'Information'; return }
+  # with problems: the rights the account needs and no more, after asking (Button2: No is the default)
+  if (-not (Confirm-Action (Get-Text 'PermTitle') (($lines -join "`r`n") + "`r`n`r`n" + (Get-Text 'PermFixAsk' ($acc -join ', '))) 'Button2')) { return }
+  $form.Cursor = 'WaitCursor'
+  try {
+    $r = foreach ($x in $acc) { Get-Text 'PermAccount' $x; @(Repair-FolderPermissions $x | ForEach-Object { "  $_" })
+      foreach ($t in (Test-FolderPermissions $x)) { if ($t.Problem) { "  $([char]0x2717) $($t.Text)" } else { "  $([char]0x2713) $($t.Text)" } }; '' }
+  } catch { $r = @(Get-Text 'PermFixFailed' $_.Exception.Message) } finally { $form.Cursor = 'Default' }
+  Show-Message (Get-Text 'PermTitle') ($r -join "`r`n") 'Information'
 })
 function Update-ProblemView {
   $since = switch ($cmbPeriod.SelectedIndex) { 0 { (Get-Date).Date } 1 { (Get-Date).AddHours(-24) } 2 { (Get-Date).AddDays(-7) } default { (Get-Date).AddDays(-30) } }

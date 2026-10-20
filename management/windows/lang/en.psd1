@@ -361,7 +361,7 @@
   Label_WIFI_PSK            = 'Wi-Fi password'
   Help_WIFI_PSK             = 'Type the password (8-63 characters) or a 64 hex digit key: only the WPA key computed for the SSID goes to the file, never the password. (saved) = keep the current key.'
   Label_MGMT_SHARE          = 'Management folder'
-  Help_MGMT_SHARE           = 'Where the devices report and read this configuration (\\server\share). A wrong value cuts the devices off from this tool.'
+  Help_MGMT_SHARE           = 'Where the devices report and read this configuration (\\server\share). A wrong value cuts the devices off from this tool. Empty, with a domain account in MGMT_USER: the folder named for that account in the domain (Settings > Manager > Management folder).'
   Label_MGMT_USER           = 'Management folder user'
   Help_MGMT_USER            = 'Account the devices use for this folder: user, DOMAIN\user or user@domain. Its password is set on the device (settings dialog) or as MGMT_PASSWORD in the .conf file, and is kept only in /etc/openthinrdp/smb.cred. Empty = the account built into the image.'
   Label_SECURITY_UPDATES    = 'Security updates'
@@ -2076,4 +2076,9 @@
   FolderMoveConf         = 'MGMT_SHARE points to the new folder in both copies: the devices with a folder of their own move at their next report.'
   FolderMoveDomain       = 'Named in the domain for {0}: the devices on the domain follow too.'
   FolderMoveAfter        = 'Leave the old folder until every device reports in the new one (Devices page).'
+  PermFixAsk             = 'Correct the permissions of {0} now? It gets read on the folder and below and modify on status\ only; write rights it has of its own elsewhere become read. Rights through groups (Everyone, Domain Users...) are not touched: remove them by hand if nobody needs them.'
+  PermFixNoWrite         = 'write rights of the account removed on {0}'
+  PermFixRead            = 'read on {0} and below'
+  PermFixStatus          = 'modify on {0}'
+  PermFixFailed          = 'Not corrected: {0}'
 }
