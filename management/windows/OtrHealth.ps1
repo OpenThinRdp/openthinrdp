@@ -504,11 +504,13 @@ function Get-HealthProbeConfig($settings, $vdiModel) {
 # ---------------------------------------------------------------------------------------------
 $script:HealthOrder = @{ error = 0; warn = 1; info = 2; ok = 3; off = 4 }
 function Get-TextIf([string]$key) { if ($script:Text.ContainsKey($key)) { Get-Text $key @args } else { '' } }
+# numbers with the decimal separator of the language of the window (an English window on an Italian Windows: 0.2)
+function Get-HcCulture { try { [Globalization.CultureInfo]::GetCultureInfo([string]$script:Language) } catch { [Globalization.CultureInfo]::CurrentCulture } }
 function Format-HcSize($gb) {
   if ($null -eq $gb) { return '?' }
   $g = [double]$gb
-  if ($g -ge 1024) { return Get-Text 'HcTB' ([math]::Round($g / 1024, 1).ToString([Globalization.CultureInfo]::CurrentCulture)) }
-  Get-Text 'HcGB' ([math]::Round($g, $(if ($g -lt 10) { 1 } else { 0 })).ToString([Globalization.CultureInfo]::CurrentCulture))
+  if ($g -ge 1024) { return Get-Text 'HcTB' ([math]::Round($g / 1024, 1).ToString((Get-HcCulture))) }
+  Get-Text 'HcGB' ([math]::Round($g, $(if ($g -lt 10) { 1 } else { 0 })).ToString((Get-HcCulture)))
 }
 function New-HcNode($m, [string]$id, [string]$kind, [string]$name, [string]$parent) {
   $n = [pscustomobject]@{ Id = $id; Kind = $kind; Name = $name; Parent = $parent; Status = 'ok'; Own = 'ok'; Short = ''; Facts = New-Object Collections.ArrayList
@@ -568,7 +570,7 @@ function Add-HcBasics($n, $o, [string]$role, [datetime]$now, [string]$pdc, $dcs)
   }
   # the clock: against the PDC emulator, and where it takes its time from
   if ($null -ne $o.Skew -and "$($o.Skew)" -ne '') {
-    $sk = [math]::Abs([double]$o.Skew); $sks = [math]::Round($sk, $(if ($sk -lt 10) { 1 } else { 0 })).ToString([Globalization.CultureInfo]::CurrentCulture)
+    $sk = [math]::Abs([double]$o.Skew); $sks = [math]::Round($sk, $(if ($sk -lt 10) { 1 } else { 0 })).ToString((Get-HcCulture))
     Add-HcFact $n 'HcFClock' (Get-Text 'HcClockSkew' $sks (Get-HcShort $pdc) $o.TimeSource)
     if ($sk -gt $L.SkewMax) { [void](Add-HcCheck $n 'error' 'Skew' @($sks, (Get-HcShort $pdc)) 'TimeSync') }
     elseif ($sk -gt $L.SkewWarn) { [void](Add-HcCheck $n 'warn' 'Skew' @($sks, (Get-HcShort $pdc)) 'TimeSync') }
