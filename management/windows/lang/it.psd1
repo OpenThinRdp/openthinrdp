@@ -353,7 +353,7 @@
   Label_WIFI_PSK            = 'Password Wi-Fi'
   Help_WIFI_PSK             = "Scrivere la password (8-63 caratteri) o una chiave di 64 cifre esadecimali: nel file va solo la chiave WPA calcolata per l'SSID, mai la password. (salvata) = resta la chiave attuale."
   Label_MGMT_SHARE          = 'Cartella di gestione'
-  Help_MGMT_SHARE           = 'Dove le postazioni inviano lo stato e leggono questa configurazione (\\server\share). Un valore sbagliato taglia fuori le postazioni da questo programma.'
+  Help_MGMT_SHARE           = 'Dove le postazioni inviano lo stato e leggono questa configurazione (\\server\share). Un valore sbagliato taglia fuori le postazioni da questo programma. Vuota, con un account di dominio in MGMT_USER: la cartella indicata per quell''account nel dominio (Impostazioni > Gestore > Cartella di gestione).'
   Label_MGMT_USER           = 'Utente della cartella di gestione'
   Help_MGMT_USER            = 'Account con cui le postazioni usano questa cartella: utente, DOMINIO\utente o utente@dominio. La password si imposta sulla postazione (configurazione) o come MGMT_PASSWORD nel file .conf, e resta solo in /etc/openthinrdp/smb.cred. Vuoto = l''account incluso nell''immagine.'
   Label_SECURITY_UPDATES    = 'Aggiornamenti di sicurezza'
@@ -2068,4 +2068,9 @@
   FolderMoveConf         = 'MGMT_SHARE punta alla nuova cartella in entrambe le copie: le postazioni con una cartella loro si spostano al prossimo invio di stato.'
   FolderMoveDomain       = 'Indicata nel dominio per {0}: anche le postazioni sul dominio la seguono.'
   FolderMoveAfter        = 'Lascia la vecchia cartella finché tutte le postazioni non scrivono nella nuova (pagina Postazioni).'
+  PermFixAsk             = 'Correggere adesso i permessi di {0}? Avrà lettura sulla cartella e sotto, e modifica solo su status\; i diritti di scrittura suoi altrove diventano lettura. I diritti tramite gruppi (Everyone, Domain Users...) non si toccano: toglili a mano se non servono a nessuno.'
+  PermFixNoWrite         = 'tolti i diritti di scrittura dell''account su {0}'
+  PermFixRead            = 'lettura su {0} e sotto'
+  PermFixStatus          = 'modifica su {0}'
+  PermFixFailed          = 'Non corretto: {0}'
 }
