@@ -3,6 +3,14 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.2.4 (2026-10-20)
+
+- **Manager: *Name it in the domain* works on a real domain.** Found in the first real use of 0.2.3: the account of
+  the devices, when it is set on each device and not in `common.conf`, was not found (now the account the devices
+  report is used), and in a new `folders.conf` the entry was glued to the comment line, so no device could read it
+  (now one line per account; a glued line is split again). Tried on a production device: with its own account it
+  reads the folder from NETLOGON and unmounts it again.
+
 ## 0.2.3 (2026-10-20)
 
 - **Dutch interface** (`LANGUAGE=nl`), translated by @wvanommen
