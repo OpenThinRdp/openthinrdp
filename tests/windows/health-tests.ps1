@@ -167,6 +167,13 @@ try {
     -not @($nb0.Nodes | ForEach-Object { $_.Checks } | Where-Object { $_.Id -in 'NoVmBackup', 'CrashOnly', 'BackupLogShort' }).Count -and @($nb0.Index['nc:Backup'].Checks | Where-Object Id -eq 'BackupNoSource').Count -and $nb0.Index['nc:Backup'].Actions -contains 'OpenSettings' -and
     -not $nb1.Index['nc:Backup'] }
   ok 'the reading tells its steps (as many as the progress bar counts) and what it has read so far' { @([regex]::Matches($probe, "(?m)^\s+Step '\w+'")).Count -eq $script:HealthProbeSteps -and $probe -match 'function Snap' }
+  # ---- checks switched off in the settings: neither shown nor counted as OK
+  $mOn = ConvertTo-HealthModel (Copy-Raw) $null $now $set
+  $offId = @($mOn.Nodes | ForEach-Object { $_.Checks } | Where-Object { $_.Kind -in 'error', 'warn' } | ForEach-Object Id)[0]
+  $so = Get-HealthDefaults; foreach ($p in $set.PSObject.Properties.Name) { $so.$p = $set.$p }; $so.Off = @($offId)
+  $mOff = ConvertTo-HealthModel (Copy-Raw) $null $now $so
+  ok "a check switched off is not shown ($offId)" { $offId -and -not @($mOff.Nodes | ForEach-Object { $_.Checks } | Where-Object Id -eq $offId).Count }
+  $script:HcOff = @()
   ok 'a part read so far makes a model too (the tree fills while reading)' { $part = Copy-Raw; foreach ($k in 'Dcs', 'Servers', 'Sql', 'Devices', 'Backup', 'Dns', 'RdsDb') { $part.PSObject.Properties.Remove($k) }; $mp = ConvertTo-HealthModel $part $null $now $set; [bool]$mp.Index['host:HV1'] }
   # ---- variants: a single host, without a cluster
   $rs = Copy-Raw; $rs.Clusters = @(); $rs.Hosts = @($rs.Hosts[0]); $rs.Hosts[0].Cluster = ''
