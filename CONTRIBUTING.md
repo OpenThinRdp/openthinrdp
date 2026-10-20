@@ -33,5 +33,5 @@ Remove from logs and screenshots what you do not want public: domain, server nam
 Translations are welcome: one file in `rootfs/opt/openthinrdp/lang/` and one in `management/windows/lang/`
 (see the comments at the top of the English files).
 
-By contributing you agree that your contribution is licensed under the Apache License 2.0, like the project.
+By contributing you agree that your contribution is licensed under the GNU GPL version 3 or later, like the project.
 Please follow the [code of conduct](CODE_OF_CONDUCT.md).

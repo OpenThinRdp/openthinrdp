@@ -1,0 +1,22 @@
+OpenThinRDP
+Copyright (C) 2026 the OpenThinRDP authors
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General
+Public License as published by the Free Software Foundation, either version 3 of the License, or (at your
+option) any later version. See LICENSE.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
+implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+
+Licence history: releases up to and including 0.2.5 were published under the Apache License 2.0, and those
+releases stay under it. From 0.2.6 the project is licensed under the GNU GPL version 3 or later.
+
+Parts under other licences, distributed with this program:
+- rootfs/opt/openthinrdp/lang/nl.sh: Dutch translation by @wvanommen, contributed under the Apache License 2.0
+  (compatible with the GPL version 3).
+- rootfs/opt/openthinrdp/novnc: the noVNC viewer, unmodified, MPL 2.0 and BSD (see the files in that folder).
+- FreeRDP (Apache License 2.0) and the Debian packages of the image, under their own licences.
+
+The name OpenThinRDP and its logo are not licensed by the GPL: a modified version that is distributed must use
+another name and logo, so that nobody mistakes it for this project.

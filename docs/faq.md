@@ -11,7 +11,7 @@ shared folder.
 
 ### Is it free?
 
-Yes. Apache 2.0 licence, no cost per device, no subscription, no account. The ISO and the signed updates are on
+Yes. GPLv3 licence, no cost per device, no subscription, no account. The ISO and the signed updates are on
 [GitHub](https://github.com/OpenThinRdp/openthinrdp/releases/latest).
 
 ### Is it not too young to use in production?
