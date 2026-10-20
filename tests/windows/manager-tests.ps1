@@ -296,6 +296,9 @@ try {
   ok 'as text: stored form, new password, unknown key a warning' { -not $p.Errors.Count -and ($p.Lines -contains 'USB_MODE=disks') -and ($p.Lines -contains 'MGMT_PASSWORD=New2') -and $p.Warnings.Count -eq 1 -and $p.Changes.Count -eq 3 }
   Save-ConfText $p
   ok 'as text: saved with its comments, the old file in config\backup' { (Read-Lines $script:CommonFile)[0] -eq '# all' -and (Read-ConfFile $script:CommonFile)['USB_MODE'] -eq 'disks' -and @(Get-ChildItem (Join-Path $tmp 'config\backup') -Filter 'text-test-*').Count -eq 1 }
+  # ---- power of a device: the Wake-on-LAN packet and the broadcast of its network
+  ok 'Wake-on-LAN: 6 x FF and the MAC 16 times; no packet without a MAC' { $wp = Get-WolPacket 'c0:25:a5:b3:a9:8e'; $wp.Length -eq 102 -and $wp[5] -eq 255 -and $wp[6] -eq 0xC0 -and $wp[101] -eq 0x8E -and -not (Get-WolPacket 'none') }
+  ok 'Wake-on-LAN: the broadcast of the network the device reported (/23, /24)' { (Get-Broadcast '192.168.0.37/23') -eq '192.168.1.255' -and (Get-Broadcast '10.1.2.3/24') -eq '10.1.2.255' -and -not (Get-Broadcast 'none') }
   # ---- the folder named in the domain, and moved (#82)
   [IO.File]::WriteAllText($script:CommonFile, "MGMT_USER=EXAMPLE\Svc-Thin`r`n")
   ok 'the account of the devices without its domain, in lower case' { (Get-DeviceAccount) -eq 'svc-thin' }
