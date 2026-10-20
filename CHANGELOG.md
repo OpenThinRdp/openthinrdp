@@ -14,7 +14,7 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
   to fix.
 - **Zero-touch from the domain account** ([#82](https://github.com/OpenThinRdp/openthinrdp/issues/82)). A device with
   a domain account and no folder of its own finds the management folder in
-  `\<domain>\NETLOGON\OpenThinRDP\folders.conf`, written by the manager (Settings > Manager > *Name it in the
+  `\\<domain>\NETLOGON\OpenThinRDP\folders.conf`, written by the manager (Settings > Manager > *Name it in the
   domain*): a new device needs only domain, account and password, and follows the folder when it moves.
 - **Manager: move the management folder** in one step (Settings > Manager > *Move the folder...*): everything is
   copied, every device follows at its next report, the manager goes on in the new folder.
