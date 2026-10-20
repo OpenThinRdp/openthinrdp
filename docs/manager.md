@@ -332,8 +332,22 @@ every device installs. The manager keeps both in `vault.otr`, next to it, encryp
 the administrators know. Every administrator who starts the same copy opens it with the same code; without the code
 the settings can still be edited, but no screen opens and nothing is signed.
 
+**The access code first.** When a copy of the manager has a vault, it asks the code before anything else: no folder,
+no device, no window behind the question. A wrong code says so and lets you try again (after three, each try waits
+longer: 2, 4, 8, 16, then 30 seconds); **Exit** or the close box ends the manager. With the right code the vault stays
+open for the session: the remote screen and signing do not ask again. A copy without a vault starts as before and offers
+to create one.
+
 <p align="center">
-<img src="screenshots/manager-vault.png" alt="Vault page: the access code, the SSH key of the manager, the key that signs the updates" width="80%">
+<img src="screenshots/manager-access-code.png" alt="The access code asked at the start, in a window of its own with the name and the icon of the manager" width="45%">
+</p>
+
+The **Vault** page has the vault itself, the key that signs the updates, the SSH key of the manager and, under them,
+the **SSH keys of the devices**: the public keys `otradmin` accepts on the devices with `SSH=on` (`config\authorized_keys`),
+one per line, with **Save**, **Undo changes**, **Add the key of the manager** and **Add a key from a file...**.
+
+<p align="center">
+<img src="screenshots/manager-vault.png" alt="Vault page: the vault, the key that signs the updates, the SSH key of the manager, and under them the SSH keys of the devices" width="100%">
 </p>
 
 **A fleet on its own key.** With `UPDATE_KEY=site` your devices accept only updates signed by the key of your site,
@@ -345,8 +359,8 @@ again with your key: a stolen project key installs nothing on your fleet. Set it
 
 - **Logo and background...** (common settings, or a device): any picture, scaled and saved as PNG, for every device
   or one.
-- **SSH keys**: the keys of the administrators, sent to every device (`SSH=on`); **Add the key of the manager** puts
-  the vault's key there for the remote screen.
+- **SSH keys of the devices** (on the Vault page): the keys of the administrators, sent to every device (`SSH=on`);
+  **Add the key of the manager** puts the vault's key there for the remote screen.
 - **Check permissions** tells you what the account of the devices can do in the folder: it needs to write only its
   status, never the settings or the updates.
 - The window fits any screen, from a 27" monitor to a laptop with display scaling (down to 860×560).

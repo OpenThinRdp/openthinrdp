@@ -5,6 +5,11 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
 
 ## Unreleased
 
+- **Manager: the access code first.** A copy of the manager with a vault asks its access code before anything else, in a
+  window of its own: no folder, no device, no window behind it. A wrong code can be typed again (after three, each try
+  waits longer); Exit ends the manager; the right code keeps the vault open for the session. Without a vault, as before.
+- **Manager: the SSH keys of the devices are on the Vault page**, under the SSH key of the manager; the menu has no
+  SSH keys page any more. Same list, same buttons, same file (`config\authorized_keys`).
 - **Manager: Health Center, the health of the whole Hyper-V and RDS infrastructure**
   ([#78](https://github.com/OpenThinRdp/openthinrdp/issues/78)). A page under Desktops; details in
   [docs/manager.md](docs/manager.md#health-center-the-whole-infrastructure).

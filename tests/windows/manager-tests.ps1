@@ -236,6 +236,38 @@ try {
     -not $s.Enabled -and $s.Brokers -eq 'rdcb3.example.com rdcb4' -and $s2.BrokerGroup -eq 'EXAMPLE\RDS-Brokers' -and (Get-LastFolder) -eq 'C:\y' }
   ok 'settings: a bad name refused' { (Test-VdiSettings ([pscustomobject]@{ Enabled = $true; BrokerGroup = ''; Brokers = 'bad_name!'; Hosts = '' })) -and -not (Test-VdiSettings ([pscustomobject]@{ Enabled = $true; BrokerGroup = 'EXAMPLE\RDS-Brokers'; Brokers = 'rdcb1.example.com'; Hosts = 'hv1' })) }
 
+  # ---- the access code at the start
+  $script:VaultFile = Join-Path $tmp 'test-vault.otr'
+  ok 'no vault: nothing is asked' { (Invoke-StartGate @('cancel')) -eq 'none' }
+  New-Vault 'correct-horse-1'; Close-Vault
+  ok 'a vault and Cancel: the manager does not go on' { $script:GateFailures = 0; (Invoke-StartGate @('cancel')) -eq 'cancel' -and -not (Test-VaultOpen) }
+  ok 'a wrong code, then the right one: open, one failure counted' { $script:GateFailures = 0; (Invoke-StartGate @('wrong-code-1', 'correct-horse-1')) -eq 'open' -and (Test-VaultOpen) -and $script:GateFailures -eq 1 }
+  ok 'open already: no second question' { (Invoke-StartGate @('cancel')) -eq 'open' }
+  Close-Vault
+  ok 'after 3 wrong codes each try waits longer: 2, 4, 8, 16, then 30 s' { (@(1..8 | ForEach-Object { Get-GateDelay $_ }) -join ',') -eq '0,0,2,4,8,16,30,30' }
+  # the whole manager: Cancel at the access code ends it before the folder and the window (exit code 3)
+  $mgr = Join-Path $mw 'OpenThinRDP-Manager.ps1'
+  $run = { param($answers, $shot)
+    $psi = New-Object Diagnostics.ProcessStartInfo 'powershell.exe', "-NoProfile -ExecutionPolicy Bypass -STA -File `"$mgr`" -Folder `"$tmp`" -Language en"
+    $psi.UseShellExecute = $false; $psi.RedirectStandardOutput = $true; $psi.CreateNoWindow = $true
+    $psi.EnvironmentVariables['OTR_MANAGER_VAULT'] = $script:VaultFile; $psi.EnvironmentVariables['OTR_MANAGER_GATE_ANSWERS'] = $answers
+    $psi.EnvironmentVariables['OTR_MANAGER_SETTINGS'] = (Join-Path $tmp 'gate-settings.json'); $psi.EnvironmentVariables['OTR_MANAGER_SCREENSHOT'] = $shot
+    $p = [Diagnostics.Process]::Start($psi); $out = $p.StandardOutput.ReadToEnd()
+    if (-not $p.WaitForExit(120000)) { $p.Kill(); return @{ Code = -1; Out = $out } }
+    @{ Code = $p.ExitCode; Out = $out } }
+  $r = & $run 'wrong-code-1;cancel' ''
+  ok 'the manager with a vault, a wrong code and Cancel: exits (3) without a window' { $r.Code -eq 3 -and $r.Out -match 'access code: cancel, 1 wrong' }
+  $png = Join-Path $tmp 'gate-open.png'
+  $r = & $run 'wrong-code-1;correct-horse-1' $png
+  ok 'the manager with a wrong code, then the right one: the window, the vault open' { $r.Code -eq 0 -and $r.Out -match 'access code: open, 1 wrong' -and (Test-Path -LiteralPath $png) }
+  Remove-Item -LiteralPath $script:VaultFile -Force
+  $png = Join-Path $tmp 'gate-none.png'
+  $r = & $run 'cancel' $png
+  ok 'the manager without a vault: nothing asked, the window as before' { $r.Code -eq 0 -and $r.Out -match 'access code: none, 0 wrong' -and (Test-Path -LiteralPath $png) }
+  # the SSH keys of the devices are on the Vault page
+  $src = [IO.File]::ReadAllText($mgr)
+  ok 'SSH keys: no button of their own in the menu, their list on the Vault page' { $src -match '\$vaultWrap\.Controls\.Add\(\$keysCard\)' -and $src -notmatch 'foreach \(\$b in @\([^)]*\$navKeys[^)]*\)\) \{ \$nav\.Controls\.Add' -and $src -match 'if \(\$i -eq 2\) \{ \$i = 4 \}' }
+
   # ---- Italian
   $script:Text = Read-LanguageTexts $script:LangDir 'it'
   $mi = ConvertTo-VdiModel $raw $devs $now

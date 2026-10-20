@@ -966,6 +966,26 @@ function New-Vault([string]$code) { $script:Vault = @{ format = 1 }; $script:Vau
 function Set-VaultCode([string]$code) { $script:VaultCode = $code; Save-Vault }
 function Close-Vault { Remove-VaultKeyFile; $script:Vault = $null; $script:VaultCode = $null }
 function Test-CodeStrength([string]$code) { $code.Length -ge $script:VaultMinCode }
+# The access code at the start. A copy of the manager with a vault opens only with its code: the dialog comes before
+# the folder and the window, so nothing of the fleet shows behind it; Cancel ends the manager. After 3 wrong codes each
+# try waits longer (2, 4, 8, 16, then 30 s). Without a vault there is nothing to ask (the vault is offered later, as
+# before). Returns open, none or cancel. $answers (tests, OTR_MANAGER_GATE_ANSWERS): the codes typed, in order; cancel
+# or an empty one = Cancel.
+$script:GateFailures = 0
+function Get-GateDelay([int]$failures) { if ($failures -lt 3) { 0 } else { [int][Math]::Min(30, 2 * [Math]::Pow(2, $failures - 3)) } }
+function Invoke-StartGate($answers = $null) {
+  if (-not (Test-VaultFile)) { return 'none' }
+  if (Test-VaultOpen) { return 'open' }
+  if ($null -ne $answers) {
+    foreach ($a in @($answers)) {
+      if (-not $a -or $a -eq 'cancel') { return 'cancel' }
+      if (Open-Vault $a) { return 'open' }
+      $script:GateFailures++
+    }
+    return 'cancel'
+  }
+  if (Show-AccessGate) { 'open' } else { 'cancel' }
+}
 
 # a new folder that only this account and SYSTEM can read (ssh.exe refuses a private key others can read)
 function New-PrivateDir {
@@ -1937,6 +1957,60 @@ function Show-CodeDialog([ValidateSet('Open', 'Create', 'Change')][string]$mode,
   $r -eq 'OK'
 }
 
+# The access code at the start: a window of its own, with the name and the icon of the product and nothing else of the
+# manager. A wrong code says so and lets the administrator try again (after 3, each try waits longer); Exit or the
+# close box ends the manager. $true = the vault is open.
+function Show-AccessGate {
+  $font = New-Object System.Drawing.Font('Segoe UI', 9.75); $fontName = New-Object System.Drawing.Font('Segoe UI Semibold', 13); $GW = 460
+  $shell = [System.Drawing.ColorTranslator]::FromHtml('#1b2733'); $red = [System.Drawing.ColorTranslator]::FromHtml('#dc2626'); $muted = [System.Drawing.ColorTranslator]::FromHtml('#6b7280')
+  $w = New-Object System.Windows.Forms.Form; Set-WindowIcon $w
+  $w.Text = Get-Text 'GateTitle'; $w.Font = $font; $w.FormBorderStyle = 'FixedDialog'; $w.MaximizeBox = $false; $w.MinimizeBox = $false
+  $w.StartPosition = 'CenterScreen'; $w.ShowInTaskbar = $true; $w.BackColor = [System.Drawing.Color]::White
+  # the band with the logo and the name, in the colour of the manager
+  $band = New-Object System.Windows.Forms.Panel; $band.SetBounds(0, 0, $GW, 64); $band.BackColor = $shell
+  $logo = New-Object System.Windows.Forms.PictureBox; $logo.SetBounds(18, 16, 32, 32); $logo.SizeMode = 'Zoom'
+  if ($script:AppIcon) { $logo.Image = (New-Object System.Drawing.Icon($script:AppIcon, 32, 32)).ToBitmap() }
+  $name = New-Object System.Windows.Forms.Label; $name.Text = Get-Text 'AppName'; $name.Font = $fontName; $name.ForeColor = [System.Drawing.ColorTranslator]::FromHtml('#e8eef4')
+  $name.AutoSize = $true; $name.Location = New-Object System.Drawing.Point($(if ($script:AppIcon) { 60 } else { 18 }), 19)
+  $band.Controls.AddRange(@($logo, $name))
+  $note = New-Object System.Windows.Forms.Label; $note.Text = Get-Text 'GateText'; $note.ForeColor = $muted
+  $nh = $note.GetPreferredSize((New-Object System.Drawing.Size(($GW - 40), 0))).Height; $note.SetBounds(20, 80, $GW - 40, $nh + 4)
+  $y = $note.Bottom + 12
+  $lbl = New-Object System.Windows.Forms.Label; $lbl.Text = Get-Text 'VaultCode'; $lbl.AutoSize = $true; $lbl.Location = New-Object System.Drawing.Point(20, ($y + 4))
+  $box = New-Object System.Windows.Forms.TextBox; $box.UseSystemPasswordChar = $true; $box.SetBounds(170, $y, $GW - 190, 26); $y += 36
+  $err = New-Object System.Windows.Forms.Label; $err.ForeColor = $red; $err.SetBounds(20, $y, $GW - 40, 40); $y += 44
+  $ok = New-Object System.Windows.Forms.Button; $ok.Text = Get-Text 'VaultOpenOk'
+  $no = New-Object System.Windows.Forms.Button; $no.Text = Get-Text 'GateExit'
+  foreach ($b in @($ok, $no)) { $b.Height = 30; $b.Width = [Math]::Max(110, [System.Windows.Forms.TextRenderer]::MeasureText($b.Text, $font).Width + 28) }
+  $no.Location = New-Object System.Drawing.Point(($GW - 20 - $no.Width), $y); $ok.Location = New-Object System.Drawing.Point(($no.Left - 8 - $ok.Width), $y)
+  $no.DialogResult = 'Cancel'; $w.AcceptButton = $ok; $w.CancelButton = $no
+  $w.Controls.AddRange(@($band, $note, $lbl, $box, $err, $ok, $no)); $w.ClientSize = New-Object System.Drawing.Size($GW, ($y + 48))
+  # the wait after repeated wrong codes: the box and Open come back when it is over
+  $wait = New-Object System.Windows.Forms.Timer; $wait.Interval = 1000
+  $wait.Tag = @{ Left = 0 }
+  $wait.add_Tick({ $wait.Tag.Left--; if ($wait.Tag.Left -le 0) { $wait.Stop(); $box.Enabled = $true; $ok.Enabled = $true; $err.Text = Get-Text 'GateWrong' $script:GateFailures; $box.Focus() }
+    else { $err.Text = Get-Text 'GateWait' $script:GateFailures $wait.Tag.Left } })
+  $ok.add_Click({
+    $code = $box.Text; if (-not $code) { $box.Focus(); return }
+    $err.ForeColor = $muted; $err.Text = Get-Text 'VaultOpening'; $w.Cursor = 'WaitCursor'; $w.Refresh()
+    $good = $false; $why = $null
+    try { $good = Open-Vault $code } catch { $why = $_.Exception.Message } finally { $w.Cursor = 'Default' }
+    $err.ForeColor = $red
+    if ($good) { $w.DialogResult = 'OK'; $w.Close(); return }
+    if ($why) { $err.Text = Get-Text 'VaultNotReadable' $why; return }
+    $script:GateFailures++; $box.Text = ''
+    $d = Get-GateDelay $script:GateFailures
+    if ($d) { $box.Enabled = $false; $ok.Enabled = $false; $wait.Tag.Left = $d; $err.Text = Get-Text 'GateWait' $script:GateFailures $d; $wait.Start() }
+    else { $err.Text = Get-Text 'GateWrong' $script:GateFailures; $box.Focus() }
+  })
+  $w.add_Shown({ $w.Activate(); $box.Focus() })
+  # docs: OTR_MANAGER_GATE_SHOT = <file.png>: the dialog drawn into the PNG (one wrong code typed), then closed
+  if ($env:OTR_MANAGER_GATE_SHOT) { $w.add_Shown({ $err.Text = Get-Text 'GateWrong' 1; $w.Refresh()
+    $bmp = New-Object System.Drawing.Bitmap($w.Width, $w.Height); $w.DrawToBitmap($bmp, (New-Object System.Drawing.Rectangle(0, 0, $w.Width, $w.Height)))
+    $bmp.Save($env:OTR_MANAGER_GATE_SHOT, [System.Drawing.Imaging.ImageFormat]::Png); $w.Close() }) }
+  try { $w.ShowDialog() -eq 'OK' } finally { $wait.Stop(); $wait.Dispose(); $w.Dispose() }
+}
+
 # -Sign: only the access code, then LATEST.txt.sig next to the LATEST.txt given (the .cmd starts this hidden: the
 # result in a message box too). Exit code 0 = signed, 1 = error, 2 = no code given.
 if ($Sign) {
@@ -1955,6 +2029,16 @@ if ($Sign) {
     $rc = 1; [Console]::Error.WriteLine($_.Exception.Message); Show-Message (Get-Text 'SignTitle') $_.Exception.Message 'Error'
   } finally { Close-Vault }
   exit $rc
+}
+
+# The access code before anything else (Invoke-StartGate): no folder, no device, no window behind it. A screenshot opens
+# the vault with OTR_MANAGER_VAULT_CODE instead, unless the tests give the codes to type (OTR_MANAGER_GATE_ANSWERS).
+# Exit code 3 = closed at the access code.
+$gateAnswers = if ($env:OTR_MANAGER_GATE_ANSWERS) { @($env:OTR_MANAGER_GATE_ANSWERS -split ';') } else { $null }
+if (-not $env:OTR_MANAGER_SCREENSHOT -or $gateAnswers) {
+  $gate = try { Invoke-StartGate $gateAnswers } catch { Show-Message (Get-Text 'GateTitle') (Get-Text 'VaultNotReadable' $_.Exception.Message) 'Error'; 'cancel' }
+  if ($gateAnswers) { [Console]::Out.WriteLine("access code: $gate, $($script:GateFailures) wrong") }
+  if ($gate -eq 'cancel') { Close-Vault; exit 3 }
 }
 
 # no default path: every installation has its own folder; the last one chosen is proposed
@@ -2319,7 +2403,8 @@ $navHealth = New-NavButton 'NavHealth' 'Health' 7
 $script:NavButtons = @($navDevices, $navCommon, $navKeys, $navProblems, $navVault, $navUpdates, $navDesktops, $navHealth)
 # Dock Top stacks the last added on top; the desktops under the devices and the Health Center under them, the vault next
 # to the SSH keys, the versions after the settings
-foreach ($b in @($navProblems, $navVault, $navKeys, $navUpdates, $navCommon, $navHealth, $navDesktops, $navDevices)) { $nav.Controls.Add($b) }
+# the SSH keys of the devices are on the Vault page: their button stays out of the menu (index 2 leads there)
+foreach ($b in @($navProblems, $navVault, $navUpdates, $navCommon, $navHealth, $navDesktops, $navDevices)) { $nav.Controls.Add($b) }
 
 # ---------------- Devices page: list | selected device ----------------
 $pageDevices = New-Panel 'Fill' $Theme.Page
@@ -2884,12 +2969,30 @@ $btnVaultOpen.Width = (@('BtnVaultOpen', 'BtnVaultCreate', 'BtnVaultClose') | Fo
 $blkVault = New-VaultBlock 'VaultBlockTitle' 'Lock' @($btnVaultOpen, $btnVaultCode)
 $blkSsh = New-VaultBlock 'VaultSshTitle' 'Screen' @($btnVaultSshAdd, $btnVaultSshNew, $btnVaultSshImport)
 $blkSign = New-VaultBlock 'VaultSignTitle' 'Certificate' @($btnVaultSign, $btnVaultSignSend, $btnVaultSignExport, $btnVaultSignNew, $btnVaultSignImport)
-# Dock Top stacks the last added on top
-foreach ($b in @($blkSign, $blkSsh, $blkVault)) { $vaultCard.Controls.Add($b) }
-$vaultWrap.Controls.Add($vaultCard)
+# Dock Top stacks the last added on top: the vault, the key that signs, the SSH key of the manager; under them the SSH
+# keys of the devices (config\authorized_keys, the manager's key is one of them), the list that was a page of its own
+foreach ($b in @($blkSsh, $blkSign, $blkVault)) { $vaultCard.Controls.Add($b) }
+$vaultCard.Dock = 'Top'
+$keysHead = New-Panel 'Top' $Theme.Card 80; $keysHead.Padding = New-Object System.Windows.Forms.Padding(18, 14, 18, 4)
+$keysTitle = New-Label ('  ' + (Get-Text 'VaultKeysTitle')) $fontBold; $keysTitle.AutoSize = $false; $keysTitle.Dock = 'Top'; $keysTitle.Height = 28; $keysTitle.TextAlign = 'MiddleLeft'
+$img = New-Glyph 'Key' $Theme.Accent 18; if ($img) { $keysTitle.Image = $img; $keysTitle.ImageAlign = 'MiddleLeft'; $keysTitle.Text = '      ' + (Get-Text 'VaultKeysTitle') }
+$keysNote = New-Label (Get-Text 'NoteKeys') $fontBase $Theme.Muted; $keysNote.AutoSize = $false; $keysNote.Dock = 'Fill'; $keysNote.Padding = New-Object System.Windows.Forms.Padding(0, 4, 0, 0)
+$keysHead.Controls.Add($keysNote); $keysHead.Controls.Add($keysTitle)
+$keysCard.Controls.Add($keysHead)
+$vaultGap = New-Panel 'Top' $Theme.Page 12
+# Fill first, then the edges: the vault on top, the SSH keys of the devices under it
+$vaultWrap.Controls.Add($keysCard); $vaultWrap.Controls.Add($vaultGap); $vaultWrap.Controls.Add($vaultCard)
 $pageVault.Controls.Add($vaultWrap); $pageVault.Controls.Add((New-PageHeader (Get-Text 'NavVault') (Get-Text 'PageVaultNote')))
-# each block as high as its text
-function Set-VaultHeights { Set-BlockHeights $vaultCard @($blkVault, $blkSsh, $blkSign) }
+# each block as high as its text; the blocks of the vault take at most 60% of the page (they scroll), the list the rest
+function Set-VaultHeights {
+  Set-BlockHeights $vaultCard @($blkVault, $blkSsh, $blkSign)
+  $sum = $blkVault.Height + $blkSsh.Height + $blkSign.Height + 2
+  $h = [Math]::Min($sum, [Math]::Max(180, [int]($vaultWrap.ClientSize.Height * 0.6)))
+  if ($vaultCard.Height -ne $h) { $vaultCard.Height = $h }
+  $kh = 14 + 28 + (Measure-Note $keysNote.Text ([Math]::Max(100, $keysCard.ClientSize.Width - 38))) + 10
+  if ($keysHead.Height -ne $kh) { $keysHead.Height = $kh }
+}
+$vaultWrap.add_Resize({ Set-VaultHeights })
 function Set-BlockHeights($card, $blocks) {
   $inner = $card.ClientSize.Width - 2 - 36
   if ($inner -lt 100) { return }
@@ -2932,6 +3035,8 @@ $form.Controls.Add($root)
 $script:Devices = @(); $script:Selected = $null; $script:Loading = $false; $script:Listing = $false
 
 function Select-Page([int]$i) {
+  # the SSH keys of the devices (index 2) are a part of the Vault page now
+  if ($i -eq 2) { $i = 4 }
   $script:Page = $i
   for ($k = 0; $k -lt $script:Pages.Count; $k++) {
     $script:Pages[$k].Visible = ($k -eq $i)

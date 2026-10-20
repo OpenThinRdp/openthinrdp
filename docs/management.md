@@ -95,9 +95,9 @@ The Windows manager (`management/windows/OpenThinRDP-Manager.vbs`, or the `.cmd`
 and edits these files with the same validation, a backup of every file it overwrites and a change log.
 Before saving `common.conf` it lists the devices that would reject it.
 
-The window has six pages on the left: **Devices** (the list, and the selected device with its settings, a summary,
-its events and its full report), **Common settings**, **Updates** (see [Pilot devices and going back](#pilot-devices-and-going-back)
-and [The manager updates itself](#the-manager-updates-itself)), **SSH keys**, **Vault** and **History**; the actions on the
+The window has its pages on the left: **Devices** (the list, and the selected device with its settings, a summary,
+its events and its full report), **Desktops**, **Health Center**, **Common settings**, **Updates** (see [Pilot devices and going back](#pilot-devices-and-going-back)
+and [The manager updates itself](#the-manager-updates-itself)), **Vault** (with the SSH keys of the devices) and **History**; the actions on the
 folder (refresh, open, release from GitHub, check permissions) and the state of the vault are in the bar at the top. In a settings list each row shows
 the value in use on the device, where it comes from (*the device itself*, *common settings*, *this device* for an
 exception) and *on its way* when a saved value has not reached the device yet (it reads the folder every 5 minutes;
@@ -204,9 +204,10 @@ that signs the update packages every device installs. The manager keeps both in 
 `OpenThinRDP-Manager.ps1`, encrypted with an **access code**:
 
 - At the first start the manager asks for the code (at least 8 characters) and creates the vault, with a new SSH
-  key inside (`openthinrdp-manager`) that it adds to the **SSH keys** page: Save there, and the devices take it
-  within 5 minutes. At every later start it asks the code again; **Go on without** keeps the manager usable for
-  the settings, without remote screen and signing.
+  key inside (`openthinrdp-manager`) that it adds to the **SSH keys of the devices** on the Vault page: Save there,
+  and the devices take it within 5 minutes. At every later start it asks the code **before anything else** (no folder,
+  no device, no window behind it): **Exit** ends the manager, a wrong code can be typed again (after three, each try
+  waits longer), and the right one keeps the vault open for the session.
 - Every administrator who starts the same copy of the manager (e.g. from a file share only the administrators can
   write) opens the same vault with the same code: nothing to copy from PC to PC. **Change the code...** re-encrypts
   it, and the old code stops working at once.
@@ -225,8 +226,9 @@ On the **Vault** page:
 | Block | Actions |
 |---|---|
 | Vault | Open / Close, Change the code |
-| SSH key of the manager | Add to the devices (to the SSH keys page, then Save), Create a new key, Import a private key (e.g. the one used so far: the file stays where it is, delete it yourself) |
+| SSH key of the manager | Add to the devices (to the SSH keys of the devices below, then Save), Create a new key, Import a private key (e.g. the one used so far: the file stays where it is, delete it yourself) |
 | Key that signs the updates | Sign an update (see [Signed updates](#signed-updates)), Send to the devices and Create the site key (see [A fleet on its own key](#a-fleet-on-its-own-key)), Save the public key (`update-key.asc`), Import the key: the file of `gpg --export-secret-keys --armor <key>` from a key without a passphrase; the manager offers to delete that file afterwards. |
+| SSH keys of the devices | The public keys `otradmin` accepts (`config\authorized_keys`, one per line, # for notes): Save, Undo changes, Add the key of the manager, Add a key from a file |
 
 The page says whether the signing key is the project key (releases for every installation) or one of yours
 (`update-key.asc` of your image).
@@ -239,7 +241,7 @@ sign-in in its profile).
 
 **What it needs**
 - On the device: `SSH=on`, the key of the manager among the SSH keys, and `REMOTE_SCREEN=on` (the default). On
-  the **SSH keys** page, **Add the key of the manager** adds it (from the [vault](#vault)); then Save, and the
+  the Vault page, under **SSH keys of the devices**, **Add the key of the manager** adds it (from the [vault](#vault)); then Save, and the
   devices take it within 5 minutes.
 - On your PC: the OpenSSH client of Windows 10/11 (`ssh.exe`, an optional feature that is usually there), the
   vault open with the access code, and a browser. Nothing else is installed. Only the key of the vault is offered
@@ -261,7 +263,7 @@ During a remote session the screen is the Windows desktop the user is working on
 (`/opt/openthinrdp/novnc`, MPL 2.0 and BSD licenses).
 
 **When it does not start** the manager shows why: SSH off on the device, no address reported yet, the vault
-closed or without an SSH key, the key not accepted (Add the key of the manager on the SSH keys page, then Save),
+closed or without an SSH key, the key not accepted (Add the key of the manager under SSH keys of the devices on the Vault page, then Save),
 or a device that has not received the version
 with the remote screen yet. A device reinstalled with the same address has a new SSH host key: remove the old one
 with `ssh-keygen -R <address>`.
