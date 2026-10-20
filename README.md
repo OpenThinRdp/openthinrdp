@@ -27,7 +27,7 @@ agent, no cloud service to depend on: a shared folder and a small Windows manage
 | **The whole fleet in one window** | state of every device, central settings, signed updates with pilot devices and rollback, power on (Wake-on-LAN), restart, remote screen |
 | **The Windows side too** | Health Center: brokers, Hyper-V hosts and cluster, VMs, DCs, DNS, SQL AlwaysOn and backups, with a plain sentence and a fix for each problem |
 | **Any x86-64 hardware** | UEFI with Secure Boot or legacy BIOS, complete Debian 13 kernel and firmware, from 2 GB of RAM |
-| **Open source** | Apache 2.0, Debian underneath, every client script readable in `rootfs/opt/openthinrdp` |
+| **Open source** | GPLv3: free to use, and every copy stays open source; Debian underneath, every client script readable in `rootfs/opt/openthinrdp` |
 
 > **In production every day.** OpenThinRDP runs the whole thin client fleet of the company it was built for:
 > 14 Dell OptiPlex 3000 Thin Clients at desks, tills, a laboratory, weighing stations and a wall screen on Wi-Fi,
@@ -259,7 +259,7 @@ that you can read: the whole client side is a few shell scripts in `rootfs/opt/o
 | | **OpenThinRDP** | Dell ThinOS | IGEL OS | Stratodesk NoTouch | ThinStation |
 |---|---|---|---|---|---|
 | Cost | free | comes with Dell thin clients | subscription per device | licence per device | free |
-| Source | open (Apache 2.0) | closed | closed | closed | open |
+| Source | open (GPLv3) | closed | closed | closed | open |
 | Runs on | x86-64 PCs and thin clients, UEFI or BIOS; Raspberry Pi 4 (experimental) | Dell thin clients | many x86-64 devices | x86-64 PCs, Raspberry Pi | x86 PCs |
 | Protocols | RDP only | Citrix, Omnissa/VMware, Microsoft and more | Citrix, Omnissa/VMware, Microsoft and more | many | many (you build the image) |
 | Management | shared folder + Windows tool, no server | Wyse Management Suite | UMS server | NoTouch Center | configuration files on a network server |
@@ -328,7 +328,7 @@ Security problems: please report them privately, see [SECURITY.md](SECURITY.md).
 
 ## License
 
-Apache License 2.0, see [LICENSE](LICENSE). OpenThinRDP uses FreeRDP (Apache 2.0), the noVNC viewer for the remote
+GNU General Public License version 3 or later, see [LICENSE](LICENSE) and [NOTICE](NOTICE): anyone may use, study, change and share it, and every copy or modified version that is distributed must stay under the same licence, with its source. Releases up to 0.2.5 were under the Apache License 2.0. The name OpenThinRDP and its logo are not part of the licence: a distributed fork needs a name of its own. OpenThinRDP uses FreeRDP (Apache 2.0), the noVNC viewer for the remote
 screen (included unmodified, MPL 2.0 and BSD, [rootfs/opt/openthinrdp/novnc](rootfs/opt/openthinrdp/novnc)) and Debian packages under
 their own licenses. Windows and Remote Desktop are trademarks of Microsoft; this project is not affiliated with
 Microsoft or with any vendor named above.

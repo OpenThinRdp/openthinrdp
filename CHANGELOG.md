@@ -3,6 +3,14 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.2.6 (2026-10-20)
+
+- **Licence: GNU GPL version 3 or later.** Anyone may use, study, change and share OpenThinRDP, and every copy or
+  modified version that is distributed must stay under the same licence, with its source. Releases up to 0.2.5
+  stay under the Apache License 2.0. The name and the logo are not part of the licence: a distributed fork needs a
+  name of its own ([NOTICE](NOTICE)). The device now carries the licence in `/opt/openthinrdp/LICENSE`. No other
+  change from 0.2.5.
+
 ## 0.2.5 (2026-10-20)
 
 - **Manager: power and commands for a device.** In the header of a device, *Power and commands*: power on with
