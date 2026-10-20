@@ -4985,6 +4985,14 @@ function Show-HealthSettingsDialog {
   $tbBHours = & $addBox 'HcSetBackupHours' ([string]$s.BackupHours) 80
   $tbLim = & $addBox 'HcSetLimits' $s.Limits 420 2
   & $addText (Get-Text 'HcSetLimitsHint') $fontSmall $Theme.Muted 240
+  # every check by its title: ticked = performed; a check switched off is never shown, not even as OK
+  & $addText (Get-Text 'HcSetChecks') $fontBold $null
+  & $addText (Get-Text 'HcSetChecksHint') $fontSmall $Theme.Muted
+  $hcIds = @($script:Text.Keys | Where-Object { $_ -like 'HcT_*' } | ForEach-Object { $_.Substring(4) } |
+    Sort-Object { (Get-Text "HcT_$_") -replace '\s*\{\d+\}', '' })
+  $clb = New-Object System.Windows.Forms.CheckedListBox; $clb.CheckOnClick = $true; $clb.Font = $fontBase; $clb.IntegralHeight = $false
+  foreach ($id in $hcIds) { [void]$clb.Items.Add(((Get-Text "HcT_$id") -replace '\s*\{\d+\}', ''), (@($s.Off) -notcontains $id)) }
+  $clb.SetBounds(14, $script:HsY, ($W - 160), 300); $pan.Controls.Add($clb); $script:HsY += 308
   $err = New-Object System.Windows.Forms.Label; $err.ForeColor = $script:KindColor.error; $err.SetBounds(14, $script:HsY, ($W - 40), 36); $pan.Controls.Add($err); $script:HsY += 40
   $ok = New-Button 'BtnSave' 110 28; $cancel = New-Button 'BtnCancel' 100 28
   $cancel.Location = New-Object System.Drawing.Point(($W - 40 - $cancel.Width), $script:HsY); $ok.Location = New-Object System.Drawing.Point(($cancel.Left - 8 - $ok.Width), $script:HsY)
@@ -4999,6 +5007,7 @@ function Show-HealthSettingsDialog {
     $i.HvCluster = if ($cbCl.SelectedIndex -eq 1) { 'yes' } else { 'no' }; $i.ClusterName = $tbClName.Text.Trim()
     $n.Inventory = $i; $n.Enabled = $chk.Checked; $n.BrokerName = $tbBroker.Text; $n.SqlListener = $tbSql.Text; $n.CriticalVms = $tbCrit.Text
     $n.BackupPath = $tbBPath.Text; $n.BackupText = $tbBText.Text; $n.BackupHours = $tbBHours.Text; $n.Limits = $tbLim.Text
+    $n.Off = @(for ($i = 0; $i -lt $hcIds.Count; $i++) { if (-not $clb.GetItemChecked($i)) { $hcIds[$i] } })
     $why = Test-HealthSettings $n
     if ($why) { $err.Text = $why; return }
     try { Save-HealthSettings $n } catch { $err.Text = $_.Exception.Message; return }

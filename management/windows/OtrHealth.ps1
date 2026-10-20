@@ -93,7 +93,7 @@ $script:HealthRefreshSeconds = 180
 # older than this, a repair that was tried is tried again
 $script:HealthRetryMinutes = 30
 # the steps of a reading (Step in the probe), for the progress bar of the page
-$script:HealthProbeSteps = 13
+$script:HealthProbeSteps = 12
 # two actions on servers of the same role (two DCs, two SQL replicas, two brokers) never closer than this
 $script:HealthRoleMinutes = 10
 # thresholds of the checks (the same for every site: a site with other needs changes them here)
@@ -142,7 +142,7 @@ function Set-HealthFromInventory($s) {
   & $put 'Dcs' @(& $nm 'Dcs'); & $put 'Brokers' @(& $nm 'BrokerList')
 }
 function Get-HealthDefaults {
-  [pscustomobject]@{ Enabled = $true; Mode = 'diagnose'; Items = (New-Object psobject); Hosts = ''; Cluster = 'auto'; Devices = ''; DnsServers = ''; BrokerName = ''
+  [pscustomobject]@{ Enabled = $true; Mode = 'diagnose'; Off = @(); Items = (New-Object psobject); Hosts = ''; Cluster = 'auto'; Devices = ''; DnsServers = ''; BrokerName = ''
     SqlListener = ''; BackupPath = ''; BackupText = ''; BackupHours = $script:HealthLimits.BackupHours; Servers = ''; CriticalVms = ''; Limits = ''; Inventory = (New-HealthInventory); Dcs = @(); Brokers = @() }
 }
 $script:HealthLimitsDefault = $script:HealthLimits.Clone()
@@ -170,6 +170,8 @@ function Get-HealthSettings {
   Set-HealthFromInventory $s
   $s.Enabled = [bool]$s.Enabled
   if ($s.Mode -notin 'diagnose', 'repair') { $s.Mode = 'diagnose' }
+  $s.Off = @(@($s.Off) | Where-Object { $_ } | ForEach-Object { "$_" } | Sort-Object -Unique)
+  $s.Off = @(@($s.Off) | Where-Object { $_ } | ForEach-Object { "$_" } | Sort-Object -Unique)
   if ($s.Cluster -notin 'auto', 'yes', 'no') { $s.Cluster = 'auto' }
   $h = 0; if (-not [int]::TryParse("$($s.BackupHours)", [ref]$h) -or $h -lt 1) { $h = $script:HealthLimits.BackupHours }; $s.BackupHours = $h
   Set-HealthLimits $s.Limits
@@ -222,7 +224,7 @@ function Save-HealthSettings($s) {
   if ($s.PSObject.Properties['Inventory'] -and $s.Inventory) { Set-HealthFromInventory $s }
   $m = Read-ManagerSettings
   $items = if ($s.Items -is [psobject]) { $s.Items } else { New-Object psobject }
-  Set-ManagerSetting $m 'Health' ([pscustomobject]@{ Enabled = [bool]$s.Enabled; Mode = $(if ($s.Mode -eq 'repair') { 'repair' } else { 'diagnose' }); Items = $items
+  Set-ManagerSetting $m 'Health' ([pscustomobject]@{ Enabled = [bool]$s.Enabled; Mode = $(if ($s.Mode -eq 'repair') { 'repair' } else { 'diagnose' }); Off = @(@($s.Off) | Where-Object { $_ } | ForEach-Object { "$_" } | Sort-Object -Unique); Items = $items
     Hosts = ((Split-List $s.Hosts) -join ' '); Cluster = [string]$s.Cluster
     Devices = ((@("$($s.Devices)" -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })) -join "`n"); DnsServers = ((Split-List $s.DnsServers) -join ' ')
     BrokerName = ((Split-List $s.BrokerName) -join ' '); Servers = ((Split-List $s.Servers) -join ' '); CriticalVms = ((@("$($s.CriticalVms)" -split '[,;\r\n]+' | ForEach-Object { $_.Trim() } | Where-Object { $_ })) -join ', '); SqlListener = "$($s.SqlListener)".Trim(); BackupPath = "$($s.BackupPath)".Trim(); BackupText = "$($s.BackupText)".Trim(); BackupHours = [int]$s.BackupHours; Limits = "$($s.Limits)".Trim(); Inventory = $(if ($s.PSObject.Properties['Inventory'] -and $s.Inventory) { $s.Inventory } else { New-HealthInventory }) })
@@ -397,9 +399,6 @@ function Get-OtrBasics([string]$pdc, [bool]$isDc) {
   $apipa = @(Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -like '169.254.*' } | ForEach-Object {
     $ad = Get-NetAdapter -InterfaceIndex $_.InterfaceIndex
     if ($ad -and "$($ad.Status)" -eq 'Up' -and "$($ad.InterfaceDescription)" -notmatch 'Remote NDIS|iDRAC|Failover Cluster') { "$($_.InterfaceAlias) $($_.IPAddress)" } })
-  # the servers in the lists of Server Manager of every profile: a name nobody resolves any more is retried for ever
-  $sm = @(foreach ($u in @(Get-ChildItem (Join-Path $env:SystemDrive 'Users') -Directory)) { $x = Join-Path $u.FullName 'AppData\Roaming\Microsoft\Windows\ServerManager\ServerList.xml'
-    if (Test-Path -LiteralPath $x) { try { foreach ($s in @(([xml](Get-Content -LiteralPath $x -Raw)).ServerList.ServerInfo)) { "$($s.name)" } } catch { } } })
   # RD Gateway, when this server is one: its service, the certificate it presents, its policies (CAP: who may connect,
   # RAP: to what), the errors and warnings of its log in the last day (failed connections); RD Web Access: IIS
   $gw = $null
@@ -415,7 +414,7 @@ function Get-OtrBasics([string]$pdc, [bool]$isDc) {
   }
   $rw = if (Test-Path (Join-Path $env:SystemRoot 'Web\RDWeb')) { [pscustomobject]@{ W3svc = "$((Get-Service W3SVC).Status)" } } else { $null }
   $fqdn = try { [Net.Dns]::GetHostEntry($env:COMPUTERNAME).HostName } catch { $env:COMPUTERNAME }
-  [pscustomobject]@{ Fqdn = $fqdn; Os = "$($os.Caption)"; Build = "$($os.BuildNumber)"; SmNames = @($sm | Where-Object { $_ } | Select-Object -Unique); Gateway = $gw; RdWeb = $rw
+  [pscustomobject]@{ Fqdn = $fqdn; Os = "$($os.Caption)"; Build = "$($os.BuildNumber)"; Gateway = $gw; RdWeb = $rw
     Ips = @(Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notmatch '^(127\.|169\.254\.)' } | ForEach-Object { [pscustomobject]@{ Ip = $_.IPAddress; Skip = [bool]$_.SkipAsSource } })
     MemTotalMB = [int]($os.TotalVisibleMemorySize / 1024); MemFreeMB = [int]($os.FreePhysicalMemory / 1024); Boot = Iso $os.LastBootUpTime
     Disks = $disks; Stuck = $stuck; Failed = $failed; Reboot = $reboot; ErrorCount = $ev.Count; Critical = @($ev | Where-Object { $_.Level -eq 1 }).Count; Errors = $top
@@ -748,24 +747,17 @@ $r
       $rdsDb.NoIp = @(Invoke-Sql $dbi.Server "SELECT DISTINCT t.Name FROM rds.Target t JOIN rds.Vm v ON v.Name = t.Name LEFT JOIN rds.TargetIp ti ON ti.TargetId = t.Id WHERE ti.IpAddress IS NULL OR ti.IpAddress = '0.0.0.0'" $false $dbi.Database | ForEach-Object { [string]$_.Name })
     } catch { $rdsDb.Error = (("$($_.Exception.GetBaseException().Message)") -split "`n")[0] }
   }
-  Step 'servermanager'
-  # ---- 6c. the names in the lists of Server Manager: those that neither resolve nor exist in AD any more
-  $smDead = @{}
-  foreach ($s in @(@($hosts) + @($dcsOut) + @($servers) | Where-Object { $_ -and $_.Reachable -and $_.PSObject.Properties['SmNames'] })) {
-    foreach ($nm in @($s.SmNames)) {
-      if (-not $nm) { continue }
-      $key = "$nm".ToUpper(); if (-not $smDead.ContainsKey($key)) {
-        $res = $false; try { $res = @([Net.Dns]::GetHostAddresses($nm)).Count -gt 0 } catch { }
-        $inAd = $false; if (-not $res) { try { $ds = New-Object DirectoryServices.DirectorySearcher; $ds.Filter = "(&(objectClass=computer)(cn=$(Short $nm)))"; $inAd = [bool]$ds.FindOne() } catch { } }
-        $smDead[$key] = (-not $res -and -not $inAd) }
-    }
-    $s | Add-Member -NotePropertyName SmDead -NotePropertyValue @(@($s.SmNames) | Where-Object { $_ -and $smDead["$_".ToUpper()] }) -Force
-  }
   Step 'dns'
   # ---- 7. DNS: the servers of the settings and the DCs answer; the names of the servers resolve to one address each
   # and back; the time it takes (the system resolver, as the programs use it)
   $dnsServers = @(@($cfg.DnsServers) + @($domain.Dcs | ForEach-Object { $_.Ip }) | Where-Object { $_ } | Select-Object -Unique)
   $zone = if ($domain -and $domain.Name) { $domain.Name } else { '' }
+  # what the DNS answers for a name. Not GetHostAddresses: on the computer running the manager its own name resolves
+  # to every address of its adapters (storage, cluster, APIPA), which nobody else gets from the DNS
+  $dnsA = { param([string]$n)
+    if (Get-Command Resolve-DnsName -ErrorAction SilentlyContinue) {
+      try { @(Resolve-DnsName -Name $n -Type A -DnsOnly -NoHostsFile -ErrorAction Stop | Where-Object { $_.Type -eq 'A' } | ForEach-Object { "$($_.IPAddress)" } | Select-Object -Unique) } catch { @() }
+    } else { try { @([Net.Dns]::GetHostAddresses($n) | Where-Object { $_.AddressFamily -eq 'InterNetwork' } | ForEach-Object { $_.IPAddressToString }) } catch { @() } } }
   $dnsOut = @(foreach ($s in $dnsServers) {
     $sw = [Diagnostics.Stopwatch]::StartNew(); $ok = $false; $err = $null
     try { if ($zone) { [void](Resolve-DnsName -Name $zone -Type SOA -Server $s -DnsOnly -QuickTimeout -ErrorAction Stop) } else { $ok = Test-Tcp $s 53 2000 }; if ($zone) { $ok = $true } } catch { $err = (($_.Exception.Message) -split "`n")[0] }
@@ -776,12 +768,12 @@ $r
   foreach ($x in $all) {
     if (-not $x.N) { continue }
     $sw = [Diagnostics.Stopwatch]::StartNew(); $ips = @()
-    try { $ips = @([Net.Dns]::GetHostAddresses($x.N) | Where-Object { $_.AddressFamily -eq 'InterNetwork' } | ForEach-Object { $_.IPAddressToString }) } catch { }
+    $ips = @(& $dnsA $x.N)
     $fwd = [int]$sw.ElapsedMilliseconds
     $rev = @(foreach ($ip in $ips) { $sw.Restart(); $h = try { [Net.Dns]::GetHostEntry($ip).HostName } catch { $null }; [pscustomobject]@{ Ip = $ip; Name = $h; Ms = [int]$sw.ElapsedMilliseconds } })
     $names += [pscustomobject]@{ Name = $x.N; Kind = $x.K; Ips = $ips; Ms = $fwd; Reverse = $rev; Own = @($x.Own) }
   }
-  foreach ($bn in @($cfg.BrokerName)) { if ($bn) { $ips = @(); try { $ips = @([Net.Dns]::GetHostAddresses($bn) | Where-Object { $_.AddressFamily -eq 'InterNetwork' } | ForEach-Object { $_.IPAddressToString }) } catch { }
+  foreach ($bn in @($cfg.BrokerName)) { if ($bn) { $ips = @(& $dnsA $bn)
     $names += [pscustomobject]@{ Name = $bn; Kind = 'shared'; Ips = $ips; Ms = 0; Reverse = @(); Own = @() } } }
   Step 'devices' @($cfg.Devices).Count
   # ---- 8. the devices (and the host of a file share witness), from here
@@ -878,6 +870,7 @@ function New-HcNode($m, [string]$id, [string]$kind, [string]$name, [string]$pare
 function Add-HcFact($n, [string]$key, $value) { if ($null -ne $value -and "$value" -ne '') { [void]$n.Facts.Add([pscustomobject]@{ Label = (Get-Text $key); Value = [string]$value }) } }
 # a check: HcT_<id> = its title, HcX_<id> = what (with the values of $a), HcW_<id> = what it means
 function Add-HcCheck($n, [string]$kind, [string]$id, $a = @(), $fix = $null, $fixArg = $null, [string]$why = $null) {
+  if (@($script:HcOff) -contains $id) { return }
   $a = @($a)
   $c = [pscustomobject]@{ Kind = $kind; Id = $id; Title = (Get-TextIf "HcT_$id" @a); Text = (Get-TextIf "HcX_$id" @a); Why = $(if ($why) { $why } else { Get-TextIf "HcW_$id" @a })
     Fix = $fix; FixArg = $fixArg; Source = 'health'; Node = $n.Id }
@@ -945,8 +938,6 @@ function Add-HcBasics($n, $o, [string]$role, [datetime]$now, [string]$pdc, $dcs)
   }
   if ($o.SecureChannel -eq $false) { [void](Add-HcCheck $n 'error' 'Trust' @() 'NetlogonRestart') }
   foreach ($x in @($o.Apipa | Where-Object { $_ })) { [void](Add-HcCheck $n 'warn' 'Apipa' @($x)) }
-  # names in the lists of Server Manager that neither resolve nor exist in AD: retried for ever (removed safely)
-  if ($o.PSObject.Properties['SmDead'] -and @($o.SmDead).Count) { [void](Add-HcCheck $n 'warn' 'SmDead' @((@($o.SmDead) -join ', ')) 'ServerManagerClean' (@($o.SmDead) -join ',')) }
   # RD Gateway on this server: the service, its certificate, its policies (CAP, RAP), port 443, the failed connections
   if ($o.PSObject.Properties['Gateway'] -and $o.Gateway) {
     $g = $o.Gateway
@@ -977,7 +968,6 @@ function Add-HcBasics($n, $o, [string]$role, [datetime]$now, [string]$pdc, $dcs)
   Add-HcDone $n 'Clock' @('Skew', 'SkewErr', 'TimeSource', 'PdcTime') $(if ($null -ne $o.Skew -and "$($o.Skew)" -ne '') { Get-Text 'HcSkewOk' ([math]::Round([math]::Abs([double]$o.Skew), 2)) } else { '' })
   if ($null -ne $o.SecureChannel) { Add-HcDone $n 'Trust' 'Trust' }
   Add-HcDone $n 'Apipa' 'Apipa'
-  if ($o.PSObject.Properties['SmNames']) { Add-HcDone $n 'ServerManager' 'SmDead' }
   $ips = @($o.Ips | Where-Object { $_ -and -not $_.Skip } | ForEach-Object Ip)
   if ($ips.Count) { Add-HcFact $n 'HcFAddress' ($ips -join ', ') }
 }
@@ -998,6 +988,8 @@ function Add-HcServices($n, $services, $need, [hashtable]$whyKeys) {
 # $now = the time of the data.
 function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
   if (-not $settings) { $settings = Get-HealthDefaults }
+  # the checks switched off in the settings: never added, and no OK line for them
+  $script:HcOff = @($settings.PSObject.Properties['Off'] | ForEach-Object { @($_.Value) } | Where-Object { $_ })
   $L = $script:HealthLimits
   $m = [pscustomobject]@{ Nodes = New-Object Collections.ArrayList; Index = @{}; Taken = $now; Headline = ''; HeadlineKind = 'ok'; Problems = @(); Errors = 0; Warnings = 0; Access = 'ok'; Raw = $raw }
   if (-not $settings.Enabled) { $m.Access = 'off'; return $m }
@@ -1288,13 +1280,17 @@ function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
     # every VM the cluster saves (1) or switches off (0) when it takes it offline, not only those with a vTPM
     $savers = @($allVms | Where-Object { $_.Clustered -and $null -ne $_.OfflineAction -and "$($_.OfflineAction)" -ne '' -and [int]$_.OfflineAction -in 0, 1 } | ForEach-Object Name | Sort-Object -Unique)
     if (@($c.Nodes).Count -eq 1) { [void](Add-HcCheck $cn 'warn' 'OneNode' @()) }
-    # roles that must not share a node, sharing one: the cluster does not separate them by itself
-    foreach ($g in @($c.AntiAffinity | Where-Object { $_ } | Group-Object Owner)) {
-      foreach ($cls in @($g.Group | ForEach-Object { @($_.Classes) } | Group-Object | Where-Object Count -gt 1 | ForEach-Object Name)) {
-        $pair = @($g.Group | Where-Object { @($_.Classes) -contains $cls } | ForEach-Object Name)
-        $vnode = $m.Index["vm:$(([string]$pair[-1]).ToUpper())"]
-        [void](Add-HcCheck $(if ($vnode) { $vnode } else { $cn }) 'warn' 'AntiAffinity' @(($pair -join ', '), $g.Name, $cls) $(if ($vnode) { 'VmMoveLive' }))
-      }
+    # roles that must not share a node, on fewer nodes than they could be: the cluster does not separate them by
+    # itself. Three brokers on two nodes always put two together: only a spread worse than the nodes allow is a problem
+    $aa = @($c.AntiAffinity | Where-Object { $_ })
+    $nNodes = [Math]::Max(1, @($c.Nodes).Count)
+    foreach ($cls in @($aa | ForEach-Object { @($_.Classes) } | Sort-Object -Unique)) {
+      $mem = @($aa | Where-Object { @($_.Classes) -contains $cls })
+      $byNode = @($mem | Group-Object Owner | Sort-Object Count -Descending)
+      if ($mem.Count -lt 2 -or $byNode.Count -ge [Math]::Min($mem.Count, $nNodes)) { continue }
+      $pair = @($byNode[0].Group | ForEach-Object Name)
+      $vnode = $m.Index["vm:$(([string]$pair[-1]).ToUpper())"]
+      [void](Add-HcCheck $(if ($vnode) { $vnode } else { $cn }) 'warn' 'AntiAffinity' @(($pair -join ', '), $byNode[0].Name, $cls) $(if ($vnode) { 'VmMoveLive' }))
     }
     # the resilience of the data: copies across nodes, or only across the disks of one node
     foreach ($v in @($c.VirtualDisks | Where-Object { $_ -and $_.PSObject.Properties['FaultDomain'] })) {
@@ -1747,6 +1743,7 @@ function Complete-HealthModel($m) {
   # the checks performed that found nothing: one OK line each
   foreach ($n in $m.Nodes) {
     foreach ($d in @($n.Done)) {
+      if (-not @(@($d.Ids) | Where-Object { @($script:HcOff) -notcontains $_ }).Count) { continue }
       if (@($n.Checks | Where-Object { $_.Kind -in 'error', 'warn' -and @($d.Ids) -contains $_.Id }).Count) { continue }
       [void]$n.Checks.Add([pscustomobject]@{ Kind = 'ok'; Id = "Ok$($d.Group)"; Title = (Get-Text "HcC_$($d.Group)"); Text = $(if ($d.Text) { $d.Text } else { Get-Text 'HcOkText' }); Why = ''; Fix = $null; FixArg = $null; Source = 'health'; Node = $n.Id })
     }
@@ -1998,20 +1995,6 @@ $script:HealthRemote = @{
     $err = $null; try { Remove-DnsServerResourceRecord -ZoneName $zone -Name $name -RRType A -RecordData $ip -Force -ErrorAction Stop } catch { $err = $_.Exception.Message }
     $left = @(Get-DnsServerResourceRecord -ZoneName $zone -Name $name -RRType A -ErrorAction SilentlyContinue | Where-Object { "$($_.RecordData.IPv4Address)" -eq $ip }).Count
     [pscustomobject]@{ Ok = ($left -eq 0); Error = $(if ($left) { if ($err) { $err } else { 'still there' } }); Lines = @("$name.$zone A ${ip}: $(if ($left) { 'still there' } else { 'removed' })") }
-  }
-  # names removed from the lists of Server Manager of every profile, with a copy of each list next to it; not while
-  # Server Manager is open (it writes its list back when it closes)
-  ServerManagerClean = {
-    param([string]$csv)
-    if (@(Get-Process -Name ServerManager -ErrorAction SilentlyContinue).Count) { return [pscustomobject]@{ Ok = $false; Error = 'Server Manager is open on this server: close it first'; Lines = @() } }
-    $dead = @($csv.Split(',') | ForEach-Object { $_.ToUpper() }); $n = 0
-    foreach ($u in @(Get-ChildItem (Join-Path $env:SystemDrive 'Users') -Directory -ErrorAction SilentlyContinue)) {
-      $f = Join-Path $u.FullName 'AppData\Roaming\Microsoft\Windows\ServerManager\ServerList.xml'
-      if (-not (Test-Path -LiteralPath $f)) { continue }
-      try { $x = [xml](Get-Content -LiteralPath $f -Raw); $rm = @($x.ServerList.ServerInfo | Where-Object { $dead -contains "$($_.name)".ToUpper() })
-        if ($rm.Count) { Copy-Item -LiteralPath $f -Destination "$f.bak" -Force; foreach ($s in $rm) { [void]$x.ServerList.RemoveChild($s); $n++ }; $x.Save($f) } } catch { }
-    }
-    [pscustomobject]@{ Ok = $true; Error = $null; Lines = @("names removed: $n") }
   }
   # Wake-on-LAN, from here: the magic packet (6 x FF, the MAC 16 times) to every address of the network, ports 9 and 7
   Wake = {
@@ -2390,12 +2373,6 @@ function Get-HealthActionPlan([string]$kind, [string]$target, $state, [datetime]
       $p.Text = Get-Text 'HcConfUnregister' $ip $hn $(if ($dc) { $dc.Name })
       $p.Steps = @((New-HealthStep 'no DNS registration' ([string]$srv) 'NoDnsRegister' @([string]$ip) $false), (New-HealthStep 'remove A record' $(if ($dc) { $dc.Fqdn } else { '' }) 'RemoveARecord' @($zone, $hn, [string]$ip)))
       $p.Log = "DNS: $ip no longer registered under $hn (adapter setting), its A record removed"
-    }
-    'ServerManagerClean' {
-      $p.Safe = $true
-      if (-not $fq) { $p.Blocked = Get-Text 'VdiBlkUnreachable' $where } elseif (-not $arg) { $p.Blocked = Get-Text 'VdiBlkNothing' }
-      $p.Text = Get-Text 'HcConfSmClean' $arg $where
-      $p.Steps = @(New-HealthStep 'Server Manager list' $fq 'ServerManagerClean' @([string]$arg)); $p.Log = "Server Manager on ${where}: names removed from its lists ($arg)"
     }
     default { $p.Blocked = Get-Text 'VdiBlkUnknown' $kind }
   }
