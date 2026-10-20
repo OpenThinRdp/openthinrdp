@@ -4802,7 +4802,8 @@ if ($env:OTR_MANAGER_SCREENSHOT) {   # test: draws the window into a PNG instead
     if ($env:OTR_MANAGER_DEVICE) { foreach ($it in $list.Items) { if ($it.Text -eq $env:OTR_MANAGER_DEVICE) { $it.Selected = $true } } }
     # the servers read in the background (without OTR_MANAGER_VDI_DEMO): waited for, at most 120 s
     if ($script:VdiLoaded) { $t0 = Get-Date
-      while (($script:Vdi.Busy -or ($script:HealthLoaded -and $script:Health.Busy)) -and ((Get-Date) - $t0).TotalSeconds -lt 240) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 50 } }
+      # and the automatic repairs of the Health Center (in repair mode), with the reading that follows them
+      while (($script:Vdi.Busy -or ($script:HealthLoaded -and ($script:Health.Busy -or $script:Health.Action -or $script:Health.Queue.Count))) -and ((Get-Date) - $t0).TotalSeconds -lt 240) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 50 } }
     if ($env:OTR_MANAGER_TAB) { Select-Page ([int]$env:OTR_MANAGER_TAB) }
     # OTR_MANAGER_VDI_ROW = the user (or device) to select on the Desktops page
     if ($env:OTR_MANAGER_VDI_ROW) { foreach ($it in $dskList.Items) { if ($it.Text -eq $env:OTR_MANAGER_VDI_ROW -or ($it.Tag.Device -and $it.Tag.Device.Name -eq $env:OTR_MANAGER_VDI_ROW)) { $it.Selected = $true; break } } }
