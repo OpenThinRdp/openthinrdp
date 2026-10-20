@@ -12,8 +12,17 @@ if [ "$(hostname)" = thinclient ]; then
   . "$OTR/lib/netif.sh"
   MAC=$(tr -d ':' < "/sys/class/net/$(main_nic)/address" 2>/dev/null)
   if [[ $MAC =~ ^[0-9a-f]{12}$ ]]; then
-    T=$(mktemp); echo "HOSTNAME=thinclient-${MAC:6}" > "$T"
-    "$OTR/save-config.sh" "$T" >/dev/null 2>&1 && ev "name of this device: thinclient-${MAC:6} (from its MAC address)"
+    N=thinclient-${MAC:6}; T=$(mktemp); echo "HOSTNAME=$N" > "$T"
+    if R=$("$OTR/save-config.sh" "$T" 2>&1); then ev "name of this device: $N (from its MAC address)"
+    else
+      # save-config.sh refuses everything when another setting of the device is not valid (a hand-written
+      # openthinrdp.conf, an image built with settings of its own): the device kept the shared name and nobody
+      # knew why. The name alone does not depend on them; the reason goes to the log.
+      hostnamectl set-hostname "$N" 2>/dev/null || hostname "$N"
+      if grep -q '^127\.0\.1\.1' /etc/hosts; then sed -i "s/^127\.0\.1\.1.*/127.0.1.1\t$N/" /etc/hosts
+      else printf '127.0.1.1\t%s\n' "$N" >> /etc/hosts; fi
+      ev "name of this device: $N (from its MAC address); settings not valid, fix them in the settings dialog: $(echo "$R" | sed 's/^- //' | paste -sd ';' -)"
+    fi
     rm -f "$T"
   fi
 fi
