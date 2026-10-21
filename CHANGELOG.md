@@ -3,6 +3,12 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## Unreleased
+
+- **A fault that is over gives no warning any more**: critical events and errors of the RDVH agent warn only while
+  they go on (the last one within the hour); a broker silent for more than an hour is the row of a broker that is
+  gone, not a third broker. A file share witness down for five hours had kept four servers yellow for the next 24.
+
 ## 0.2.11 (2026-10-21)
 
 - **Health Center settings by area**: general, Hyper-V and cluster, domain and DNS, remote desktops, SQL Server, file
