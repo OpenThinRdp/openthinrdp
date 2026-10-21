@@ -3,6 +3,16 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.2.7 (2026-10-21)
+
+- **Zero-touch on devices converted from another system.** Their account is only in the credentials file, without
+  `MGMT_USER`: emptying the management folder (to take it from the domain) with `UPDATE_FROM=share` was refused.
+  The device kept its previous settings, safely; now the credentials file is enough. Found by testing on a
+  production device ([#97](https://github.com/OpenThinRdp/openthinrdp/issues/97)).
+- **Production readiness, area by area**: [docs/maturity.md](docs/maturity.md), with the tests run on a production
+  device (rollback in 30 s, an interrupted update that installs again by itself, a network cut, zero-touch,
+  sign-in through each broker, power) and what is still missing.
+
 ## 0.2.6 (2026-10-20)
 
 - **Licence: GNU GPL version 3 or later.** Anyone may use, study, change and share OpenThinRDP, and every copy or
