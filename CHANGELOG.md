@@ -3,7 +3,7 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
-## Unreleased
+## 0.2.10 (2026-10-21)
 
 - **An address for every device that is on the network**: when its main adapter has no IPv4, a device reports the
   address and adapter of its default route instead of `IP=none`; and for a report without an address the manager
