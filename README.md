@@ -122,7 +122,8 @@ Tested hardware and firmware settings: [docs/hardware.md](docs/hardware.md).
    anything (answer *Yes* to go on), then about three minutes. It installs on the **first internal disk**, never
    a USB disk (not even the installation stick). For rollouts, *Unattended install* skips the question.
 
-What the device needs: [Requirements](#requirements).
+What the device needs: [Requirements](#requirements). The whole path, from the USB stick to a managed fleet:
+[getting started](docs/guides/getting-started.md).
 
 ## What it does
 
@@ -301,6 +302,7 @@ The result is `out/openthinrdp-<version>.iso`. See [docs/building.md](docs/build
 - [CHANGELOG.md](CHANGELOG.md): what changed in each release.
 - [docs/status.md](docs/status.md): what is in production, what is only tested, what does not exist yet; [docs/maturity.md](docs/maturity.md): production readiness area by area, with the evidence.
 - [docs/configuration.md](docs/configuration.md): every setting.
+- [docs/guides/getting-started.md](docs/guides/getting-started.md): step by step, from a USB stick to a managed fleet.
 - [docs/faq.md](docs/faq.md): frequently asked questions.
 - Guides: [replacing Dell ThinOS on Dell thin clients](docs/guides/replace-dell-thinos.md), [turning an old PC into a thin client](docs/guides/old-pc-thin-client.md).
 - [docs/alternatives.md](docs/alternatives.md): compared with Linux Mint + Remmina, IGEL OS, Dell ThinOS, Stratodesk, ThinStation, openthinclient.
