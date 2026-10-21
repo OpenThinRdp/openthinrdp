@@ -3324,6 +3324,8 @@ $btnMgrUpdate = New-ActionButton 'BtnUpdateManager' 'Download' 'primary'
 $btnMgrCheck = New-ActionButton 'BtnCheckManager' 'Refresh' 'secondary'
 $blkFleet = New-VaultBlock 'UpdBlockTitle' 'Devices' @($btnUpdRelease, $btnUpdAll, $btnUpdFleet, $btnUpdFetch)
 $blkManager = New-VaultBlock 'MgrBlockTitle' 'Settings' @($btnMgrUpdate, $btnMgrCheck)
+# the updates of the manager itself on the Updates page too, under those of the devices: every update in one place
+$updCard.Controls.Add($blkManager)
 $updCard.Controls.Add($blkFleet)
 $updWrap.Controls.Add($updCard)
 $pageUpdates.Controls.Add($updWrap); $pageUpdates.Controls.Add((New-PageHeader (Get-Text 'NavUpdates') (Get-Text 'PageUpdatesNote')))
@@ -3347,7 +3349,7 @@ $btnLocalChoose = New-ActionButton 'BtnLocalChoose' 'Folder' 'secondary'; $btnLo
 $blkLocal = New-VaultBlock 'LocalBlock' 'Folder' @($btnLocalSync, $btnLocalChoose, $btnLocalOpen)
 $btnFolderDom = New-ActionButton 'BtnFolderDomain' 'Shield' 'secondary'; $btnFolderMove = New-ActionButton 'BtnFolderMove' 'Forward' 'secondary'
 $blkFolder = New-VaultBlock 'FolderBlock' 'Folder' @($btnFolderDom, $btnFolderMove)
-$setMgrCard = New-SetCard $tabSetManager; foreach ($b in @($blkFolder, $blkLocal, $blkLang, $blkManager)) { $setMgrCard.Controls.Add($b) }
+$setMgrCard = New-SetCard $tabSetManager; foreach ($b in @($blkFolder, $blkLocal, $blkLang)) { $setMgrCard.Controls.Add($b) }
 $btnFolderDom.add_Click({
   $acc = Get-DeviceAccount; $f = Get-DomainFolderFile
   if (-not $acc) { Show-Message (Get-Text 'FolderBlock') (Get-Text 'FolderNoAccount'); return }
