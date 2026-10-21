@@ -2707,8 +2707,16 @@ $listCard = New-Panel 'Fill' $Theme.Card; Add-Line $listCard 'Box'; $listCard.Pa
 $listTop = New-Panel 'Top' $Theme.Card 72
 $txtDevSearch = New-SearchBox 'SearchDevices' 200; $txtDevSearch.Location = New-Object System.Drawing.Point(12, 12); $txtDevSearch.Anchor = 'Top, Left, Right'
 $lblDevCount = New-Label '' $fontSmall $Theme.Muted; $lblDevCount.Location = New-Object System.Drawing.Point(12, 46)
-$listTop.Controls.AddRange(@($txtDevSearch, $lblDevCount))
-$listTop.add_Resize({ param($s, $e) $txtDevSearch.Width = [Math]::Max(80, $s.ClientSize.Width - 24) })
+# the groups in sight, right of the count: a new group, and the groups (the same as the right click on the list)
+$lnkNewGroup = New-Object System.Windows.Forms.LinkLabel; $lnkNewGroup.Text = '+ ' + (Get-Text 'GroupsNew'); $lnkNewGroup.AutoSize = $true; $lnkNewGroup.Font = $fontSmallBold; $lnkNewGroup.Anchor = 'Top, Right'
+$lnkGroups = New-Object System.Windows.Forms.LinkLabel; $lnkGroups.Text = Get-Text 'GroupsManage'; $lnkGroups.AutoSize = $true; $lnkGroups.Font = $fontSmall; $lnkGroups.Anchor = 'Top, Right'
+foreach ($l in $lnkNewGroup, $lnkGroups) { $l.LinkColor = $Theme.Accent; $l.ActiveLinkColor = $Theme.Accent; $l.LinkBehavior = 'HoverUnderline' }
+$listTop.Controls.AddRange(@($txtDevSearch, $lblDevCount, $lnkNewGroup, $lnkGroups))
+$listTop.add_Resize({ param($s, $e) $txtDevSearch.Width = [Math]::Max(80, $s.ClientSize.Width - 24)
+  $lnkGroups.Location = New-Object System.Drawing.Point(($s.ClientSize.Width - 12 - $lnkGroups.PreferredWidth), 46)
+  $lnkNewGroup.Location = New-Object System.Drawing.Point(($lnkGroups.Left - 14 - $lnkNewGroup.PreferredWidth), 46) })
+$lnkNewGroup.add_LinkClicked({ $miNewGroup.PerformClick() })
+$lnkGroups.add_LinkClicked({ Show-GroupsDialog })
 
 $imgDots = New-Object System.Windows.Forms.ImageList; $imgDots.ColorDepth = 'Depth32Bit'; $imgDots.ImageSize = New-Object System.Drawing.Size(16, 26)
 foreach ($k in @('ok', 'off', 'error', 'warn', 'info')) { $imgDots.Images.Add($k, (New-Dot $script:KindColor[$k])) }
