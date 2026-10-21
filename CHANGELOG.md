@@ -5,6 +5,14 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
 
 ## Unreleased
 
+- **Health Center settings by area**: general, Hyper-V and cluster, domain and DNS, remote desktops, SQL Server, file
+  and other servers, devices and appliances, backup. Each area has its switch, the servers it reads (one line each,
+  with a remove button and *+ Add*, instead of a small grid), its own settings, its thresholds as numbers with their
+  names (no more `DiskPct=10; ...` to type) and its checks; the list on the left says which areas are on and how many
+  of their checks. An area switched on without what it needs (a host, a domain controller, a broker...) is not saved:
+  the window goes there and says what is missing. An area never configured opens switched off.
+- **Save in the Health Center settings saved nothing**: the buttons were created twice, and the Save in front had no
+  action.
 - **A frozen session reconnects by itself**: a FreeRDP still connected but no longer reading (data waiting in its
   sockets, the queue never shrinking for 60 s) is killed and the session reopened, like after any drop. Seen during a
   call with microphone and camera: the screen stayed frozen for hours until the device was switched off. What it was

@@ -99,6 +99,37 @@ $script:HealthRoleMinutes = 10
 # thresholds of the checks (the same for every site: a site with other needs changes them here)
 $script:HealthLimits = @{ DiskGB = 5; DiskPct = 8; DiskWarnPct = 15; DiskWarnGB = 50; MemPct = 5; MemWarnPct = 10; SkewWarn = 60; SkewMax = 240
   CheckpointDays = 3; ReverseMs = 1500; DnsMs = 1000; BackupHours = 26; JobDays = 3 }
+# ---- The areas of the settings: each with its checks, the lists of servers they read, its thresholds. An area is
+# switched on when at least one of its checks is (Off lists the others); switched on, it needs what Need says.
+$script:HcAreas = [ordered]@{
+  general  = @{ Lists = @(); Limits = @('DiskGB', 'DiskPct', 'DiskWarnGB', 'DiskWarnPct', 'MemPct', 'MemWarnPct', 'SkewWarn', 'SkewMax')
+    Checks = @('Unreach', 'Denied', 'Mem', 'Disk', 'Stuck', 'Failed', 'Reboot', 'Critical', 'Errors', 'Skew', 'SkewErr', 'PdcTime', 'TimeSource', 'Trust', 'Apipa', 'SvcStopped', 'SvcDisabled', 'ServerOff', 'NotConfigured', 'OnBattery', 'CustomFolder', 'NicDown', 'NicDriver') }
+  hyperv   = @{ Lists = @('HvHosts'); Limits = @('CheckpointDays'); Need = 'HvHosts'
+    Checks = @('ClusterUnread', 'Witness', 'NoWitness', 'Drain', 'GroupFailed', 'GroupPartial', 'ResFailed', 'CsvState', 'CsvFree', 'CsvMissing', 'Pool', 'PoolReserve', 'VDisk', 'FaultDomain', 'DisksMaint', 'DisksBad', 'Jobs', 'JobsSuspended', 'Network', 'Migration', 'NodePaused', 'NodeDown', 'Saved', 'SavedTpm', 'Paused', 'Hung', 'HungMany', 'RoleOffline', 'VmState', 'RoleFailed', 'NotClustered', 'Checkpoints', 'StopSave', 'StopOff', 'GuestDisk', 'OfflineAction', 'Guardian', 'Room', 'NoCluster', 'ClusterDown', 'OneNode', 'CriticalOff', 'DynamicMac', 'NoIpOff', 'OffRoleOnline', 'AntiAffinity', 'WitnessDevice') }
+  domain   = @{ Lists = @('Dcs', 'DnsList'); Limits = @('DnsMs', 'ReverseMs'); Need = 'Dcs'
+    Checks = @('DomainUnread', 'DcPort', 'Adws', 'AdQuery', 'LdapQuery', 'NoGc', 'Fsmo', 'Sysvol', 'Repl', 'DnsLoopback', 'NotAlike', 'ZoneOnOne', 'DnsDown', 'DnsSlow', 'NoName', 'TwoAddresses', 'NoPtr', 'SlowPtr', 'NoReverseZone', 'StaleRecords', 'ScavengeWitness') }
+  desktops = @{ Lists = @('BrokerList', 'Gateways', 'RdWebs'); Limits = @(); Need = 'BrokerList'
+    Checks = @('Vdi', 'VdiName', 'Agent1295', 'AgentFails', 'AgentMaint', 'BrokerDbNode', 'BrokerHeartbeat', 'MapWrong', 'PhantomBroker', 'ThirdBroker', 'TssdisEmpty', 'RdsDbUnread', 'RdpCertMissing', 'RdpCertName', 'RdpCertExpiring', 'RdpCertExpired', 'Gw443', 'GwService', 'GwPolicies', 'GwCert', 'GwCertExpiring', 'GwCertExpired', 'GwFailed', 'RdWeb') }
+  sql      = @{ Lists = @('SqlReplicas', 'SqlSingle'); Limits = @('JobDays'); Need = 'Sql'
+    Checks = @('SqlUnread', 'SqlAuth', 'SqlPort', 'SqlRejected', 'SqlNodeDown', 'SqlResOffline', 'Listener', 'Replica', 'NotInAg', 'DbOffline', 'DbSuspended', 'DbSync', 'Sql976', 'LoginsMissing', 'LoginsDisabled', 'JobsMissing', 'JobsFailed', 'SqlNoBackup', 'SqlBackup', 'NoLogBackup', 'LogBackupOld', 'SqlWriter') }
+  servers  = @{ Lists = @('FileServers', 'OtherServers'); Limits = @(); Need = 'Servers'; Checks = @('Share') }
+  devices  = @{ Lists = @('DeviceList'); Limits = @(); Need = 'DeviceList'; Checks = @('DeviceDown', 'DevicePort', 'NoPing') }
+  backup   = @{ Lists = @(); Limits = @(); Need = 'BackupPath'; Checks = @('BackupNoSource', 'BackupUnread', 'BackupLogShort', 'BackupNone', 'BackupOld', 'NoVmBackup', 'CrashOnly') }
+}
+# the area of a check (a check of no area, as a custom one, is in the general one)
+function Get-HcArea([string]$id) { foreach ($k in $script:HcAreas.Keys) { if ($script:HcAreas[$k].Checks -contains $id) { return $k } }; 'general' }
+# switched on, the area has what its checks need: $null, else the reason
+function Test-HcAreaReady($s, [string]$area) {
+  $need = $script:HcAreas[$area].Need; if (-not $need) { return $null }
+  $i = $s.Inventory; $has = { param($k) @(@($i.$k) | Where-Object { "$($_.Name)".Trim() }).Count -gt 0 }
+  $ok = switch ($need) {
+    'Sql' { "$($s.SqlListener)".Trim() -or (& $has 'SqlReplicas') -or (& $has 'SqlSingle') }
+    'Servers' { (& $has 'FileServers') -or (& $has 'OtherServers') }
+    'BackupPath' { [bool]"$($s.BackupPath)".Trim() }
+    default { & $has $_ }
+  }
+  if ($ok) { $null } else { Get-Text "HcAreaNeed_$area" }
+}
 # ---- The inventory: every server is typed by hand in Settings > Health Center, by its role; nothing is found by itself,
 # because servers can be on other networks or anywhere. What a configured host or cluster says about its own nodes and
 # VMs, and an availability group about its replicas, is still read from it. Each list: entries { Name; Note }; the

@@ -5302,108 +5302,199 @@ function Show-CustomCheckDialog($c) {
 }
 # Settings > Health Center: every server typed by hand by its role (nothing is found by itself: servers can be on other
 # networks or anywhere), each list with its notes; a new line at the bottom of a list adds, Remove (or Delete) removes.
+# Settings of the Health Center: the areas on the left (a dot: on or off, how many of its checks), on the right the
+# area chosen: its switch, the servers it reads, its own settings and thresholds, its checks. An area switched on
+# without what it needs is not saved (Test-HcAreaReady): the window goes there and says what is missing.
 function Show-HealthSettingsDialog {
   $s = Get-HealthSettings; $inv = $s.Inventory
-  $W = 880; $script:HsY = 12; $grids = @{}
+  $areas = @($script:HcAreas.Keys); $pages = @{}
+  $off = @{}; foreach ($x in @($s.Off)) { $off["$x"] = $true }
   $dlg = New-Object System.Windows.Forms.Form; Set-WindowIcon $dlg
-  $dlg.Text = Get-Text 'HcSetTitle'; $dlg.Font = $fontBase; $dlg.FormBorderStyle = 'FixedDialog'; $dlg.MaximizeBox = $false; $dlg.MinimizeBox = $false; $dlg.StartPosition = 'CenterParent'
-  # one tab per part of the infrastructure, the note and the switch above them, Save and Cancel always in sight
-  $dlg.ClientSize = New-Object System.Drawing.Size(($W + 20), 660)
-  $top = New-Object System.Windows.Forms.Panel; $top.Dock = 'Top'; $top.Height = 108
-  $tabs = New-Object System.Windows.Forms.TabControl; $tabs.Dock = 'Fill'; $tabs.Padding = New-Object System.Drawing.Point(14, 6); $tabs.Font = $fontBase
-  $bottom = New-Object System.Windows.Forms.Panel; $bottom.Dock = 'Bottom'; $bottom.Height = 56
-  $newTab = { param([string]$key) $tp = New-Object System.Windows.Forms.TabPage (Get-Text $key); $tp.BackColor = $Theme.Card
-    $p = New-Object System.Windows.Forms.Panel; $p.AutoScroll = $true; $p.Dock = 'Fill'; $tp.Controls.Add($p); [void]$tabs.TabPages.Add($tp); $script:HsY = 12; $p }
-  $pan = $top
-  $addText = { param([string]$text, $font, $color, [int]$x = 14)
-    $l = New-Object System.Windows.Forms.Label; $l.Text = $text; $l.Font = $font; if ($color) { $l.ForeColor = $color }
-    $l.MaximumSize = New-Object System.Drawing.Size(($W - 40 - $x), 0); $l.AutoSize = $true; $l.Location = New-Object System.Drawing.Point($x, $script:HsY); $pan.Controls.Add($l)
-    $script:HsY += $l.GetPreferredSize((New-Object System.Drawing.Size(($W - 40 - $x), 0))).Height + 4 }
-  $addBox = { param([string]$key, [string]$value, [int]$width = 420, [int]$lines = 1)
-    $l = New-Object System.Windows.Forms.Label; $l.Text = Get-Text $key; $l.AutoSize = $true; $l.Location = New-Object System.Drawing.Point(14, ($script:HsY + 4)); $pan.Controls.Add($l)
-    $tb = New-Object System.Windows.Forms.TextBox; $tb.Text = $value
-    if ($lines -gt 1) { $tb.Multiline = $true; $tb.ScrollBars = 'Vertical'; $tb.AcceptsReturn = $true }
-    $tb.SetBounds(240, $script:HsY, $width, $(if ($lines -gt 1) { 22 * $lines } else { 26 })); $pan.Controls.Add($tb); $script:HsY += $tb.Height + 8; $tb }
-  $addGrid = { param([string]$key, $cols, $rows)
-    & $addText (Get-Text "HcInv_$key") $fontBold $null
-    $hk = "HcInvHint_$key"; if ($script:Text.ContainsKey($hk)) { & $addText (Get-Text $hk) $fontSmall $Theme.Muted }
-    $g = New-Object System.Windows.Forms.DataGridView; $g.Font = $fontBase; $g.AllowUserToAddRows = $true; $g.AllowUserToDeleteRows = $true; $g.RowHeadersVisible = $false
-    $g.AutoSizeColumnsMode = 'Fill'; $g.BackgroundColor = $Theme.Card; $g.BorderStyle = 'FixedSingle'; $g.SelectionMode = 'FullRowSelect'; $g.ColumnHeadersHeightSizeMode = 'AutoSize'
-    foreach ($c in $cols) { $i = $g.Columns.Add($c, (Get-Text "HcInvCol_$c")); if ($c -eq 'Note') { $g.Columns[$i].FillWeight = 160 } }
-    foreach ($r in @($rows)) { [void]$g.Rows.Add([object[]]@($cols | ForEach-Object { [string]$r.$_ })) }
-    $h = 26 + 24 * [Math]::Max(3, @($rows).Count + 1)
-    $g.SetBounds(14, $script:HsY, ($W - 160), $h); $pan.Controls.Add($g)
-    $rm = New-Button 'HcInvRemove' 110 28; $rm.Location = New-Object System.Drawing.Point(($W - 136), $script:HsY); $rm.Tag = $g; $pan.Controls.Add($rm)
-    $rm.add_Click({ param($x, $e) $gg = $x.Tag; foreach ($row in @($gg.SelectedRows)) { if (-not $row.IsNewRow) { $gg.Rows.Remove($row) } } })
-    $script:HsY += $h + 12; $grids[$key] = $g }
-  & $addText (Get-Text 'HcSetNote' $script:SettingsFile) $fontBase $Theme.Muted
-  $chk = New-Object System.Windows.Forms.CheckBox; $chk.Text = Get-Text 'HcSetEnabled'; $chk.Checked = [bool]$s.Enabled; $chk.AutoSize = $true; $chk.Location = New-Object System.Drawing.Point(14, $script:HsY); $pan.Controls.Add($chk); $script:HsY += 34
-  $two = @('Name', 'Note')
-  $pan = & $newTab 'HcTabHyperV'
-  & $addGrid 'HvHosts' $two $inv.HvHosts
-  $lc = New-Object System.Windows.Forms.Label; $lc.Text = Get-Text 'HcInvCluster'; $lc.AutoSize = $true; $lc.Location = New-Object System.Drawing.Point(14, ($script:HsY + 4)); $pan.Controls.Add($lc)
-  $cbCl = New-Object System.Windows.Forms.ComboBox; $cbCl.DropDownStyle = 'DropDownList'; $cbCl.Font = $fontBase; [void]$cbCl.Items.AddRange(@((Get-Text 'HcInvNo'), (Get-Text 'HcInvYes'))); $cbCl.SelectedIndex = $(if ($inv.HvCluster -eq 'yes') { 1 } else { 0 })
-  $cbCl.SetBounds(240, $script:HsY, 100, 26); $pan.Controls.Add($cbCl); $script:HsY += 34
-  $tbClName = & $addBox 'HcInvClusterName' $inv.ClusterName 300
-  $cbCl.add_SelectedIndexChanged({ $tbClName.Enabled = $cbCl.SelectedIndex -eq 1 }); $tbClName.Enabled = $cbCl.SelectedIndex -eq 1
-  $pan = & $newTab 'HcTabDomain'
-  & $addGrid 'Dcs' $two $inv.Dcs
-  & $addGrid 'DnsList' $two $inv.DnsList
-  & $addGrid 'BrokerList' $two $inv.BrokerList
-  $tbBroker = & $addBox 'HcSetBrokerName' $s.BrokerName
-  & $addGrid 'Gateways' $two $inv.Gateways
-  & $addGrid 'RdWebs' $two $inv.RdWebs
-  $pan = & $newTab 'HcTabSql'
-  & $addText (Get-Text 'HcInvSql') $fontBold $null
-  $tbSql = & $addBox 'HcSetSql' $s.SqlListener
-  & $addGrid 'SqlReplicas' $two $inv.SqlReplicas
-  & $addGrid 'SqlSingle' $two $inv.SqlSingle
-  & $addGrid 'FileServers' $two $inv.FileServers
-  & $addGrid 'OtherServers' $two $inv.OtherServers
-  $pan = & $newTab 'HcTabDevices'
-  & $addGrid 'DeviceList' @('Name', 'Address', 'Ports', 'Share', 'Mac', 'Note') $inv.DeviceList
-  & $addText (Get-Text 'HcInvMore') $fontBold $null
-  $tbCrit = & $addBox 'HcSetCritical' $s.CriticalVms
-  $tbBPath = & $addBox 'HcSetBackup' $s.BackupPath
-  $tbBText = & $addBox 'HcSetBackupText' $s.BackupText
-  $tbBHours = & $addBox 'HcSetBackupHours' ([string]$s.BackupHours) 80
-  $pan = & $newTab 'HcTabChecks'
-  $tbLim = & $addBox 'HcSetLimits' $s.Limits 420 2
-  & $addText (Get-Text 'HcSetLimitsHint') $fontSmall $Theme.Muted 240
-  # every check by its title: ticked = performed; a check switched off is never shown, not even as OK
-  & $addText (Get-Text 'HcSetChecks') $fontBold $null
-  & $addText (Get-Text 'HcSetChecksHint') $fontSmall $Theme.Muted
-  $hcIds = @($script:Text.Keys | Where-Object { $_ -like 'HcT_*' } | ForEach-Object { $_.Substring(4) } |
-    Sort-Object { (Get-Text "HcT_$_") -replace '\s*\{\d+\}', '' })
-  $clb = New-Object System.Windows.Forms.CheckedListBox; $clb.CheckOnClick = $true; $clb.Font = $fontBase; $clb.IntegralHeight = $false
-  # two checks with the same title (a placeholder taken out): the name of the check after it
-  $titles = @($hcIds | ForEach-Object { ((Get-Text "HcT_$_") -replace '\s*\{\d+\}', '').Trim() })
-  for ($k = 0; $k -lt $hcIds.Count; $k++) { $tt = $titles[$k]; if (@($titles | Where-Object { $_ -eq $tt }).Count -gt 1) { $tt = "$tt  ($($hcIds[$k]))" }; [void]$clb.Items.Add($tt, (@($s.Off) -notcontains $hcIds[$k])) }
-  $clb.SetBounds(14, $script:HsY, ($W - 160), 300); $pan.Controls.Add($clb); $script:HsY += 308
-  $err = New-Object System.Windows.Forms.Label; $err.ForeColor = $script:KindColor.error; $err.SetBounds(14, 6, ($W - 260), 44); $bottom.Controls.Add($err)
-  $ok = New-Button 'BtnSave' 110 30; $cancel = New-Button 'BtnCancel' 100 30
-  $cancel.Location = New-Object System.Drawing.Point(($W + 20 - 16 - $cancel.Width), 12); $ok.Location = New-Object System.Drawing.Point(($cancel.Left - 8 - $ok.Width), 12)
-  $cancel.DialogResult = 'Cancel'; $dlg.CancelButton = $cancel; $bottom.Controls.AddRange(@($ok, $cancel))
-  $dlg.Controls.Add($tabs); $dlg.Controls.Add($top); $dlg.Controls.Add($bottom)
-  $err = New-Object System.Windows.Forms.Label; $err.ForeColor = $script:KindColor.error; $err.SetBounds(14, 6, ($W - 260), 44); $bottom.Controls.Add($err)
-  $ok = New-Button 'BtnSave' 110 30; $cancel = New-Button 'BtnCancel' 100 30
-  $cancel.Location = New-Object System.Drawing.Point(($W + 20 - 16 - $cancel.Width), 12); $ok.Location = New-Object System.Drawing.Point(($cancel.Left - 8 - $ok.Width), 12)
-  $cancel.DialogResult = 'Cancel'; $dlg.CancelButton = $cancel; $bottom.Controls.AddRange(@($ok, $cancel))
-  $dlg.Controls.Add($tabs); $dlg.Controls.Add($top); $dlg.Controls.Add($bottom)
-  $read = { param($g, $cols) @(foreach ($row in $g.Rows) { if ($row.IsNewRow) { continue }; $o = [ordered]@{}; foreach ($c in $cols) { $o[$c] = "$($row.Cells[$c].Value)".Trim() }; if ($o.Name) { [pscustomobject]$o } }) }
-  $ok.add_Click({
+  $dlg.Text = Get-Text 'HcSetTitle'; $dlg.Font = $fontBase; $dlg.StartPosition = 'CenterParent'; $dlg.MinimizeBox = $false; $dlg.BackColor = $Theme.Page
+  # up to 1040x720, never larger than the screen (a foldable, a laptop with display scaling)
+  $wa = [System.Windows.Forms.Screen]::FromControl($form).WorkingArea
+  $dlg.Size = New-Object System.Drawing.Size([Math]::Min(1040, $wa.Width - 24), [Math]::Min(720, $wa.Height - 24))
+  $dlg.MinimumSize = New-Object System.Drawing.Size([Math]::Min(720, $wa.Width - 24), [Math]::Min(480, $wa.Height - 24))
+
+  # top: where these settings are kept, and the switch of the whole reading
+  $top = New-Panel 'Top' $Theme.Card 76; $top.Padding = New-Object System.Windows.Forms.Padding(18, 10, 18, 8); Add-Line $top 'Bottom'
+  $chk = New-Object System.Windows.Forms.CheckBox; $chk.Text = Get-Text 'HcSetEnabled'; $chk.Checked = [bool]$s.Enabled; $chk.Font = $fontBold; $chk.AutoSize = $true; $chk.Dock = 'Top'
+  $note = New-Label (Get-Text 'HcSetNote' $script:SettingsFile) $fontSmall $Theme.Muted; $note.AutoSize = $false; $note.Dock = 'Top'
+  $top.Controls.Add($note); $top.Controls.Add($chk)
+  # bottom: what is wrong, Save, Cancel
+  $bottom = New-Panel 'Bottom' $Theme.Card 58; Add-Line $bottom 'Top'
+  $err = New-Label '' $fontBase $script:KindColor.error; $err.AutoSize = $false; $err.Location = New-Object System.Drawing.Point(18, 8)
+  $okB = New-ActionButton 'BtnSave' 'Save' 'primary'; $cancel = New-ActionButton 'BtnCancel'
+  $cancel.DialogResult = 'Cancel'; $dlg.CancelButton = $cancel; $bottom.Controls.AddRange(@($err, $okB, $cancel))
+  $bottom.add_Resize({ param($p, $e)
+    $cancel.Location = New-Object System.Drawing.Point(($p.ClientSize.Width - 18 - $cancel.Width), 13)
+    $okB.Location = New-Object System.Drawing.Point(($cancel.Left - 8 - $okB.Width), 13)
+    $err.Size = New-Object System.Drawing.Size([Math]::Max(100, $okB.Left - 30), 44) })
+
+  # left: the areas
+  $nav = New-Object System.Windows.Forms.ListBox; $nav.Dock = 'Left'; $nav.Width = 250; $nav.DrawMode = 'OwnerDrawFixed'; $nav.ItemHeight = 56
+  $nav.BorderStyle = 'None'; $nav.BackColor = $Theme.Card; $nav.IntegralHeight = $false
+  foreach ($a in $areas) { [void]$nav.Items.Add($a) }
+  $navLine = New-Panel 'Left' $Theme.Line 0 1
+  $body = New-Panel 'Fill' $Theme.Card
+
+  # ---- the parts of a page (a FlowLayoutPanel from top to bottom: the parts marked Full take its whole width)
+  $part = { param($pg, $c, [bool]$full = $true) if ($full) { [void]$pg.Tag.Full.Add($c) }; $pg.Controls.Add($c); $c }
+  $text = { param($pg, [string]$t, $font, $color, [int]$top = 0)
+    $l = New-Label $t $font $color; $l.Margin = New-Object System.Windows.Forms.Padding(0, $top, 0, 4); & $part $pg $l | Out-Null; $l }
+  $section = { param($pg, [string]$key) $l = & $text $pg (Get-Text $key) $fontSmallBold $Theme.Muted 18; $l.Text = $l.Text.ToUpper(); [void]$pg.Tag.Parts.Add($l); $l }
+  $cue = { param($t, [string]$hint) $t.Tag = @{ Cue = $hint; Col = $t.Tag }; $t.add_HandleCreated({ param($x, $e) [void][OtrNative]::SendMessage($x.Handle, 0x1501, [IntPtr]1, [string]$x.Tag.Cue) }) }
+  # a field: its name above, the box, a hint under it
+  $field = { param($pg, [string]$key, [string]$value, [int]$width = 420, [string]$hintKey = '')
+    $w = New-Object System.Windows.Forms.FlowLayoutPanel; $w.FlowDirection = 'TopDown'; $w.WrapContents = $false; $w.AutoSize = $true; $w.Margin = New-Object System.Windows.Forms.Padding(0, 4, 0, 6)
+    $l = New-Label (Get-Text $key) $fontBase $Theme.Text; $l.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 3); $w.Controls.Add($l)
+    $tb = New-Object System.Windows.Forms.TextBox; $tb.Font = $fontBase; $tb.Width = $width; $tb.Text = $value; $w.Controls.Add($tb)
+    if ($hintKey -and $script:Text.ContainsKey($hintKey)) { $h = New-Label (Get-Text $hintKey) $fontSmall $Theme.Muted; $h.MaximumSize = New-Object System.Drawing.Size(640, 0); $h.Margin = New-Object System.Windows.Forms.Padding(0, 3, 0, 0); $w.Controls.Add($h) }
+    & $part $pg $w $false | Out-Null; [void]$pg.Tag.Parts.Add($w); $tb }
+  # a list of servers: one line each (its boxes, a remove button), "+ Add" for one more line
+  $widths = @{ Name = 260; Note = 320 }
+  $devWidths = @{ Name = 130; Address = 120; Ports = 80; Share = 160; Mac = 130; Note = 150 }
+  $addRow = { param($box, $values)
+    $r = New-Object System.Windows.Forms.FlowLayoutPanel; $r.WrapContents = $false; $r.AutoSize = $true; $r.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 4)
+    # as wide as the names of the columns above it are now (the page may have made them narrower)
+    $hd = $box.Controls[0]; $j = 0
+    foreach ($c in $box.Tag.Cols) {
+      $tb = New-Object System.Windows.Forms.TextBox; $tb.Font = $fontBase; $tb.Width = $(if ($hd -and $hd.Controls.Count -gt $j) { $hd.Controls[$j].Width - 6 } else { $box.Tag.Widths[$c] }); $j++; $tb.Margin = New-Object System.Windows.Forms.Padding(0, 0, 6, 0)
+      $tb.Text = if ($values) { [string]$values.$c } else { '' }; $tb.Tag = $c; & $cue $tb (Get-Text "HcInvCol_$c"); $r.Controls.Add($tb) }
+    $x = New-Object System.Windows.Forms.Button; $x.Text = [string][char]0x2715; $x.FlatStyle = 'Flat'; $x.FlatAppearance.BorderSize = 0; $x.ForeColor = $Theme.Muted
+    $x.Size = New-Object System.Drawing.Size(28, 24); $x.Cursor = 'Hand'; $x.Tag = $r; $tips.SetToolTip($x, (Get-Text 'HcRemoveRow'))
+    $x.add_Click({ param($b, $e) $row = $b.Tag; $row.Parent.Controls.Remove($row); $row.Dispose() }); $r.Controls.Add($x)
+    $box.Controls.Add($r); $box.Controls.SetChildIndex($r, $box.Controls.Count - 2); $r }
+  $list = { param($pg, [string]$key, $cols, $rows)
+    & $text $pg (Get-Text "HcInv_$key") $fontBold $Theme.Text 8 | Out-Null
+    $hk = "HcInvHint_$key"; if ($script:Text.ContainsKey($hk)) { & $text $pg (Get-Text $hk) $fontSmall $Theme.Muted | Out-Null }
+    $box = New-Object System.Windows.Forms.FlowLayoutPanel; $box.FlowDirection = 'TopDown'; $box.WrapContents = $false; $box.AutoSize = $true; $box.Margin = New-Object System.Windows.Forms.Padding(0, 2, 0, 8)
+    $box.Tag = @{ Cols = $cols; Widths = $(if ($cols.Count -gt 2) { $devWidths } else { $widths }) }
+    # the names of the columns over the boxes (the grey hint inside a box goes when it is filled)
+    $hd = New-Object System.Windows.Forms.FlowLayoutPanel; $hd.WrapContents = $false; $hd.AutoSize = $true; $hd.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 2)
+    foreach ($c in $cols) { $l = New-Label (Get-Text "HcInvCol_$c") $fontSmall $Theme.Muted; $l.AutoSize = $false; $l.Size = New-Object System.Drawing.Size(($box.Tag.Widths[$c] + 6), 18); $l.Margin = New-Object System.Windows.Forms.Padding(0); $hd.Controls.Add($l) }
+    $box.Controls.Add($hd)
+    $add = New-Object System.Windows.Forms.LinkLabel; $add.Text = Get-Text 'HcAddRow'; $add.AutoSize = $true; $add.Font = $fontSmallBold; $add.LinkColor = $Theme.Accent; $add.LinkBehavior = 'HoverUnderline'
+    $add.Margin = New-Object System.Windows.Forms.Padding(0, 2, 0, 0); $add.Tag = $box; $box.Controls.Add($add)
+    $add.add_LinkClicked({ param($l, $e) $r = & $addRow $l.Tag $null; $r.Controls[0].Focus() })
+    foreach ($row in @($rows)) { [void](& $addRow $box $row) }
+    if (-not @($rows).Count) { [void](& $addRow $box $null) }
+    & $part $pg $box $false | Out-Null; [void]$pg.Tag.Parts.Add($box); $pg.Tag.Lists[$key] = $box; $box }
+  $readList = { param($box) @(foreach ($r in $box.Controls) { if ($r -isnot [System.Windows.Forms.FlowLayoutPanel] -or -not ($r.Controls[0] -is [System.Windows.Forms.TextBox])) { continue }
+      $o = [ordered]@{}; foreach ($tb in $r.Controls) { if ($tb -is [System.Windows.Forms.TextBox]) { $o[[string]$tb.Tag.Col] = $tb.Text.Trim() } }
+      if ($o.Name) { [pscustomobject]$o } }) }
+
+  foreach ($a in $areas) {
+    $def = $script:HcAreas[$a]
+    $pg = New-Object System.Windows.Forms.FlowLayoutPanel; $pg.Dock = 'Fill'; $pg.FlowDirection = 'TopDown'; $pg.WrapContents = $false; $pg.AutoScroll = $true
+    $pg.Padding = New-Object System.Windows.Forms.Padding(24, 16, 24, 24); $pg.BackColor = $Theme.Card; $pg.Visible = $false
+    $pg.Tag = @{ Area = $a; Full = (New-Object System.Collections.ArrayList); Parts = (New-Object System.Collections.ArrayList); Lists = @{}; Checks = (New-Object System.Collections.ArrayList); Limits = (New-Object System.Collections.ArrayList) }
+    $pages[$a] = $pg; $body.Controls.Add($pg)
+    & $text $pg (Get-Text "HcArea_$a") $fontPageTitle $Theme.Text | Out-Null
+    & $text $pg (Get-Text "HcAreaDesc_$a") $fontBase $Theme.Muted | Out-Null
+    # the switch of the area: on when at least one of its checks is and it has what they need (without it they have
+    # nothing to read: an area never configured opens switched off, and Save does not stop on it)
+    $sw = New-Object System.Windows.Forms.CheckBox; $sw.Text = Get-Text 'HcAreaOn' (Get-Text "HcArea_$a"); $sw.Font = $fontBold; $sw.AutoSize = $true
+    $sw.Margin = New-Object System.Windows.Forms.Padding(0, 10, 0, 2); $sw.Checked = [bool]@($def.Checks | Where-Object { -not $off[$_] }).Count -and -not (Test-HcAreaReady $s $a); $sw.Tag = $pg
+    $pg.Tag.Switch = $sw; & $part $pg $sw $false | Out-Null
+    if ($def.Lists.Count) { & $section $pg 'HcSecServers' | Out-Null
+      foreach ($k in $def.Lists) { [void](& $list $pg $k $(if ($k -eq 'DeviceList') { @('Name', 'Address', 'Ports', 'Share', 'Mac', 'Note') } else { @('Name', 'Note') }) $inv.$k) } }
+    switch ($a) {
+      'hyperv' { & $section $pg 'HcSecSettings' | Out-Null
+        $cbCl = New-Object System.Windows.Forms.CheckBox; $cbCl.Text = Get-Text 'HcInvCluster'; $cbCl.AutoSize = $true; $cbCl.Checked = $inv.HvCluster -eq 'yes'; $cbCl.Margin = New-Object System.Windows.Forms.Padding(0, 4, 0, 2)
+        & $part $pg $cbCl $false | Out-Null; [void]$pg.Tag.Parts.Add($cbCl)
+        $tbClName = & $field $pg 'HcInvClusterName' $inv.ClusterName 300
+        $cbCl.add_CheckedChanged({ $tbClName.Enabled = $cbCl.Checked -and $pages.hyperv.Tag.Switch.Checked }); $tbClName.Enabled = $cbCl.Checked
+        $tbCrit = & $field $pg 'HcSetCritical' $s.CriticalVms 520 'HcSetCriticalHint' }
+      'desktops' { & $section $pg 'HcSecSettings' | Out-Null; $tbBroker = & $field $pg 'HcSetBrokerName' $s.BrokerName 420 'HcSetBrokerNameHint' }
+      'sql' { & $section $pg 'HcSecSettings' | Out-Null; $tbSql = & $field $pg 'HcSetSql' $s.SqlListener 420 'HcSetSqlHint' }
+      'backup' { & $section $pg 'HcSecSettings' | Out-Null
+        $tbBPath = & $field $pg 'HcSetBackup' $s.BackupPath 520 'HcSetBackupHint'
+        $tbBText = & $field $pg 'HcSetBackupText' $s.BackupText 420 'HcSetBackupTextHint'
+        $tbBHours = & $field $pg 'HcSetBackupHours' ([string]$s.BackupHours) 90 }
+    }
+    # its thresholds, as numbers with their names
+    if ($def.Limits.Count) { & $section $pg 'HcSecLimits' | Out-Null
+      $lw = New-Object System.Windows.Forms.FlowLayoutPanel; $lw.AutoSize = $true; $lw.Margin = New-Object System.Windows.Forms.Padding(0, 2, 0, 4)
+      foreach ($k in $def.Limits) {
+        $cell = New-Object System.Windows.Forms.FlowLayoutPanel; $cell.WrapContents = $false; $cell.AutoSize = $true; $cell.Margin = New-Object System.Windows.Forms.Padding(0, 0, 24, 6)
+        $l = New-Label (Get-Text "HcLim_$k") $fontBase $Theme.Text; $l.AutoSize = $false; $l.Size = New-Object System.Drawing.Size(300, 26); $l.TextAlign = 'MiddleLeft'; $cell.Controls.Add($l)
+        $nu = New-Object System.Windows.Forms.NumericUpDown; $nu.Minimum = 0; $nu.Maximum = 100000; $nu.Width = 90; $nu.Value = [decimal]$script:HealthLimits[$k]; $nu.Tag = $k; $nu.TextAlign = 'Right'
+        $tips.SetToolTip($nu, "$k ($([string]$script:HealthLimitsDefault[$k]))"); $cell.Controls.Add($nu); [void]$pg.Tag.Limits.Add($nu); $lw.Controls.Add($cell) }
+      & $part $pg $lw | Out-Null; [void]$pg.Tag.Parts.Add($lw) }
+    # its checks, two columns where there is room; the reason of each in its tooltip
+    & $section $pg 'HcSecChecks' | Out-Null
+    $links = New-Object System.Windows.Forms.FlowLayoutPanel; $links.AutoSize = $true; $links.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 4)
+    foreach ($w in 'All', 'None') { $ll = New-Object System.Windows.Forms.LinkLabel; $ll.Text = Get-Text "HcChecks$w"; $ll.AutoSize = $true; $ll.LinkColor = $Theme.Accent; $ll.LinkBehavior = 'HoverUnderline'
+      $ll.Margin = New-Object System.Windows.Forms.Padding(0, 0, 14, 0); $ll.Tag = @{ Page = $pg; On = ($w -eq 'All') }
+      $ll.add_LinkClicked({ param($x, $e) foreach ($cb in $x.Tag.Page.Tag.Checks) { $cb.Checked = $x.Tag.On } }); $links.Controls.Add($ll) }
+    & $part $pg $links $false | Out-Null; [void]$pg.Tag.Parts.Add($links)
+    $cw = New-Object System.Windows.Forms.FlowLayoutPanel; $cw.AutoSize = $true; $cw.Margin = New-Object System.Windows.Forms.Padding(0)
+    $titles = @($def.Checks | ForEach-Object { ((Get-Text "HcT_$_") -replace '\s*\{\d+\}', '').Trim().TrimEnd(':') })
+    for ($k = 0; $k -lt $def.Checks.Count; $k++) {
+      $id = $def.Checks[$k]; $tt = $titles[$k]; if (@($titles | Where-Object { $_ -eq $tt }).Count -gt 1) { $tt = "$tt ($id)" }
+      $cb = New-Object System.Windows.Forms.CheckBox; $cb.Text = $tt; $cb.Tag = $id; $cb.Checked = -not $off[$id]; $cb.AutoSize = $false; $cb.AutoEllipsis = $true
+      $cb.Size = New-Object System.Drawing.Size(330, 24); $cb.Margin = New-Object System.Windows.Forms.Padding(0, 0, 12, 0)
+      $why = [string]$script:Text["HcW_$id"]; if ($why) { $tips.SetToolTip($cb, ($why -replace '\{\d+\}', [string][char]0x2026)) }
+      $cb.add_CheckedChanged({ $nav.Invalidate() }); [void]$pg.Tag.Checks.Add($cb); $cw.Controls.Add($cb) }
+    & $part $pg $cw | Out-Null; [void]$pg.Tag.Parts.Add($cw)
+    # off, its parts are greyed (kept as they are); on again with nothing ticked, every check is
+    $sw.add_CheckedChanged({ param($x, $e) $p = $x.Tag
+      foreach ($c in $p.Tag.Parts) { $c.Enabled = $x.Checked }
+      if ($x.Checked -and -not @($p.Tag.Checks | Where-Object { $_.Checked }).Count) { foreach ($cb in $p.Tag.Checks) { $cb.Checked = $true } }
+      if ($p.Tag.Area -eq 'hyperv') { $tbClName.Enabled = $x.Checked -and $cbCl.Checked }
+      $nav.Invalidate() })
+    foreach ($c in $pg.Tag.Parts) { $c.Enabled = $sw.Checked }
+    # the parts marked Full follow the width of the page (texts wrap, the checks make columns)
+    # and the boxes of the lists share that width in proportion (never under 60 points): nothing goes past the edge
+    $pg.add_Resize({ param($p, $e) $w = [Math]::Max(200, $p.ClientSize.Width - $p.Padding.Horizontal - 8)
+      foreach ($c in $p.Tag.Full) { $c.MaximumSize = New-Object System.Drawing.Size($w, 0) }
+      foreach ($box in $p.Tag.Lists.Values) {
+        $cols = $box.Tag.Cols; $base = 0; foreach ($c in $cols) { $base += $box.Tag.Widths[$c] }
+        $room = $w - 40 - 6 * $cols.Count; $f = [Math]::Min(1.4, $room / [double]$base)
+        $cw = @{}; foreach ($c in $cols) { $cw[$c] = [Math]::Max(60, [int]($box.Tag.Widths[$c] * $f)) }
+        foreach ($r in $box.Controls) { if ($r -isnot [System.Windows.Forms.FlowLayoutPanel]) { continue }
+          $j = 0; foreach ($x in $r.Controls) { if ($j -ge $cols.Count) { break }; $x.Width = $cw[$cols[$j]] + $(if ($x -is [System.Windows.Forms.Label]) { 6 } else { 0 }); $j++ } } } })
+  }
+  if ($pages.hyperv) { $tbClName.Enabled = $tbClName.Enabled -and $pages.hyperv.Tag.Switch.Checked }
+
+  $nav.add_DrawItem({ param($x, $e) if ($e.Index -lt 0) { return }
+    $a = [string]$x.Items[$e.Index]; $p = $pages[$a]; $sel = ($e.State -band [System.Windows.Forms.DrawItemState]::Selected) -ne 0
+    $g = $e.Graphics; $b = $e.Bounds
+    $br = New-Object System.Drawing.SolidBrush($(if ($sel) { $Theme.Hover } else { $Theme.Card })); $g.FillRectangle($br, $b); $br.Dispose()
+    if ($sel) { $br = New-Object System.Drawing.SolidBrush($Theme.Accent); $g.FillRectangle($br, $b.X, ($b.Y + 10), 4, ($b.Height - 20)); $br.Dispose() }
+    $on = $p.Tag.Switch.Checked
+    $g.SmoothingMode = 'AntiAlias'; $br = New-Object System.Drawing.SolidBrush($(if ($on) { $script:KindColor.ok } else { $script:KindColor.off })); $g.FillEllipse($br, ($b.X + 18), ($b.Y + 14), 10, 10); $br.Dispose()
+    [System.Windows.Forms.TextRenderer]::DrawText($g, (Get-Text "HcArea_$a"), $fontBold, (New-Object System.Drawing.Point(($b.X + 38), ($b.Y + 8))), $Theme.Text)
+    $st = if ($on) { Get-Text 'HcAreaState' @($p.Tag.Checks | Where-Object { $_.Checked }).Count $p.Tag.Checks.Count } else { Get-Text 'HcAreaStateOff' }
+    [System.Windows.Forms.TextRenderer]::DrawText($g, $st, $fontSmall, (New-Object System.Drawing.Point(($b.X + 38), ($b.Y + 30))), $Theme.Muted) })
+  $nav.add_SelectedIndexChanged({ foreach ($p in $pages.Values) { $p.Visible = $false }; $p = $pages[[string]$nav.SelectedItem]; if ($p) { $p.Visible = $true; $p.BringToFront() } })
+  $top.add_Resize({ param($p, $e) $note.Height = (Measure-Note $note.Text ($p.ClientSize.Width - $p.Padding.Horizontal) $fontSmall) + 4; $h = $chk.Height + $note.Height + $p.Padding.Vertical + 4; if ($p.Height -ne $h) { $p.Height = $h } })
+  $dlg.Controls.Add($body); $dlg.Controls.Add($navLine); $dlg.Controls.Add($nav); $dlg.Controls.Add($top); $dlg.Controls.Add($bottom)
+  $nav.SelectedIndex = 0
+
+  $okB.add_Click({
     $n = Get-HealthSettings; $i = New-HealthInventory
-    foreach ($k in @($grids.Keys)) { $i.$k = @(& $read $grids[$k] $(if ($k -eq 'DeviceList') { @('Name', 'Address', 'Ports', 'Share', 'Mac', 'Note') } else { @('Name', 'Note') })) }
-    $i.HvCluster = if ($cbCl.SelectedIndex -eq 1) { 'yes' } else { 'no' }; $i.ClusterName = $tbClName.Text.Trim()
+    foreach ($p in $pages.Values) { foreach ($k in @($p.Tag.Lists.Keys)) { $i.$k = @(& $readList $p.Tag.Lists[$k]) } }
+    $i.HvCluster = if ($cbCl.Checked) { 'yes' } else { 'no' }; $i.ClusterName = $tbClName.Text.Trim()
     $n.Inventory = $i; $n.Enabled = $chk.Checked; $n.BrokerName = $tbBroker.Text; $n.SqlListener = $tbSql.Text; $n.CriticalVms = $tbCrit.Text
-    $n.BackupPath = $tbBPath.Text; $n.BackupText = $tbBText.Text; $n.BackupHours = $tbBHours.Text; $n.Limits = $tbLim.Text
-    $n.Off = @(for ($i = 0; $i -lt $hcIds.Count; $i++) { if (-not $clb.GetItemChecked($i)) { $hcIds[$i] } })
+    $n.BackupPath = $tbBPath.Text; $n.BackupText = $tbBText.Text; $n.BackupHours = $tbBHours.Text
+    # the thresholds that differ from the defaults
+    $n.Limits = (@(foreach ($p in $pages.Values) { foreach ($nu in $p.Tag.Limits) { if ([int]$nu.Value -ne [int]$script:HealthLimitsDefault[$nu.Tag]) { "$($nu.Tag)=$([int]$nu.Value)" } } }) | Sort-Object) -join '; '
+    # off: the checks not ticked and every check of an area switched off; the others (custom checks) as they were
+    $known = @($areas | ForEach-Object { $script:HcAreas[$_].Checks })
+    $n.Off = @(@(@($s.Off) | Where-Object { $known -notcontains $_ }) + @(foreach ($p in $pages.Values) { foreach ($cb in $p.Tag.Checks) { if (-not $p.Tag.Switch.Checked -or -not $cb.Checked) { [string]$cb.Tag } } }))
+    foreach ($a in $areas) { if ($pages[$a].Tag.Switch.Checked) { $why = Test-HcAreaReady $n $a; if ($why) { $nav.SelectedItem = $a; $err.Text = $why; return } } }
     $why = Test-HealthSettings $n
     if ($why) { $err.Text = $why; return }
     try { Save-HealthSettings $n } catch { $err.Text = $_.Exception.Message; return }
     $dlg.DialogResult = 'OK' })
-  # test: the dialog drawn into OTR_MANAGER_HCSET_SHOT (OTR_MANAGER_HCSET_TAB = the tab), then closed
-  if ($env:OTR_MANAGER_HCSET_SHOT) { $dlg.add_Shown({ $tabs.SelectedIndex = [int]$env:OTR_MANAGER_HCSET_TAB; $dlg.Refresh(); $bm = New-Object System.Drawing.Bitmap($dlg.Width, $dlg.Height); $dlg.DrawToBitmap($bm, (New-Object System.Drawing.Rectangle(0, 0, $dlg.Width, $dlg.Height))); $bm.Save($env:OTR_MANAGER_HCSET_SHOT); $dlg.Close() }) }
+  # test: the dialog drawn into OTR_MANAGER_HCSET_SHOT (OTR_MANAGER_HCSET_TAB = the area, by its number), then closed
+  # with OTR_MANAGER_HCSET_SAVE=1 Save is pressed as it is (what it refuses goes to stderr): saved = nothing lost
+  if ($env:OTR_MANAGER_HCSET_SHOT) { $dlg.add_Shown({ $nav.SelectedIndex = [int]$env:OTR_MANAGER_HCSET_TAB; $dlg.Refresh(); [System.Windows.Forms.Application]::DoEvents()
+    $bm = New-Object System.Drawing.Bitmap($dlg.Width, $dlg.Height); $dlg.DrawToBitmap($bm, (New-Object System.Drawing.Rectangle(0, 0, $dlg.Width, $dlg.Height))); $bm.Save($env:OTR_MANAGER_HCSET_SHOT)
+    if ($env:OTR_MANAGER_HCSET_SAVE) { $okB.PerformClick(); if ($dlg.DialogResult -ne 'OK') { [Console]::Error.WriteLine("not saved: $($err.Text)") } }
+    $dlg.Close() }) }
   try { if ($dlg.ShowDialog($form) -eq 'OK') { $barText.Text = Get-Text 'HcSetSaved'; Update-SettingsTabs; Start-HealthRefresh -Queue; Start-VdiRefresh -Queue } } finally { $dlg.Dispose() }
 }
 $hcTimer = New-Object System.Windows.Forms.Timer; $hcTimer.Interval = $script:HealthRefreshSeconds * 1000
