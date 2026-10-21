@@ -3,6 +3,17 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## Unreleased
+
+- **The actions of a device on a line of their own, with their names**: remote screen, power and commands, version,
+  group, logo. They used to be bare icons in the top right corner and, on a small screen, covered the state of the
+  device. Past two lines only the secondary ones keep just their icon.
+- **A narrow window works**: the column of the pages keeps only its icons under 1200 points, the group links sit
+  under the count instead of over it, the note of the site is never cut, the help under the settings has no empty
+  title line.
+- **Where a value comes from, said right**: a value set by the group of the device reads *group Pesa*, no longer
+  *common settings*; the others read *site* or *local*.
+
 ## 0.2.9 (2026-10-21)
 
 - **Groups of devices, as folders of the management folder.** `config\groups\<group>\_group.conf` holds the settings
