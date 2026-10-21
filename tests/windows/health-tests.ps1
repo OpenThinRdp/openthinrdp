@@ -347,6 +347,16 @@ try {
   $script:Text = Read-LanguageTexts $script:LangDir 'it'
   $mi = ConvertTo-HealthModel (Copy-Raw) $null $now $set
   ok 'the model in Italian' { $mi.Headline -match '^Problemi: 2, avvisi: 10:' -and @($mi.Index['vm:VM-CAROL'].Checks)[0].Title -eq 'Salvata con vTPM' -and @($mi.Index['host:HV2'].Facts | Where-Object { $_.Label -eq 'Memoria' }).Count }
+  # ---- the areas of the settings: every check in exactly one, an area switched on has what it needs
+  $allIds = @($script:Text.Keys | Where-Object { $_ -like 'HcT_*' } | ForEach-Object { $_.Substring(4) })
+  $inAreas = @($script:HcAreas.Values | ForEach-Object { $_.Checks })
+  ok "areas: every one of the $($allIds.Count) checks in an area, none twice, none unknown" { -not @($allIds | Where-Object { $inAreas -notcontains $_ }).Count -and $inAreas.Count -eq @($inAreas | Sort-Object -Unique).Count -and -not @($inAreas | Where-Object { $allIds -notcontains $_ }).Count }
+  ok 'areas: every area has its name, description and, when it needs something, the reason' { -not @($script:HcAreas.Keys | Where-Object { -not $script:Text["HcArea_$_"] -or -not $script:Text["HcAreaDesc_$_"] -or ($script:HcAreas[$_].Need -and -not $script:Text["HcAreaNeed_$_"]) }).Count }
+  ok 'areas: every threshold of an area has its label' { -not @($script:HcAreas.Values | ForEach-Object { $_.Limits } | Where-Object { -not $script:Text["HcLim_$_"] -or -not $script:HealthLimitsDefault.ContainsKey($_) }).Count }
+  $sa = Get-HealthDefaults
+  ok 'areas: Hyper-V on without hosts refused, with a host ready; general needs nothing' { (Test-HcAreaReady $sa 'hyperv') -and -not (Test-HcAreaReady $sa 'general') -and $(($sa.Inventory.HvHosts = @(ConvertTo-HcEntry 'hv1')); -not (Test-HcAreaReady $sa 'hyperv')) }
+  ok 'areas: SQL ready with the listener alone, backup with its folder' { (Test-HcAreaReady $sa 'sql') -and $(($sa.SqlListener = 'sqlha'); -not (Test-HcAreaReady $sa 'sql')) -and (Test-HcAreaReady $sa 'backup') -and $(($sa.BackupPath = '\nas\logs'); -not (Test-HcAreaReady $sa 'backup')) }
+  ok 'areas: a check of no area (a custom one) counts as general' { (Get-HcArea 'custom-xyz') -eq 'general' -and (Get-HcArea 'Witness') -eq 'hyperv' }
 } finally { Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item Env:\OTR_MANAGER_SETTINGS -ErrorAction SilentlyContinue }
 
 Write-Host ''
