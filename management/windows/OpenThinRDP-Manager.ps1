@@ -586,6 +586,14 @@ function Read-StatusFile($f) {
   foreach ($l in (Read-Lines $f)) { if ($l -like '---*') { break }; if ($l -cmatch '^([A-Z][A-Z0-9_]*)=(.*)$') { $h[$Matches[1]] = $Matches[2].Trim() } }
   $h
 }
+# the IPv4 of a device for the actions over SSH: the one of its report, else its name in the DNS (as DHCP registers
+# it), for a report without an address (IP=none); '' when neither
+function Get-DeviceIp($d) {
+  $ip = ([string]$d.S['IP']) -replace '/.*$', ''
+  if ($ip -match '^\d{1,3}(\.\d{1,3}){3}$') { return $ip }
+  try { $a = @([Net.Dns]::GetHostAddresses([string]$d.Name) | Where-Object { $_.AddressFamily -eq 'InterNetwork' }); if ($a.Count) { return $a[0].IPAddressToString } } catch { }
+  ''
+}
 function Get-ReportTime($s) {
   # UTC when the device writes it (0.2.10 and later): its age is right whatever the time zones of device and manager
   if ($s['UPDATED_UTC'] -match '^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$') {
@@ -1146,7 +1154,7 @@ function Test-OvpnProfile([string]$text) {
 }
 # Profile and/or user and password to one device over SSH (vpn.sh profile / auth); $null = done, else the reason
 function Send-VpnFiles($d, [string]$sshKey, [string]$profileText, [string]$user, [string]$password) {
-  $ip = ([string]$d.S['IP']) -replace '/.*$', ''
+  $ip = Get-DeviceIp $d
   if ($ip -notmatch '^\d{1,3}(\.\d{1,3}){3}$') { return (Get-Text 'ErrRemoteNoIp') }
   if ($d.S['CFG_SSH'] -ne 'on') { return (Get-Text 'SendKeyNoSsh') }
   $jobs = @()
@@ -1219,7 +1227,7 @@ function Get-Dot1xEkuWarning($c) {
 }
 # Client certificate and/or PEAP password to one device over SSH (dot1x.sh client / password); $null = done, else why
 function Send-Dot1xFiles($d, [string]$sshKey, [string]$clientData, [string]$eapPassword) {
-  $ip = ([string]$d.S['IP']) -replace '/.*$', ''
+  $ip = Get-DeviceIp $d
   if ($ip -notmatch '^\d{1,3}(\.\d{1,3}){3}$') { return (Get-Text 'ErrRemoteNoIp') }
   if ($d.S['CFG_SSH'] -ne 'on') { return (Get-Text 'SendKeyNoSsh') }
   $jobs = @()
@@ -1314,7 +1322,7 @@ function Export-VaultPublicKey([string]$file) {
 # the first time it cannot come through the folder (whoever may write there would choose the key) nor, outside
 # the project, signed by the project key. $null = done, else the reason.
 function Send-SiteKey($d, [string]$sshKey, [string]$armored) {
-  $ip = ([string]$d.S['IP']) -replace '/.*$', ''
+  $ip = Get-DeviceIp $d
   if ($ip -notmatch '^\d{1,3}(\.\d{1,3}){3}$') { return (Get-Text 'ErrRemoteNoIp') }
   if ($d.S['CFG_SSH'] -ne 'on') { return (Get-Text 'SendKeyNoSsh') }
   $b64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($armored))
@@ -5407,7 +5415,7 @@ function Invoke-DeviceAction($d, [string]$kind) {
     if (Send-DeviceWake $d) { $barText.Text = Get-Text 'PwrWakeSent' $name } else { Show-Message $title (Get-Text 'PwrNoMac') }
     return
   }
-  $ip = ([string]$d.S['IP']) -replace '/.*$', ''
+  $ip = Get-DeviceIp $d
   if (-not (Get-Command ssh.exe -ErrorAction SilentlyContinue)) { Show-Message $title (Get-Text 'ErrRemoteNoSshExe'); return }
   if ($ip -notmatch '^\d{1,3}(\.\d{1,3}){3}$') { Show-Message $title (Get-Text 'ErrRemoteNoIp'); return }
   if ($d.S['CFG_SSH'] -ne 'on') { Show-Message $title (Get-Text 'ErrRemoteNoSsh'); return }
@@ -5436,7 +5444,7 @@ function Invoke-DeviceAction($d, [string]$kind) {
 }
 
 function Start-RemoteScreen($d) {
-  $name = $d.Name; $ip = ([string]$d.S['IP']) -replace '/.*$', ''
+  $name = $d.Name; $ip = Get-DeviceIp $d
   if (-not (Get-Command ssh.exe -ErrorAction SilentlyContinue)) { Show-Message (Get-Text 'RemoteTitle' $name) (Get-Text 'ErrRemoteNoSshExe'); return }
   if ($ip -notmatch '^\d{1,3}(\.\d{1,3}){3}$') { Show-Message (Get-Text 'RemoteTitle' $name) (Get-Text 'ErrRemoteNoIp'); return }
   if ($d.S['CFG_SSH'] -ne 'on') { Show-Message (Get-Text 'RemoteTitle' $name) (Get-Text 'ErrRemoteNoSsh'); return }
