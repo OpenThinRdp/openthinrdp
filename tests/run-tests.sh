@@ -314,7 +314,9 @@ ok "site-key.sh: a public key sent by the manager is installed and logged" '$OTR
 ok "site-key.sh: a secret key or anything else is refused, the key in place stays" 'gpg -q --batch --pinentry-mode loopback --passphrase "" --armor --export-secret-keys x@example.invalid > /tmp/x-sec.asc; ! $OTR/site-key.sh install < /tmp/x-sec.asc >/dev/null && ! echo garbage | $OTR/site-key.sh install >/dev/null && [ "$($OTR/site-key.sh show)" = "$(key_fingerprint /tmp/x-pub.asc)" ]'
 $OTR/site-key.sh install < /tmp/s-pub.asc >/dev/null; rm -f /tmp/x-pub.asc /tmp/x-sec.asc /tmp/s-pub.asc
 ok "UPDATE_KEY site or any" '$OTR/save-config.sh "$T" --print >/dev/null 2>&1; printf "UPDATE_KEY=Sito\n" > "$T"; $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "UPDATE_KEY=site" && printf "UPDATE_KEY=garbage\n" > "$T" && $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "UPDATE_KEY=any"'
-ok "UPDATE_FROM share needs a management folder" '! check x "$(printf "UPDATE_FROM=share\nMGMT_SHARE=\n")"'
+ok "UPDATE_FROM share needs a management folder (or an account to find it in the domain)" 'CF=$(. $OTR/lib/secrets.sh; secret_path smb.cred); [ -f "$CF" ] && mv "$CF" "$CF.k"; ! check x "$(printf "UPDATE_FROM=share
+MGMT_SHARE=
+")"; r=$?; [ -f "$CF.k" ] && mv "$CF.k" "$CF"; [ $r = 0 ]'
 # UPDATE_TO: one version, also an older one (pilot groups, going back)
 ok "UPDATE_TO latest or a version" 'printf "UPDATE_TO=Ultima\n" > "$T"; $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "UPDATE_TO=latest" && printf "UPDATE_TO=0.1.20\n" > "$T" && $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "UPDATE_TO=0.1.20" && ! check x "UPDATE_TO=0.1 20!"'
 to(){ sed -i '/^UPDATE_TO=/d' $OTR_CONF; [ -n "$1" ] && echo "UPDATE_TO=$1" >> $OTR_CONF; rm -rf $U/pkg-* $U/attempts-*; }
