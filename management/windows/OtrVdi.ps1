@@ -807,11 +807,14 @@ function Get-VdiFindings($m, [datetime]$now, $settings) {
     }
     # the brokers in the three local groups: each broker must be in each, directly or through a group
     $missing = @{}; $via = @()
+    # only the brokers of the deployment (the active one names them): a name a device still has as fallback, from
+    # a server that is no longer a broker, is no broker the hosts must know
+    $inDep = @($m.Brokers | Where-Object { $_.IsActive } | ForEach-Object { @($_.Nodes) } | Where-Object { $_ -and $_.Rdcb } | ForEach-Object { (([string]$_.Fqdn) -split '\.')[0] })
     if ($rdvh) {
       foreach ($g in @($h.Groups)) {
         if (-not $g.Read) { & $add 'warn' $h.Name (Get-Text 'VdiFGroupUnread' $gname[$g.Sid]); continue }
         $mem = @($g.Members | ForEach-Object { $_.Sid })
-        foreach ($b in @($m.Brokers | Where-Object { @($_.Sids).Count })) {
+        foreach ($b in @($m.Brokers | Where-Object { @($_.Sids).Count -and (-not $inDep.Count -or $inDep -contains (([string]$_.Name) -split '\.')[0]) })) {
           $hit = @($g.Members | Where-Object { @($b.Sids) -contains $_.Sid })
           if (-not $hit.Count) { if (-not $missing.ContainsKey($b.Name)) { $missing[$b.Name] = @() }; $missing[$b.Name] += $gname[$g.Sid] }
           else { $via += @($hit | ForEach-Object { ([string]$_.Name).Split('\')[-1] }) }

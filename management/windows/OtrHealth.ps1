@@ -929,7 +929,8 @@ function Add-HcBasics($n, $o, [string]$role, [datetime]$now, [string]$pdc, $dcs)
   } elseif ($o.SkewError) { [void](Add-HcCheck $n 'warn' 'SkewErr' @((Get-HcShort $pdc), "$($o.SkewError)".Trim())) }
   elseif ($o.TimeSource) { Add-HcFact $n 'HcFClock' (Get-Text 'HcClockSource' $o.TimeSource) }
   $src = "$($o.TimeSource)" -replace ',0x[0-9A-Fa-f]+$', ''
-  if ($src -and $pdc) {
+  # not before the domain controllers are known (a reading still in progress would call every source a stranger)
+  if ($src -and $pdc -and @($dcs).Count) {
     $isPdc = $short -eq (Get-HcShort $pdc)
     $fromDc = @(@($dcs) | Where-Object { $src -match "(^|\b)$([regex]::Escape($_))(\.|\b|$)" }).Count -gt 0
     $local = $src -match 'Local CMOS Clock|Free-running System Clock|Clock CMOS locale|Orologio di sistema'
@@ -997,7 +998,7 @@ function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
   $domain = $raw.Domain
   $pdc = if ($domain) { [string]$domain.Pdc } else { '' }
   # the domain controllers by name and by address (a time source is named either way)
-  $dcShort = @(@($raw.Dcs) | Where-Object { $_ } | ForEach-Object { $_.Name }) + @(@($domain.Dcs) | Where-Object { $_ -and $_.Ip } | ForEach-Object { $_.Ip })
+  $dcShort = @(@($raw.Dcs) | Where-Object { $_ } | ForEach-Object { $_.Name }) + @(@($domain.Dcs) | Where-Object { $_ } | ForEach-Object { $_.Name; $_.Ip }) | Where-Object { $_ } | Select-Object -Unique
   $hostsAll = @($raw.Hosts | Where-Object { $_ })
   # Cluster = no in the settings: single hosts, whatever they say (their VMs judged as outside a cluster)
   $useCl = $settings.Cluster -ne 'no'

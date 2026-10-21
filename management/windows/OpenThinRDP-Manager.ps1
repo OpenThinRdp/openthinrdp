@@ -265,7 +265,9 @@ function Get-GroupFiles {
     $m[$x.BaseName.ToLower()] = [pscustomobject]@{ File = $x.FullName; Group = $x.Directory.Name } }
   $script:GroupFiles = $m; $m
 }
-function Get-Groups { @(Get-ChildItem -LiteralPath (Get-GroupsDir) -Directory -ErrorAction SilentlyContinue | ForEach-Object Name | Sort-Object) }
+# the name of the site, at the top of the device list: the domain of this PC (FINCO-AGRI), else the folder's name
+function Get-SiteName { $d = [string]$env:USERDOMAIN; if ($d -and $d -ne $env:COMPUTERNAME) { $d.ToUpper() } else { Split-Path $script:Folder -Leaf } }
+function Get-Groups {@(Get-ChildItem -LiteralPath (Get-GroupsDir) -Directory -ErrorAction SilentlyContinue | ForEach-Object Name | Sort-Object) }
 function New-DeviceGroup([string]$name) {
   if ($name -notmatch '^[A-Za-z0-9._-]{1,64}$') { throw (Get-Text 'ErrGroupName') }
   $d = Join-Path (Get-GroupsDir) $name; if (Test-Path -LiteralPath $d) { throw (Get-Text 'ErrGroupExists' $name) }
@@ -3540,24 +3542,23 @@ function Update-DeviceList {
     [void]$list.Items.Add($it)
     if ($d.File -eq $sel) { $it.Selected = $true; $script:Selected = $d }
   }
-  # groups of devices: one collapsible header per group (its name, how many devices, how many to look at), kept from
-  # one refresh to the next so a collapsed group stays collapsed; no groups at all = the plain list
-  $names = @($script:Devices | ForEach-Object Group | Where-Object { $_ } | Sort-Object -Unique)
-  $list.ShowGroups = [bool]$names.Count
-  if ($names.Count) {
-    if (-not $script:LvGroups) { $script:LvGroups = @{} }
-    $none = Get-Text 'GroupNone'
-    foreach ($n in @($names) + @($none)) {
-      $g = $script:LvGroups[$n]
-      if (-not $g) { $g = New-Object System.Windows.Forms.ListViewGroup($n, $n); [void]$list.Groups.Add($g); $script:LvGroups[$n] = $g }
-      $ds = @($script:Devices | Where-Object { $(if ($n -eq $none) { -not $_.Group } else { $_.Group -eq $n }) })
-      $bad = @($ds | Where-Object { $_.Kind -in 'error', 'warn' }).Count
-      $g.Header = Get-Text 'GroupHeader' $n $ds.Count $(if ($bad) { Get-Text 'GroupHeaderBad' $bad } else { '' })
-    }
-    foreach ($it in $list.Items) { $it.Group = $script:LvGroups[$(if ($it.Tag.Group) { $it.Tag.Group } else { $none })] }
-    foreach ($g in @($list.Groups)) {
-      try { [OtrNative]::Collapsible($list.Handle, [int]$g.GetType().GetProperty('ID', [Reflection.BindingFlags]'NonPublic,Instance').GetValue($g)) } catch { }
-    }
+  # groups of devices, always: the site first (the devices in no group), then its groups, each a collapsible header
+  # (name, devices, how many to look at), kept from one refresh to the next so a collapsed group stays collapsed
+  $site = Get-SiteName
+  $names = @(@(Get-Groups) + @($script:Devices | ForEach-Object Group | Where-Object { $_ }) | Sort-Object -Unique)
+  $list.ShowGroups = $true
+  if (-not $script:LvGroups) { $script:LvGroups = @{} }
+  foreach ($n in @('') + $names) {
+    $g = $script:LvGroups[$n]
+    if (-not $g) { $g = New-Object System.Windows.Forms.ListViewGroup("g:$n", $n); $g.Tag = $n; [void]$list.Groups.Add($g); $script:LvGroups[$n] = $g }
+    $ds = @($script:Devices | Where-Object { [string]$_.Group -eq $n })
+    $bad = @($ds | Where-Object { $_.Kind -in 'error', 'warn' }).Count
+    $label = if ($n) { "$site  $([char]0x203A)  $n" } else { $site }
+    $g.Header = Get-Text 'GroupHeader' $label $ds.Count $(if ($bad) { Get-Text 'GroupHeaderBad' $bad } else { '' })
+  }
+  foreach ($it in $list.Items) { $it.Group = $script:LvGroups[[string]$it.Tag.Group] }
+  foreach ($g in @($list.Groups)) {
+    try { [OtrNative]::Collapsible($list.Handle, [int]$g.GetType().GetProperty('ID', [Reflection.BindingFlags]'NonPublic,Instance').GetValue($g)) } catch { }
   }
   $list.Sort()
   $list.EndUpdate()
@@ -5530,6 +5531,45 @@ function Show-GroupsDialog {
   try { [void]$dlg.ShowDialog($form) } finally { $dlg.Dispose(); Update-DeviceList }
 }
 $btnGroupsCom.add_Click({ Show-GroupsDialog })
+# a device into a group ('' = the site, no group): its file moves in the share
+function Move-ListDevice($d, [string]$g) {
+  if (-not $d) { return }
+  if ($lblDirtyDev.Visible -and $script:Selected -and $script:Selected.Name -eq $d.Name) { Show-Message (Get-Text 'MsgTextDirtyTitle') (Get-Text 'MsgTextDirty') 'Information'; return }
+  if ([string]$d.Group -eq $g) { return }
+  try { Move-DeviceToGroup $d.Name $g } catch { Show-Message (Get-Text 'GroupDevTitle' $d.Name) $_.Exception.Message 'Error'; return }
+  $barText.Text = Get-Text 'GroupDevDone' $d.Name $(if ($g) { $g } else { Get-SiteName })
+  Update-DeviceList; Update-DeviceGrid
+}
+# right click on the list: a new group, the selected device into a group, the groups
+$mnuList = New-Object System.Windows.Forms.ContextMenuStrip; $mnuList.Font = $fontBase
+$miNewGroup = $mnuList.Items.Add((Get-Text 'GroupsNew'))
+$miMoveTo = New-Object System.Windows.Forms.ToolStripMenuItem((Get-Text 'GroupMoveTo')); [void]$mnuList.Items.Add($miMoveTo)
+$miGroups = $mnuList.Items.Add((Get-Text 'GroupsManage'))
+$mnuList.add_Opening({
+  $miMoveTo.DropDownItems.Clear(); $miMoveTo.Enabled = [bool]$script:Selected
+  foreach ($g in @('') + @(Get-Groups)) {
+    $mi = $miMoveTo.DropDownItems.Add($(if ($g) { $g } else { Get-SiteName })); $mi.Tag = $g
+    if ($script:Selected -and [string]$script:Selected.Group -eq $g) { $mi.Enabled = $false }
+    $mi.add_Click({ param($s, $e) Move-ListDevice $script:Selected ([string]$s.Tag) })
+  } })
+$miNewGroup.add_Click({ Add-Type -AssemblyName Microsoft.VisualBasic
+  $g = [Microsoft.VisualBasic.Interaction]::InputBox((Get-Text 'GroupsNewAsk'), (Get-Text 'GroupsTitle'), ''); if (-not $g) { return }
+  try { New-DeviceGroup $g.Trim() } catch { Show-Message (Get-Text 'GroupsTitle') $_.Exception.Message; return }
+  # the selected device goes in at once: an empty group has no header to drop on
+  if ($script:Selected -and (Confirm-Action (Get-Text 'GroupsTitle') (Get-Text 'GroupMoveNew' $script:Selected.Name $g.Trim()))) { Move-ListDevice $script:Selected $g.Trim() } else { Update-DeviceList } })
+$miGroups.add_Click({ Show-GroupsDialog })
+$list.ContextMenuStrip = $mnuList
+# drag a device onto a group: the group of the device under the drop, or of the first one below the header dropped on
+$list.AllowDrop = $true
+$list.add_ItemDrag({ param($s, $e) [void]$list.DoDragDrop($e.Item, [System.Windows.Forms.DragDropEffects]::Move) })
+$list.add_DragOver({ param($s, $e) $e.Effect = [System.Windows.Forms.DragDropEffects]::Move })
+$list.add_DragDrop({ param($s, $e)
+  $src = $e.Data.GetData([System.Windows.Forms.ListViewItem]); if (-not $src) { return }
+  $p = $list.PointToClient((New-Object System.Drawing.Point($e.X, $e.Y)))
+  $t = $list.GetItemAt($p.X, $p.Y)
+  if (-not $t) { $t = @($list.Items | Where-Object { $_.Bounds.Top -ge $p.Y } | Sort-Object { $_.Bounds.Top }) | Select-Object -First 1 }
+  if (-not $t) { $t = @($list.Items | Sort-Object { $_.Bounds.Top }) | Select-Object -Last 1 }
+  if ($t -and $t.Group) { Move-ListDevice $src.Tag ([string]$t.Group.Tag) } })
 # the group of the selected device: its file moves to that folder of the share
 $btnGroupDev.add_Click({
   $d = $script:Selected; if (-not $d) { return }

@@ -2122,4 +2122,7 @@
   ErrGroupNotEmpty       = 'The group {0} still has devices: move them to another group first.'
   GroupHeader            = '{0}   {1} devices{2}'
   GroupHeaderBad         = ', {0} to look at'
+  GroupMoveTo            = 'Move to group'
+  GroupsManage           = 'Manage the groups...'
+  GroupMoveNew           = 'Move {0} into the new group {1} now?'
 }

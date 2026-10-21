@@ -2114,4 +2114,7 @@
   ErrGroupNotEmpty       = 'Il gruppo {0} ha ancora postazioni: prima spostale in un altro gruppo.'
   GroupHeader            = '{0}   {1} postazioni{2}'
   GroupHeaderBad         = ', {0} da guardare'
+  GroupMoveTo            = 'Sposta nel gruppo'
+  GroupsManage           = 'Gestisci i gruppi...'
+  GroupMoveNew           = 'Spostare adesso {0} nel nuovo gruppo {1}?'
 }
