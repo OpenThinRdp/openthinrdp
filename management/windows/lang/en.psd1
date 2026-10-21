@@ -2125,4 +2125,13 @@
   GroupMoveTo            = 'Move to group'
   GroupsManage           = 'Manage the groups...'
   GroupMoveNew           = 'Move {0} into the new group {1} now?'
+  ScopeSite              = '{0}: settings of every device'
+  ScopeGroup             = 'Group {0}  ({1})'
+  ScopeGroupNote         = 'Ticked: set for this group, it wins over {0} for its devices and each device can still change it. Not ticked: it comes from {0} (the value shown).'
+  ColValueGroup          = 'Value for the group'
+  HcTabHyperV            = 'Hyper-V'
+  HcTabDomain            = 'Domain and desktops'
+  HcTabSql               = 'SQL and files'
+  HcTabDevices           = 'Devices and backups'
+  HcTabChecks            = 'Checks'
 }

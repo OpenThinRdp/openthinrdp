@@ -2117,4 +2117,13 @@
   GroupMoveTo            = 'Sposta nel gruppo'
   GroupsManage           = 'Gestisci i gruppi...'
   GroupMoveNew           = 'Spostare adesso {0} nel nuovo gruppo {1}?'
+  ScopeSite              = '{0}: impostazioni di tutte le postazioni'
+  ScopeGroup             = 'Gruppo {0}  ({1})'
+  ScopeGroupNote         = 'Con la spunta: impostato per questo gruppo, vince su {0} per le sue postazioni e ogni postazione può ancora cambiarlo. Senza spunta: arriva da {0} (il valore mostrato).'
+  ColValueGroup          = 'Valore per il gruppo'
+  HcTabHyperV            = 'Hyper-V'
+  HcTabDomain            = 'Dominio e desktop'
+  HcTabSql               = 'SQL e file'
+  HcTabDevices           = 'Dispositivi e backup'
+  HcTabChecks            = 'Controlli'
 }

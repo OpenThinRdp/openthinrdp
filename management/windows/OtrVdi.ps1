@@ -540,6 +540,10 @@ function ConvertTo-VdiModel($raw, $devices, [datetime]$now, $settings = $null) {
     Taken = $now; Active = $null; Collections = @(); Desktops = @(); Group = $null; CannotSignIn = 0 }
   $brokers = @(); $hosts = @()
   if ($raw) { $brokers = @($raw.Brokers | Where-Object { $_ }); $hosts = @($raw.Hosts | Where-Object { $_ }); $m.Names = @($raw.Names | Where-Object { $_ }); $m.Group = $raw.Group }
+  # only the brokers of the deployment, as the active one lists them: a server a device still names as fallback but that
+  # is no longer a broker (its role removed) is not shown as a broker failing every sign-in
+  $dep = @($brokers | Where-Object { $_.IsActive } | ForEach-Object { @($_.Nodes) } | Where-Object { $_ -and $_.Rdcb } | ForEach-Object { (([string]$_.Fqdn) -split '\.')[0] })
+  if ($dep.Count) { $brokers = @($brokers | Where-Object { $dep -contains (([string]$_.Name) -split '\.')[0] }) }
   $reach = @($brokers | Where-Object Reachable)
   # ---- brokers
   $bsid = @{}; if ($raw) { foreach ($x in @($raw.BrokerSids)) { if ($x) { $bsid[([string]$x.Broker).ToUpper()] = @($x.Sids) } } }
