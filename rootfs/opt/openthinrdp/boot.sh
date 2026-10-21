@@ -2,7 +2,7 @@
 # Boot service (openthinrdp-boot.service): bring the system to a known state from the settings.
 # Runs in parallel with the automatic login: nothing here may be needed before the login form.
 . /opt/openthinrdp/lib/common.sh
-mkdir -p "$OTR_LIB" "$OTR_LOG"; touch "$OTR_EVENTS"; chown "$OTR_KIOSK_USER:" "$OTR_EVENTS" 2>/dev/null
+mkdir -p "$OTR_LIB" "$OTR_LOG"; touch "$OTR_EVENTS" "$OTR_LOG/session-hang.log"; chown "$OTR_KIOSK_USER:" "$OTR_EVENTS" "$OTR_LOG/session-hang.log" 2>/dev/null
 
 # A new device (installer, live system) is called "thinclient": it gets a name of its own from the MAC address of
 # its network card, so devices installed from the same image do not report over each other in the management
