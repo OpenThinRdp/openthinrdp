@@ -587,6 +587,9 @@ function Read-StatusFile($f) {
   $h
 }
 function Get-ReportTime($s) {
+  # UTC when the device writes it (0.2.10 and later): its age is right whatever the time zones of device and manager
+  if ($s['UPDATED_UTC'] -match '^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$') {
+    try { return [datetime]::ParseExact($s['UPDATED_UTC'], "yyyy-MM-dd'T'HH:mm:ss'Z'", [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]'AssumeUniversal, AdjustToUniversal').ToLocalTime() } catch { } }
   try { [datetime]::ParseExact($s['UPDATED'], 'yyyy-MM-dd HH:mm:ss', [Globalization.CultureInfo]::InvariantCulture) } catch { $null }
 }
 function Format-Minutes($m) { if ($m -lt 120) { Get-Text 'DurMinutes' $m } elseif ($m -lt 2880) { Get-Text 'DurHours' ([int]($m / 60)) } else { Get-Text 'DurDays' ([int]($m / 1440)) } }

@@ -336,6 +336,11 @@ try {
   $script:Text = Read-LanguageTexts $script:LangDir 'it'
   $mi = ConvertTo-VdiModel $raw $devs $now
   ok 'the model in Italian' { $mi.Headline -match '^Non riescono' -and (@($mi.Rows | Where-Object { $_.UserKey -eq 'FRANK' }))[0].State -eq 'Secondo tentativo' }
+  # #80: a device in another time zone (the ISO is built with Etc/UTC) is not hours old because of it
+  $nowUtc = [datetime]::UtcNow
+  $st = @{ UPDATED = $nowUtc.AddHours(-7).ToString('yyyy-MM-dd HH:mm:ss'); UPDATED_UTC = $nowUtc.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'") }
+  ok 'report time: UPDATED_UTC wins over the local time of the device' { [Math]::Abs(((Get-Date) - (Get-ReportTime $st)).TotalMinutes) -lt 2 }
+  ok 'report time: without UPDATED_UTC the local time as before' { (Get-ReportTime @{ UPDATED = '2026-10-21 08:00:00' }) -eq [datetime]'2026-10-21 08:00:00' }
 } finally { Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue }
 
 Write-Host ''

@@ -62,6 +62,8 @@ HOME=${HOME:-/root} xfreerdp3 --buildconfig 2>/dev/null | grep -q 'WITH_RDPEUDP=
 
 {
   echo "UPDATED=$(date '+%Y-%m-%d %H:%M:%S')"
+  # the same moment in UTC: the manager may be in another time zone than the device (the ISO is built with Etc/UTC)
+  echo "UPDATED_UTC=$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   echo "HOSTNAME=$H"
   echo "IP=${IPC:-none}"
   echo "MAC=$(cat "/sys/class/net/$IF/address" 2>/dev/null)"
