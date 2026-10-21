@@ -59,6 +59,12 @@ ok "bad time refused" '! check x "POWER_ON_TIME=25:00"'
 ok "bad USB id refused" '! check x "USB_REDIRECT=1eaf:00x9"'
 ok "unknown language refused" '! check x "LANGUAGE=xx"'
 ok "Dutch accepted" 'check x "LANGUAGE=nl"'
+# no folder, updates from the folder: refused without an account, accepted with the account only in the credentials
+# file (devices converted from another system have no MGMT_USER), as found on a production device (#97)
+ok "no folder and no account: folder updates refused" '! check x "$(printf "UPDATE_FROM=share\nMGMT_SHARE=")"'
+CF=$(. $OTR/lib/secrets.sh; secret_path smb.cred); mkdir -p "$(dirname "$CF")"; printf 'username=svc\npassword=x\n' > "$CF"
+ok "no folder, account only in the credentials file: folder updates accepted (folder from the domain)" 'check x "$(printf "UPDATE_FROM=share\nMGMT_SHARE=")"'
+rm -f "$CF"
 # every translation: only plain KEY="text" lines (it is sourced as root), the keys of en.sh, the same %s
 LANG_EN=/src/rootfs/opt/openthinrdp/lang/en.sh
 lang_plain(){ ! grep -vE '^\s*(#.*)?$|^[A-Z][A-Z0-9_]*="([^"\\`$]|\\.)*"\s*$' "$1" | grep -q .; }
