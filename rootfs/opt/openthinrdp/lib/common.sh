@@ -30,6 +30,10 @@ otr_splash(){ if [ -f "$OTR_LIB/branding/splash.png" ]; then echo "$OTR_LIB/bran
 
 # event log: one line per event, English, sent to the management folder by report.sh
 ev(){ echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$OTR_EVENTS" 2>/dev/null; }
+# a software update installing now (auto-update.sh install, started as the transient unit openthinrdp-update). Not
+# "systemctl is-active": once that unit is collected, every query makes systemd log "Failed to open
+# /run/systemd/transient/openthinrdp-update.service" (the kiosk asks every 5 s: 10000 lines a day)
+updating(){ pgrep -f -- "$OTR/auto-update.sh install" >/dev/null 2>&1; }
 
 # The name to connect to with Kerberos. The ticket is for TERMSRV/<server name>, and a name shared by several servers
 # (a round-robin alias for the brokers) or an IP address is nobody's: the Kerberos library then looks the address up

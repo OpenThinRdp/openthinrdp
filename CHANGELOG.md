@@ -5,6 +5,12 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
 
 ## Unreleased
 
+- **A frozen session reconnects by itself**: a FreeRDP still connected but no longer reading (data waiting in its
+  sockets, the queue never shrinking for 60 s) is killed and the session reopened, like after any drop. Seen during a
+  call with microphone and camera: the screen stayed frozen for hours until the device was switched off. What it was
+  doing (its sockets, its threads, the end of its log) is kept in `/var/log/openthinrdp/session-hang.log`.
+- **10 000 lines a day less in the journal**: the kiosk no longer asks systemd every 5 s about the collected update
+  unit ("Failed to open /run/systemd/transient/openthinrdp-update.service").
 - **A device before 0.2.9 is not moved into a group**: it looks for its file only in `config\`, so in a group it
   lost the settings of its own (they went back to the defaults). The manager now refuses the move and says to update
   the device first.

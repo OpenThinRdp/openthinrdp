@@ -58,7 +58,7 @@ update_watch(){
     nsig=$(stat -c %Y "$OTR_LIB"/branding/*.png 2>/dev/null | tr '\n' ' ')
     if [ "$nsig" != "$bsig" ]; then bsig=$nsig; pgrep -x xfreerdp3 >/dev/null || pkill -f -- "--class=OtrLogin" 2>/dev/null; fi
     # not while the full screen power-off notice shows the same progress
-    if systemctl is-active -q openthinrdp-update.service && ! pgrep -x xfreerdp3 >/dev/null && [ ! -f /tmp/openthinrdp-poweroff-pending ]; then
+    if updating && ! pgrep -x xfreerdp3 >/dev/null && [ ! -f /tmp/openthinrdp-poweroff-pending ]; then
       if [ -z "$y" ] || ! kill -0 "$y" 2>/dev/null; then
         if [ $UIOK = 1 ]; then python3 "$OTR/ui.py" toast --text="$L_UPDATE_RUNNING (%p%)" 2>/dev/null & y=$!
         else
@@ -607,6 +607,24 @@ reason(){ case "$1" in
   3) echo "idle timeout" ;; 5) echo "session opened from another device" ;;
   11|12) echo "user disconnect or sign out" ;; 137) echo "killed (watchdog or kill -9)" ;; 147) echo "network lost" ;; *) echo "error $1" ;; esac; }
 deliberate(){ case "$1" in 0|1|2|3|11|12) return 0 ;; *) return 1 ;; esac; }
+# bytes waiting, unread, in the sockets of a process (TCP and UDP)
+recvq(){ ss -tunpH 2>/dev/null | grep "pid=$1," | awk '{s += $3} END {print s + 0}'; }
+# What a stuck FreeRDP was doing, before it is killed: its threads (state, where they sleep, the system call they
+# wait in), with eu-stack their stacks when it is installed, and the end of its log. Kept across a restart in
+# session-hang.log (prepared by boot.sh, at most 1 MB), read over SSH: the log of the session itself is in /tmp.
+hang_report(){ local f=$OTR_LOG/session-hang.log t
+  {
+    echo "=== $(date '+%Y-%m-%d %H:%M:%S') FreeRDP $1 ($(xfreerdp3 --version 2>/dev/null | head -1)), sockets:"
+    ss -tunpH 2>/dev/null | grep "pid=$1," | awk '{print "  " $1, $2, "unread", $3, "unsent", $4}'
+    for t in /proc/"$1"/task/*; do
+      printf '  %-16s %s wchan=%s syscall=%s\n' "$(cat "$t/comm" 2>/dev/null)" "$(awk '{print $3}' "$t/stat" 2>/dev/null)" \
+        "$(cat "$t/wchan" 2>/dev/null)" "$(cut -d' ' -f1 "$t/syscall" 2>/dev/null)"
+    done
+    command -v eu-stack >/dev/null && timeout 20 eu-stack -p "$1" 2>&1 | head -400
+    echo "--- end of the FreeRDP log"; tail -80 /tmp/kiosk.log 2>/dev/null
+  } >> "$f" 2>/dev/null
+  if [ "$(stat -c %s "$f" 2>/dev/null || echo 0)" -gt 1000000 ]; then tail -c 500000 "$f" > "$f.tmp" 2>/dev/null && cat "$f.tmp" > "$f"; rm -f "$f.tmp"; fi
+}
 # Why FreeRDP ended this session, for the event of a drop (" - text", or nothing): its last connection error
 # (ERRCONNECT_/ERRINFO_), else its last error that is not the noise of the channels closing behind it. Plain "last
 # ERROR" named a smart card channel failing after the UDP tunnel broke down (measured 13/10/2026).
@@ -715,7 +733,7 @@ session(){
       # redirected to the virtual machine (a connection to another address), the desktop window on screen. With the
       # window the screen closes (100); a closed screen must not end this loop (watchdog): writes ignore SIGPIPE.
       trap '' PIPE
-      local s1=0 s2=0 s3=0 n=0 s1n=0 s1w="" seen=0 lost=0 tcponly=0 fp ips first=""
+      local s1=0 s2=0 s3=0 n=0 s1n=0 s1w="" seen=0 lost=0 tcponly=0 fp ips first="" q lastq=0 stuck=0
       while kill -0 $xp 2>/dev/null; do
         fp=$(pgrep -P $xp -x xfreerdp3 | head -1)
         if [ -n "$fp" ] && [ $s3 -eq 0 ]; then
@@ -736,6 +754,16 @@ session(){
         [ $((n % 12)) -eq 0 ] || continue
         fp=$(pgrep -P $xp -x xfreerdp3 | head -1); [ -n "$fp" ] || continue
         if ss -tnpH state established 2>/dev/null | grep -q "pid=$fp,"; then seen=1; lost=0
+          # Watchdog 2: connected, but FreeRDP no longer reads. Data waits in its sockets and the queue never shrinks
+          # for 60 s (a working FreeRDP empties it all the time, even under load). Seen during a call with
+          # microphone and camera: the server stopped sending at 09:46, the connection stayed up, the screen stayed
+          # frozen for hours until the device was switched off. What it was doing goes to session-hang.log first.
+          q=$(recvq "$fp")
+          if [ "$q" -gt 0 ] && [ "$q" -ge "$lastq" ]; then stuck=$((stuck + 5)); else stuck=0; fi; lastq=$q
+          if [ $stuck -ge 60 ]; then
+            hang_report "$fp"; ev "watchdog: FreeRDP connected but no longer reading for 60 s ($q bytes waiting), killed (session-hang.log)"
+            kill -9 "$fp"; stuck=0
+          fi
           # the server it is connected to now, after the broker's redirect the VM (vm_alive)
           ss -tnpH state established 2>/dev/null | grep "pid=$fp," | awk '{print $4}' | sed 's/:[0-9]*$//' | tail -1 > /tmp/kiosk.vm
           # TRANSPORT=udp: connected for 30 s without a UDP socket = UDP blocked, or FreeRDP fell back to TCP
@@ -868,7 +896,7 @@ kiosk_idle(){
 power_off(){
   local act=poweroff; [ "$2" = reboot ] && act=reboot
   ev "$([ $act = reboot ] && echo restart || echo 'power off') ($1)"
-  if systemctl is-active -q openthinrdp-update.service; then
+  if updating; then
     ev "$act waits for the software update to finish"
     echo $act > /tmp/openthinrdp-poweroff-pending   # install.sh does not restart the X session, auto-update.sh does this
     # full screen with the progress; ends when the update is over
@@ -919,7 +947,7 @@ first_update(){
   # the event starts report.sh, which installs it; the install restarts this kiosk with the new version
   : > /tmp/openthinrdp-update-accepted; ev "software update $v chosen on the device"
   { echo "10"; echo "# $(printf "$L_UPD_GET" "$v")"
-    for i in $(seq 1 120); do systemctl is-active -q openthinrdp-update.service && break; sleep 0.5; done
+    for i in $(seq 1 120); do updating && break; sleep 0.5; done
     echo "100"; } | ui message --progress --icon=update --heading="$(plain "$L_UPDATE_RUNNING")" --text="$(plain "$(printf "$L_UPD_GET" "$v")")"
   ui message --update --icon=update --heading="$(plain "$L_UPDATE_RUNNING")" --text="$(plain "$L_UPD_INSTALL") (%p%)"
   wait_update

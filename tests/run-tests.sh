@@ -667,5 +667,25 @@ ok "netif: nic_ipv4 of that adapter is an IPv4 with prefix" '[ -z "$RN" ] || [[ 
 ok "netif: nic_ipv4 of a missing adapter is empty" '[ -z "$(nic_ipv4 nosuchnic0)" ]'
 ok "report: falls back to the route when the main adapter has no address" 'grep -q "IPC=\$(nic_ipv4 \"\$R\")" /opt/openthinrdp/report.sh'
 
+# a FreeRDP that no longer reads: data waits in its socket (kiosk.sh recvq), and what it was doing is kept (hang_report)
+eval "$(sed -n '/^recvq(){/p; /^hang_report(){/,/^}/p' $OTR/kiosk.sh)"
+python3 -c 'import socket,time
+s=socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(("127.0.0.1", 47123)); s.listen(2)
+for i in range(2):
+    c,_=s.accept(); c.sendall(b"x" * 60000)
+time.sleep(30)' & SRV=$!
+sleep 1
+python3 -c 'import socket,time; s=socket.create_connection(("127.0.0.1", 47123)); time.sleep(30)' & DEAF=$!
+python3 -c 'import socket,time
+s=socket.create_connection(("127.0.0.1", 47123))
+while s.recv(65536): pass' & READER=$!
+sleep 2
+ok "watchdog: recvq sees the bytes a process does not read" '[ "$(recvq $DEAF)" -gt 0 ]'
+ok "watchdog: recvq is 0 for a process that reads" '[ "$(recvq $READER)" -eq 0 ]'
+OTR_LOG=$(mktemp -d); touch /tmp/kiosk.log; hang_report $DEAF
+ok "watchdog: hang_report keeps its sockets and threads in session-hang.log" 'grep -q "^=== .* FreeRDP $DEAF" $OTR_LOG/session-hang.log && grep -q "unread [1-9]" $OTR_LOG/session-hang.log && grep -q "wchan=" $OTR_LOG/session-hang.log'
+kill $SRV $DEAF $READER 2>/dev/null; rm -rf "${OTR_LOG:?}"; OTR_LOG=/var/log/openthinrdp
+ok "kiosk: no systemctl is-active on the collected update unit (journal noise every 5 s)" '! grep -q "is-active -q openthinrdp-update" $OTR/kiosk.sh && grep -q "^updating()" $OTR/lib/common.sh'
+
 echo "passed $PASS, failed $FAIL"
 [ $FAIL = 0 ]
