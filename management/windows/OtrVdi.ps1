@@ -31,7 +31,7 @@
 # to the desktop like quser.exe, with a time limit: a desktop that does not answer must not hold the refresh.
 # ---------------------------------------------------------------------------------------------
 if (-not ('OtrWts' -as [type])) {
-  Add-Type -TypeDefinition @'
+  Add-OtrType -TypeDefinition @'
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;

@@ -373,9 +373,24 @@ public static class OtrVault {
     // ---------------- vault ----------------
     public const int Rounds = 600000;
     // 32 bytes of PBKDF2 (one block: 64 would run the rounds twice), then the key of AES and the key of the MAC
+    // PBKDF2 of Windows (CNG, bcrypt.dll): the same bytes as Rfc2898DeriveBytes, in a fraction of the time (the
+    // managed HMAC of .NET Framework took 2.4 s for 600000 rounds at every opening of the vault)
+    [System.Runtime.InteropServices.DllImport("bcrypt.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    static extern int BCryptOpenAlgorithmProvider(out IntPtr h, string alg, string impl, int flags);
+    [System.Runtime.InteropServices.DllImport("bcrypt.dll")]
+    static extern int BCryptDeriveKeyPBKDF2(IntPtr h, byte[] pwd, int cbPwd, byte[] salt, int cbSalt, ulong rounds, byte[] key, int cbKey, int flags);
+    [System.Runtime.InteropServices.DllImport("bcrypt.dll")]
+    static extern int BCryptCloseAlgorithmProvider(IntPtr h, int flags);
+    static byte[] Pbkdf2(byte[] pwd, byte[] salt, int rounds) {
+        IntPtr h; byte[] m = new byte[32];
+        if (BCryptOpenAlgorithmProvider(out h, "SHA256", null, 8) == 0) {          // 8 = BCRYPT_ALG_HANDLE_HMAC_FLAG
+            try { if (BCryptDeriveKeyPBKDF2(h, pwd, pwd.Length, salt, salt.Length, (ulong)rounds, m, 32, 0) == 0) return m; }
+            finally { BCryptCloseAlgorithmProvider(h, 0); }
+        }
+        using (Rfc2898DeriveBytes k = new Rfc2898DeriveBytes(pwd, salt, rounds, HashAlgorithmName.SHA256)) return k.GetBytes(32);
+    }
     static byte[] Keys(string code, byte[] salt, int rounds) {
-        byte[] m;
-        using (Rfc2898DeriveBytes k = new Rfc2898DeriveBytes(Encoding.UTF8.GetBytes(code), salt, rounds, HashAlgorithmName.SHA256)) m = k.GetBytes(32);
+        byte[] m = Pbkdf2(Encoding.UTF8.GetBytes(code), salt, rounds);
         using (HMACSHA256 h = new HMACSHA256(m)) return Cat(h.ComputeHash(Encoding.ASCII.GetBytes("otrvault1 aes")), h.ComputeHash(Encoding.ASCII.GetBytes("otrvault1 mac")));
     }
     static byte[] Mac(byte[] key, byte[] header, byte[] iv, byte[] data) {

@@ -102,6 +102,7 @@ HOME=${HOME:-/root} xfreerdp3 --buildconfig 2>/dev/null | grep -q 'WITH_RDPEUDP=
   MA=$(sed -n 's/^username=//p' "$CRED" 2>/dev/null | head -1); MD=$(sed -n 's/^domain=//p' "$CRED" 2>/dev/null | head -1)
   case "$MA" in *\\*|*@*) MD="" ;; esac
   echo "MGMT_ACCOUNT=${MD:+$MD\\}${MA:-none}"
+  echo "GROUP=$(cat "$OTR_LIB/central-group-name" 2>/dev/null)"
   # logo and background picture: image = the image's own, common = config\branding\, device = config\branding\<hostname>\
   BRS=$(tr '\n' ' ' < "$OTR_LIB/branding/source" 2>/dev/null); BRS=${BRS% }
   echo "BRANDING=${BRS:-logo=image splash=image}"
@@ -169,15 +170,24 @@ else
     [ -n "$OLD" ] && [ "$OLD" != "$H" ] && rm -f "$MNT/status/$OLD.txt" "$MNT/status/$OLD-events.log"
     cp "$OUT" "$MNT/status/$H.txt" && { [ -f "$OTR_EVENTS" ] && cp "$OTR_EVENTS" "$MNT/status/$H-events.log"; echo "$H" > "$OTR_LIB/share-name"
       echo "$(date '+%F %T') sent to $RS" > "$LOG"; }
-    # central settings: config\common.conf and config\<hostname>.conf -> local copy (= last good one).
-    # If the folder answers and a file is gone, those keys are no longer managed centrally.
-    for p in "common:common.conf" "host:$H.conf"; do
+    # central settings -> local copies (= last good ones). If the folder answers and a file is gone, those keys are no
+    # longer managed centrally. Groups are folders: config\groups\<group>\_group.conf (the settings of the group) and
+    # the files of its devices, config\groups\<group>\<hostname>.conf; moving the file of a device to another folder
+    # moves it to that group. A device whose file is not in a group folder: its DEVICE_GROUP, else the group named as
+    # the account of the management folder, when that folder exists; its own file then in config\<hostname>.conf.
+    HF=$(ls "$MNT"/config/groups/*/"$H.conf" 2>/dev/null | head -1)
+    if [ -n "$HF" ]; then G=$(basename "$(dirname "$HF")")
+    else HF=$MNT/config/$H.conf; G=$(cfg DEVICE_GROUP)
+      [ -n "$G" ] || G=$(sed -n 's/^username=//p' "$CRED" 2>/dev/null | head -1 | tr 'A-Z' 'a-z'); fi
+    GF=""; [[ $G =~ ^[A-Za-z0-9._-]{1,64}$ ]] && [ -f "$MNT/config/groups/$G/_group.conf" ] && GF=$MNT/config/groups/$G/_group.conf
+    for p in "common:$MNT/config/common.conf" "group:$GF" "host:$HF"; do
       n=${p%%:*}; f=${p#*:}
-      if [ -f "$MNT/config/$f" ]; then
+      if [ -n "$f" ] && [ -f "$f" ]; then
         # 600: they may contain the Wi-Fi key
-        ( umask 077; cp "$MNT/config/$f" "$OTR_LIB/central-$n.conf.new" ) && mv -f "$OTR_LIB/central-$n.conf.new" "$OTR_LIB/central-$n.conf"
+        ( umask 077; cp "$f" "$OTR_LIB/central-$n.conf.new" ) && mv -f "$OTR_LIB/central-$n.conf.new" "$OTR_LIB/central-$n.conf"
       else rm -f "$OTR_LIB/central-$n.conf"; fi
     done
+    if [ -n "$GF" ] || [[ $HF == */groups/* ]]; then echo "$G" > "$OTR_LIB/central-group-name"; else rm -f "$OTR_LIB/central-group-name"; fi
     # SSH keys of the administrators: config\authorized_keys, only well-formed public key lines.
     # Removed from the folder after being used = keys revoked: back to the keys built into the image,
     # kept aside the first time.

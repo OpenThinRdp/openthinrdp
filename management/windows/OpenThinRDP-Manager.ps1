@@ -44,13 +44,32 @@ param(
   [string]$Sign,           # LATEST.txt of an update package to sign with the key of the vault (no window)
   [switch]$UpdateManager   # the manager of the latest release in place of this one (no window)
 )
+$script:T0 = [Diagnostics.Stopwatch]::StartNew(); function Write-Trace($w) { if ($env:OTR_MANAGER_TRACE) { [IO.File]::AppendAllText($env:OTR_MANAGER_TRACE, ("{0,6} ms  {1}`r`n" -f $script:T0.ElapsedMilliseconds, $w)) } }
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+# The C# of the manager compiled once per user and version, then loaded from %LOCALAPPDATA%\OpenThinRDP\types: five
+# compilations at every start cost one to two seconds (more with a cold compiler). The name of the DLL is a hash of
+# the source, so a changed source is compiled again; anything wrong with the cache = compiled in memory as before.
+function Add-OtrType([string]$TypeDefinition, [string]$Path, [string[]]$ReferencedAssemblies = @()) {
+  $src = if ($Path) { [IO.File]::ReadAllText($Path) } else { $TypeDefinition }
+  $p = @{ TypeDefinition = $src }; if ($ReferencedAssemblies) { $p.ReferencedAssemblies = $ReferencedAssemblies }
+  try {
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $h = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($src + '|' + ($ReferencedAssemblies -join ',') + '|' + $PSVersionTable.CLRVersion))).Replace('-', '').Substring(0, 20)
+    $dir = Join-Path $env:LOCALAPPDATA 'OpenThinRDP\types'; $dll = Join-Path $dir "otr-$h.dll"
+    if (-not (Test-Path -LiteralPath $dll)) {
+      New-Item -ItemType Directory -Force -Path $dir | Out-Null
+      Add-Type @p -OutputAssembly "$dll.part" -OutputType Library; Move-Item -LiteralPath "$dll.part" -Destination $dll -Force
+    }
+    Add-Type -Path $dll; return
+  } catch { }
+  Add-Type @p
+}
 # "natural" sort of the list columns: numbers inside the text compare as numbers (thinclient2 before
 # thinclient10, 192.0.2.22 before 192.0.2.165), the rest ignoring case.
 # WPA key in C#: the PowerShell loop takes seconds for 8192 HMAC rounds.
 if (-not ('OtrColumnSorter' -as [type])) {
-  Add-Type -ReferencedAssemblies System.Windows.Forms -TypeDefinition @'
+  Add-OtrType -ReferencedAssemblies System.Windows.Forms -TypeDefinition @'
 using System;
 using System.Text;
 using System.Windows.Forms;
@@ -148,7 +167,7 @@ public static class OtrCrypto {
 '@
 }
 # Ed25519, OpenPGP signatures and the vault (.NET Framework has no Ed25519): OtrVault.cs next to this file
-if (-not ('OtrVault' -as [type])) { Add-Type -ReferencedAssemblies System.Numerics -Path (Join-Path $PSScriptRoot 'OtrVault.cs') }
+if (-not ('OtrVault' -as [type])) { Add-OtrType -ReferencedAssemblies System.Numerics -Path (Join-Path $PSScriptRoot 'OtrVault.cs') }
 # the OpenThinRDP icon of every window (title bar, taskbar, Alt+Tab): openthinrdp.ico next to this file
 $script:AppIcon = $null
 $icoFile = Join-Path $PSScriptRoot 'openthinrdp.ico'
@@ -235,7 +254,51 @@ function Set-ManagementFolder([string]$path) {
   $script:CommonFile = Join-Path $script:ConfigDir 'common.conf'
   $script:KeysFile = Join-Path $script:ConfigDir 'authorized_keys'
 }
-function Get-HostFile($name) { Join-Path $script:ConfigDir "$name.conf" }
+# Groups are folders: config\groups\<group>\_group.conf (the settings of the group) and the files of its devices,
+# config\groups\<group>\<hostname>.conf; a device in no group has its file in config\. Get-GroupFiles refreshes the
+# map name -> file of the devices in a group (once per refresh: hundreds of devices, one directory read).
+$script:GroupFiles = @{}
+function Get-GroupsDir { Join-Path $script:ConfigDir 'groups' }
+function Get-GroupFiles {
+  $m = @{}
+  foreach ($x in @(Get-ChildItem -Path (Join-Path (Get-GroupsDir) '*\*.conf') -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne '_group.conf' -and $_.Extension -eq '.conf' })) {
+    $m[$x.BaseName.ToLower()] = [pscustomobject]@{ File = $x.FullName; Group = $x.Directory.Name } }
+  $script:GroupFiles = $m; $m
+}
+function Get-Groups { @(Get-ChildItem -LiteralPath (Get-GroupsDir) -Directory -ErrorAction SilentlyContinue | ForEach-Object Name | Sort-Object) }
+function New-DeviceGroup([string]$name) {
+  if ($name -notmatch '^[A-Za-z0-9._-]{1,64}$') { throw (Get-Text 'ErrGroupName') }
+  $d = Join-Path (Get-GroupsDir) $name; if (Test-Path -LiteralPath $d) { throw (Get-Text 'ErrGroupExists' $name) }
+  New-Item -ItemType Directory -Path $d -Force | Out-Null
+  [IO.File]::WriteAllText((Join-Path $d '_group.conf'), "# Settings for the devices of the group $name (written by the OpenThinRDP manager).`r`n# They win over common.conf; the file of each device wins over them.`r`n", $script:Utf8)
+  Add-ChangeLog "group $name created"
+}
+# the file of a device moves to the folder of the group ('' = no group): the device follows at its next report
+function Move-DeviceToGroup([string]$device, [string]$group) {
+  $from = Get-HostFile $device
+  $dir = if ($group) { Join-Path (Get-GroupsDir) $group } else { $script:ConfigDir }
+  if (-not (Test-Path -LiteralPath $dir)) { throw (Get-Text 'ErrGroupMissing' $group) }
+  $to = Join-Path $dir "$device.conf"
+  if ($from -ieq $to) { return }
+  if (Test-Path -LiteralPath $from) { Move-Item -LiteralPath $from -Destination $to }
+  elseif ($group) { [IO.File]::WriteAllText($to, (($script:HostHeader -join "`r`n") + "`r`n"), $script:Utf8) }
+  # out of every group and nothing of its own: no file
+  if (-not $group -and (Test-Path -LiteralPath $to) -and -not (Read-ConfFile $to).Count) { Move-Item -LiteralPath $to -Destination (Get-BackupPath $to) }
+  Add-ChangeLog ("{0}: group {1}" -f $device, $(if ($group) { $group } else { '(none)' }))
+  [void](Get-GroupFiles)
+}
+function Remove-DeviceGroup([string]$group) {
+  $d = Join-Path (Get-GroupsDir) $group
+  if (@(Get-ChildItem -LiteralPath $d -Filter '*.conf' -File | Where-Object Name -ne '_group.conf').Count) { throw (Get-Text 'ErrGroupNotEmpty' $group) }
+  $g = Join-Path $d '_group.conf'
+  if (Test-Path -LiteralPath $g) { Move-Item -LiteralPath $g -Destination (Get-BackupPath (Join-Path $script:ConfigDir "group-$group.conf")) }
+  Remove-Item -LiteralPath $d -Recurse -Force
+  Add-ChangeLog "group $group removed"
+}
+function Get-HostFile($name) {
+  $g = $script:GroupFiles["$name".ToLower()]; if ($g -and (Test-Path -LiteralPath $g.File)) { return $g.File }
+  Join-Path $script:ConfigDir "$name.conf"
+}
 
 # ---------------------------------------------------------------------------------------------
 # Settings: the keys of defaults.conf on the device (+ HOSTNAME, + WIFI_PSK which never leaves this tool
@@ -533,6 +596,8 @@ function Get-Devices {
   foreach ($f in @(Get-ChildItem -LiteralPath $script:StatusDir -Filter '*.txt' -File -ErrorAction SilentlyContinue | Where-Object Extension -eq '.txt')) {
     $s = Read-StatusFile $f.FullName
     if (-not $s['HOSTNAME']) { continue }
+    # its group: the folder its file is in, else the group the device reports (its DEVICE_GROUP or its account)
+    $grp = $script:GroupFiles[$s['HOSTNAME'].ToLower()]; $grp = if ($grp) { $grp.Group } else { [string]$s['GROUP'] }
     $when = Get-ReportTime $s; if (-not $when) { $when = $f.LastWriteTime }
     $min = [int]((Get-Date) - $when).TotalMinutes
     # Kind = the colour of the state: ok, off, error, warn, info
@@ -542,7 +607,7 @@ function Get-Devices {
     elseif ($s['CENTRAL_CONFIG'] -like 'REJECTED*') { $state = Get-Text 'StateRejected'; $kind = 'warn' }
     elseif ($s['SHARE_UPDATE'] -like 'ERROR*' -or $s['SHARE_UPDATE'] -like 'IGNORED*') { $state = Get-Text 'StateUpdateError'; $kind = 'warn' }
     elseif ($s['REBOOT_REQUIRED'] -eq 'yes') { $state = Get-Text 'StateReboot'; $kind = 'info' }
-    $list += [pscustomobject]@{ Name = $s['HOSTNAME']; File = $f.BaseName; State = $state; Kind = $kind; OldName = $false; Minutes = $min; When = $when; S = $s }
+    $list += [pscustomobject]@{ Name = $s['HOSTNAME']; File = $f.BaseName; State = $state; Kind = $kind; OldName = $false; Minutes = $min; When = $when; S = $s; Group = $grp }
   }
   # same MAC under two names = the old name left behind by a rename (normally the device removes it itself)
   foreach ($g in @($list | Where-Object { $_.S['MAC'] } | Group-Object { $_.S['MAC'] } | Where-Object Count -gt 1)) {
@@ -1666,7 +1731,9 @@ function Save-AuthorizedKeys([string]$text) {
 function Complete-Renames {
   $done = @()
   if (-not (Test-Path -LiteralPath $script:ConfigDir)) { return @() }
-  foreach ($f in @(Get-ChildItem -LiteralPath $script:ConfigDir -Filter '*.conf' -File -ErrorAction SilentlyContinue | Where-Object Extension -eq '.conf')) {
+  $files = @(Get-ChildItem -LiteralPath $script:ConfigDir -Filter '*.conf' -File -ErrorAction SilentlyContinue) +
+    @(Get-ChildItem -Path (Join-Path (Get-GroupsDir) '*\*.conf') -File -ErrorAction SilentlyContinue | Where-Object Name -ne '_group.conf')
+  foreach ($f in @($files | Where-Object Extension -eq '.conf')) {
     $old = $f.BaseName; if ($old -eq 'common') { continue }
     $c = Read-ConfFile $f.FullName; $new = $c['HOSTNAME']
     if (-not $new -or $new -eq $old) { continue }
@@ -1682,13 +1749,16 @@ function Complete-Renames {
       $when = Get-ReportTime $sn; if (-not $when -or $when -le $f.LastWriteTime) { continue }
       if ((Test-Path -LiteralPath $oldStatus) -and (Read-StatusFile $oldStatus)['MAC'] -ne $sn['MAC']) { continue }
     }
-    $dest = Get-HostFile $new
+    $dest = Join-Path $f.DirectoryName "$new.conf"                             # the same folder: the same group
     if (Test-Path -LiteralPath $dest) { continue }                             # never overwritten
     $lines = @(Read-Lines $f.FullName | Where-Object { $_ -cnotmatch '^\s*#?\s*HOSTNAME\s*=' -and $_ -notmatch $script:RenameRx })
     # the removed lines can leave an "# added by..." line with nothing under it at the end
     $n = $lines.Count; while ($n -gt 0 -and ($lines[$n - 1] -eq '' -or $lines[$n - 1] -like '# added by the OpenThinRDP manager*')) { $n-- }
     $lines = @($lines | Select-Object -First $n)
-    [IO.File]::WriteAllText($dest, (($lines -join "`r`n").TrimEnd() + "`r`n"), $script:Utf8)
+    # nothing of its own left: no file at all, the device just has its new name (in a group folder the file stays:
+    # it is what puts the device in that group)
+    $active = @($lines | Where-Object { $_ -cmatch '^\s*[A-Z][A-Z0-9_]*\s*=' })
+    if ($active.Count -or $f.DirectoryName -ne $script:ConfigDir.TrimEnd('\')) { [IO.File]::WriteAllText($dest, (($lines -join "`r`n").TrimEnd() + "`r`n"), $script:Utf8) }
     Move-Item -LiteralPath $f.FullName -Destination (Get-BackupPath $f.FullName)
     # status under the old name: the device removes it itself; one left behind (folder unreachable at that
     # moment) would stay in the list forever
@@ -2038,6 +2108,7 @@ try { . (Join-Path $PSScriptRoot 'OtrVdi.ps1'); $script:VdiLoaded = $true } catc
 # The Health Center (hosts, cluster, storage, DCs, DNS, SQL, devices, backups): OtrHealth.ps1, on top of OtrVdi.ps1
 $script:HealthLoaded = $false
 if ($script:VdiLoaded) { try { . (Join-Path $PSScriptRoot 'OtrHealth.ps1'); $script:HealthLoaded = $true } catch { Write-Warning "OtrHealth.ps1: $($_.Exception.Message)" } }
+Write-Trace 'functions loaded'
 if ($FunctionsOnly) { return }
 # files of an update of the manager that were in use (Install-ManagerFile)
 try { Remove-OldManagerFiles } catch { }
@@ -2229,6 +2300,7 @@ if ($Sign) {
 # The access code before anything else (Invoke-StartGate): no folder, no device, no window behind it. A screenshot opens
 # the vault with OTR_MANAGER_VAULT_CODE instead, unless the tests give the codes to type (OTR_MANAGER_GATE_ANSWERS).
 # Exit code 3 = closed at the access code.
+Write-Trace 'access code asked'
 $gateAnswers = if ($env:OTR_MANAGER_GATE_ANSWERS) { @($env:OTR_MANAGER_GATE_ANSWERS -split ';') } else { $null }
 if (-not $env:OTR_MANAGER_SCREENSHOT -or $gateAnswers) {
   $gate = try { Invoke-StartGate $gateAnswers } catch { Show-Message (Get-Text 'GateTitle') (Get-Text 'VaultNotReadable' $_.Exception.Message) 'Error'; 'cancel' }
@@ -2253,6 +2325,7 @@ if (-not (Test-Path -LiteralPath $script:Folder) -and $lcPath -and (Test-Path -L
   if (Confirm-Action (Get-Text 'LocalTitle') (Get-Text 'LocalUseAsk' $script:Folder $lcPath (Get-LocalCopyAge $lcPath))) { Set-ManagementFolder $lcPath }
 }
 if ($lcPath -and $script:Folder.TrimEnd('\') -ieq $lcPath.TrimEnd('\')) { $script:LocalMode = $true }
+Write-Trace 'folder chosen'
 if (-not (Test-Path -LiteralPath $script:Folder)) {
   Show-Message (Get-Text 'FolderNotFoundTitle') (Get-Text 'FolderNotFoundText' $script:Folder) 'Error'
   return
@@ -2373,7 +2446,11 @@ function Add-Line($p, [string]$side = 'Top') {
 }
 # search boxes with a grey hint inside (EM_SETCUEBANNER)
 if (-not ('OtrNative' -as [type])) {
-  Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class OtrNative { [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr h, int m, IntPtr w, string l); }'
+  Add-OtrType -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class OtrNative { [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr h, int m, IntPtr w, string l);
+  [StructLayout(LayoutKind.Sequential)] public struct LVGROUP { public int cbSize; public int mask; public IntPtr pszHeader; public int cchHeader; public IntPtr pszFooter; public int cchFooter; public int iGroupId; public int stateMask; public int state; public int uAlign; }
+  [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr h, int m, IntPtr w, ref LVGROUP l);
+  /* a group of a ListView that the user can collapse (LVM_SETGROUPINFO, LVGS_COLLAPSIBLE) */
+  public static void Collapsible(IntPtr lv, int id) { LVGROUP g = new LVGROUP(); g.cbSize = Marshal.SizeOf(g); g.mask = 4; g.iGroupId = id; g.stateMask = 8; g.state = 8; SendMessage(lv, 0x1093, (IntPtr)id, ref g); } }'
 }
 function New-SearchBox([string]$cueKey, [int]$width) {
   $t = New-Object System.Windows.Forms.TextBox; $t.Font = $fontBase; $t.Width = $width; $t.Tag = Get-Text $cueKey
@@ -2800,7 +2877,8 @@ $btnReloadDev = New-ActionButton 'BtnUndo' 'Undo' 'secondary'
 $btnClearDev = New-ActionButton 'BtnRemoveExceptions' 'Delete' 'danger'
 $lblDirtyDev = New-Label (Get-Text 'Unsaved') $fontSmallBold $script:KindColor.warn; $lblDirtyDev.Margin = New-Object System.Windows.Forms.Padding(6, 8, 0, 0); $lblDirtyDev.Visible = $false
 $btnTextDev = New-ActionButton 'BtnAsText' 'Document' 'secondary'
-$barDev = New-ActionBar @($btnSaveDev, $btnReloadDev, $btnTextDev, $lblDirtyDev) @($btnClearDev)
+$btnGroupDev = New-ActionButton 'BtnDeviceGroup' 'Folder' 'secondary'
+$barDev = New-ActionBar @($btnSaveDev, $btnReloadDev, $btnTextDev, $btnGroupDev, $lblDirtyDev) @($btnClearDev)
 $filterDev = New-FilterBar $gridDev
 $tabDevSettings.Controls.Add($gridDev); $tabDevSettings.Controls.Add($filterDev); $tabDevSettings.Controls.Add($helpDev); $tabDevSettings.Controls.Add($barDev)
 
@@ -2823,7 +2901,8 @@ $btnReloadCom = New-ActionButton 'BtnUndo' 'Undo' 'secondary'
 $btnBrandCom = New-ActionButton 'BtnBranding' 'Picture' 'secondary'
 $lblDirtyCom = New-Label (Get-Text 'Unsaved') $fontSmallBold $script:KindColor.warn; $lblDirtyCom.Margin = New-Object System.Windows.Forms.Padding(6, 8, 0, 0); $lblDirtyCom.Visible = $false
 $btnTextCom = New-ActionButton 'BtnAsText' 'Document' 'secondary'
-$barCom = New-ActionBar @($btnSaveCom, $btnReloadCom, $btnTextCom, $btnBrandCom, $lblDirtyCom)
+$btnGroupsCom = New-ActionButton 'BtnGroups' 'Folder' 'secondary'
+$barCom = New-ActionBar @($btnSaveCom, $btnReloadCom, $btnTextCom, $btnGroupsCom, $btnBrandCom, $lblDirtyCom)
 $filterCom = New-FilterBar $gridCom
 $comCard.Controls.Add($gridCom); $comCard.Controls.Add($filterCom); $comCard.Controls.Add($helpCom); $comCard.Controls.Add($barCom)
 $comWrap.Controls.Add($comCard)
@@ -3434,7 +3513,9 @@ function Get-Seen($d) { if ($d.Minutes -lt 1) { Get-Text 'SeenNow' } else { Get-
 
 function Update-DeviceList {
   try {
+    [void](Get-GroupFiles)
     $renamed = @(Complete-Renames)
+    if ($renamed.Count) { [void](Get-GroupFiles) }
     $script:Devices = @(Get-Devices)
   } catch { $barText.Text = Get-Text 'ErrReadFolder' $script:Folder $_.Exception.Message; return }
   $sel = if ($script:Selected) { $script:Selected.File } else { $null }
@@ -3444,7 +3525,7 @@ function Update-DeviceList {
   $list.BeginUpdate(); $list.Items.Clear()
   foreach ($d in $script:Devices) {
     $s = $d.S; $user = Get-SessionUser $s
-    if ($f -and -not (@($d.Name, $d.State, $s['IP'], $user, $s['DEFAULT_USER'], $s['MAC']) | Where-Object { "$_" -like "*$f*" })) { continue }
+    if ($f -and -not (@($d.Name, $d.State, $s['IP'], $user, $s['DEFAULT_USER'], $s['MAC'], $d.Group) | Where-Object { "$_" -like "*$f*" })) { continue }
     $it = New-Object System.Windows.Forms.ListViewItem($d.Name)
     $it.ImageKey = $d.Kind; $it.UseItemStyleForSubItems = $false; $it.BackColor = $Theme.Card
     $ver = Get-Version $s; if ($script:Rollout -and $script:Rollout.Pilots -contains $d.Name) { $ver = Get-Text 'ListPilot' $ver }
@@ -3456,6 +3537,25 @@ function Update-DeviceList {
     $it.Tag = $d
     [void]$list.Items.Add($it)
     if ($d.File -eq $sel) { $it.Selected = $true; $script:Selected = $d }
+  }
+  # groups of devices: one collapsible header per group (its name, how many devices, how many to look at), kept from
+  # one refresh to the next so a collapsed group stays collapsed; no groups at all = the plain list
+  $names = @($script:Devices | ForEach-Object Group | Where-Object { $_ } | Sort-Object -Unique)
+  $list.ShowGroups = [bool]$names.Count
+  if ($names.Count) {
+    if (-not $script:LvGroups) { $script:LvGroups = @{} }
+    $none = Get-Text 'GroupNone'
+    foreach ($n in @($names) + @($none)) {
+      $g = $script:LvGroups[$n]
+      if (-not $g) { $g = New-Object System.Windows.Forms.ListViewGroup($n, $n); [void]$list.Groups.Add($g); $script:LvGroups[$n] = $g }
+      $ds = @($script:Devices | Where-Object { $(if ($n -eq $none) { -not $_.Group } else { $_.Group -eq $n }) })
+      $bad = @($ds | Where-Object { $_.Kind -in 'error', 'warn' }).Count
+      $g.Header = Get-Text 'GroupHeader' $n $ds.Count $(if ($bad) { Get-Text 'GroupHeaderBad' $bad } else { '' })
+    }
+    foreach ($it in $list.Items) { $it.Group = $script:LvGroups[$(if ($it.Tag.Group) { $it.Tag.Group } else { $none })] }
+    foreach ($g in @($list.Groups)) {
+      try { [OtrNative]::Collapsible($list.Handle, [int]$g.GetType().GetProperty('ID', [Reflection.BindingFlags]'NonPublic,Instance').GetValue($g)) } catch { }
+    }
   }
   $list.Sort()
   $list.EndUpdate()
@@ -3575,6 +3675,8 @@ function Update-DeviceGrid {
   $d = $script:Selected; if (-not $d) { return }
   $script:Loading = $true
   $common = Read-ConfFile $script:CommonFile
+  # the settings of its group count as common ones for this device (between common.conf and its own file)
+  if ($d.Group) { $gc = Read-ConfFile (Join-Path (Join-Path (Get-GroupsDir) $d.Group) '_group.conf'); foreach ($k in @($gc.Keys)) { $common[$k] = $gc[$k] } }
   $exc = Read-ConfFile (Get-HostFile $d.Name)
   $gridDev.Rows.Clear(); $section = $null
   $arrow = [string][char]0x2192
@@ -3690,8 +3792,15 @@ function Save-Common {
 }
 
 # the device file ($dev) or common.conf ($null) as text; unsaved changes of the page first (one place edits at a time)
+# the settings of a group as text: the same checks as common.conf (a group may not set what identifies a device)
+function Show-GroupTextDialog([string]$group) {
+  $keep = $script:CommonFile, $script:CommonHeader; $script:InGroupText = $true
+  $script:CommonFile = Join-Path (Join-Path (Get-GroupsDir) $group) '_group.conf'
+  $script:CommonHeader = @("# Settings for the devices of the group $group (written by the OpenThinRDP manager).", '')
+  try { Show-ConfTextDialog $null } finally { $script:CommonFile, $script:CommonHeader = $keep; $script:InGroupText = $false; Update-CommonGrid }
+}
 function Show-ConfTextDialog($dev) {
-  if (($dev -and $lblDirtyDev.Visible) -or (-not $dev -and $lblDirtyCom.Visible)) { Show-Message (Get-Text 'MsgTextDirtyTitle') (Get-Text 'MsgTextDirty') 'Information'; return }
+  if (($dev -and $lblDirtyDev.Visible) -or (-not $dev -and -not $script:InGroupText -and $lblDirtyCom.Visible)) { Show-Message (Get-Text 'MsgTextDirtyTitle') (Get-Text 'MsgTextDirty') 'Information'; return }
   $f = if ($dev) { Get-HostFile $dev.Name } else { $script:CommonFile }
   $orig = if (Test-Path -LiteralPath $f) { @(Read-Lines $f) } elseif ($dev) { $script:HostHeader } else { $script:CommonHeader }
   $dlg = New-Object System.Windows.Forms.Form; Set-WindowIcon $dlg
@@ -4739,7 +4848,8 @@ function Start-HealthRefresh([switch]$Queue) {
       $script:Health.Seen = [int]$pg.Version; Update-HealthStamp
       # the first reading: the parts already read go into the tree at once (later readings keep the last full one)
       if (-not $script:Health.Raw -and $pg.Snap) {
-        try { $script:Health.Model = ConvertTo-HealthModel $pg.Snap $script:Vdi.Model (Get-Date) (Get-HealthSettings); Update-HealthView; Update-HealthNav } catch { }
+        # only while its page is open: each partial tree took 0.5-0.9 s of the window, six times in the first minute
+        if ($script:Page -eq 7) { try { $script:Health.Model = ConvertTo-HealthModel $pg.Snap $script:Vdi.Model (Get-Date) (Get-HealthSettings); Update-HealthView; Update-HealthNav } catch { } }
       }
     }
     if (-not $st.H.IsCompleted -and ((Get-Date) - $st.Started).TotalSeconds -lt 400) { return }
@@ -5394,6 +5504,49 @@ $btnClearDev.add_Click({ Clear-Device })
 $btnSaveCom.add_Click({ Save-Common })
 $btnTextDev.add_Click({ if ($script:Selected) { Show-ConfTextDialog $script:Selected } })
 $btnTextCom.add_Click({ Show-ConfTextDialog $null })
+# Groups: folders of the management folder (config\groups\<group>), each with its settings and the files of its devices
+function Show-GroupsDialog {
+  $dlg = New-Object System.Windows.Forms.Form; Set-WindowIcon $dlg
+  $dlg.Text = Get-Text 'GroupsTitle'; $dlg.Font = $fontBase; $dlg.FormBorderStyle = 'FixedDialog'; $dlg.MaximizeBox = $false; $dlg.MinimizeBox = $false; $dlg.StartPosition = 'CenterParent'
+  $dlg.ClientSize = New-Object System.Drawing.Size(640, 420)
+  $hint = New-Object System.Windows.Forms.Label; $hint.Text = Get-Text 'GroupsHint'; $hint.SetBounds(14, 10, 612, 54); $hint.ForeColor = $Theme.Muted
+  $lb = New-Object System.Windows.Forms.ListBox; $lb.SetBounds(14, 70, 440, 330); $lb.Font = $fontBase
+  $fill = { $lb.Items.Clear(); foreach ($g in (Get-Groups)) { $n = @($script:Devices | Where-Object Group -eq $g).Count; [void]$lb.Items.Add((Get-Text 'GroupsItem' $g $n)) } }
+  $name = { if ($lb.SelectedIndex -lt 0) { $null } else { (Get-Groups)[$lb.SelectedIndex] } }
+  $y = 70; $mk = { param($k) $b = New-Button $k 160 30; $b.Location = New-Object System.Drawing.Point(466, $script:GrY); $script:GrY += 38; $dlg.Controls.Add($b); $b }
+  $script:GrY = 70
+  $bNew = & $mk 'GroupsNew'; $bEdit = & $mk 'GroupsEdit'; $bDel = & $mk 'GroupsDelete'; $bClose = & $mk 'BtnClose'; $bClose.DialogResult = 'Cancel'; $dlg.CancelButton = $bClose
+  $dlg.Controls.AddRange(@($hint, $lb))
+  $bNew.add_Click({ Add-Type -AssemblyName Microsoft.VisualBasic
+    $g = [Microsoft.VisualBasic.Interaction]::InputBox((Get-Text 'GroupsNewAsk'), (Get-Text 'GroupsTitle'), '')
+    if (-not $g) { return }; try { New-DeviceGroup $g.Trim() } catch { Show-Message (Get-Text 'GroupsTitle') $_.Exception.Message; return }; & $fill })
+  $bEdit.add_Click({ $g = & $name; if ($g) { Show-GroupTextDialog $g } })
+  $bDel.add_Click({ $g = & $name; if (-not $g) { return }
+    if (-not (Confirm-Action (Get-Text 'GroupsTitle') (Get-Text 'GroupsDeleteAsk' $g) 'Button2')) { return }
+    try { Remove-DeviceGroup $g } catch { Show-Message (Get-Text 'GroupsTitle') $_.Exception.Message; return }; & $fill })
+  & $fill
+  try { [void]$dlg.ShowDialog($form) } finally { $dlg.Dispose(); Update-DeviceList }
+}
+$btnGroupsCom.add_Click({ Show-GroupsDialog })
+# the group of the selected device: its file moves to that folder of the share
+$btnGroupDev.add_Click({
+  $d = $script:Selected; if (-not $d) { return }
+  if ($lblDirtyDev.Visible) { Show-Message (Get-Text 'MsgTextDirtyTitle') (Get-Text 'MsgTextDirty') 'Information'; return }
+  $dlg = New-Object System.Windows.Forms.Form; Set-WindowIcon $dlg
+  $dlg.Text = Get-Text 'GroupDevTitle' $d.Name; $dlg.Font = $fontBase; $dlg.FormBorderStyle = 'FixedDialog'; $dlg.MaximizeBox = $false; $dlg.MinimizeBox = $false; $dlg.StartPosition = 'CenterParent'
+  $dlg.ClientSize = New-Object System.Drawing.Size(460, 150)
+  $l = New-Object System.Windows.Forms.Label; $l.Text = Get-Text 'GroupDevAsk' $d.Name; $l.SetBounds(14, 12, 432, 40)
+  $cb = New-Object System.Windows.Forms.ComboBox; $cb.DropDownStyle = 'DropDownList'; $cb.SetBounds(14, 58, 432, 28)
+  $none = Get-Text 'GroupNone'; [void]$cb.Items.Add($none); foreach ($g in (Get-Groups)) { [void]$cb.Items.Add($g) }
+  $cb.SelectedItem = $(if ($d.Group -and $cb.Items.Contains($d.Group)) { $d.Group } else { $none })
+  $ok = New-Button 'BtnSave' 100 30; $ok.Location = New-Object System.Drawing.Point(238, 106); $ok.DialogResult = 'OK'
+  $cancel = New-Button 'BtnCancel' 100 30; $cancel.Location = New-Object System.Drawing.Point(346, 106); $cancel.DialogResult = 'Cancel'
+  $dlg.Controls.AddRange(@($l, $cb, $ok, $cancel)); $dlg.AcceptButton = $ok; $dlg.CancelButton = $cancel
+  $r = $dlg.ShowDialog($form); $g = [string]$cb.SelectedItem; $dlg.Dispose()
+  if ($r -ne 'OK') { return }
+  try { Move-DeviceToGroup $d.Name $(if ($g -eq $none) { '' } else { $g }) } catch { Show-Message (Get-Text 'GroupDevTitle' $d.Name) $_.Exception.Message 'Error'; return }
+  $barText.Text = Get-Text 'GroupDevDone' $d.Name $(if ($g -eq $none) { $none } else { $g })
+  Update-DeviceList; Update-DeviceGrid })
 $btnReloadCom.add_Click({ Update-CommonGrid })
 $btnBrandDev.add_Click({ if ($script:Selected) { Show-BrandingDialog $script:Selected } })
 $btnRemoteDev.add_Click({ if ($script:Selected) { Start-RemoteScreen $script:Selected } })
@@ -5423,9 +5576,11 @@ $timer.Interval = 60000
 $timer.add_Tick({ Update-DeviceList })      # the list and the header only: grids being edited are left alone
 
 $form.add_Shown({
+  Write-Trace 'shown'
   Set-SplitFit
   Select-Page 0
   Update-DeviceList; Update-CommonGrid; Update-KeysView
+  Write-Trace 'devices, common settings, keys'
   # brokers and hosts in the background from the start: the menu shows who cannot sign in, on any page
   if ($script:VdiLoaded) { Start-VdiRefresh; $vdiTimer.Start() } else { $dskOuter.Panel1Collapsed = $true }
   # the infrastructure too: the menu shows its problems on any page
@@ -5479,4 +5634,5 @@ if ($env:OTR_MANAGER_SCREENSHOT) {   # test: draws the window into a PNG instead
     $bmp.Save($env:OTR_MANAGER_SCREENSHOT, [System.Drawing.Imaging.ImageFormat]::Png)
   } catch { [Console]::Error.WriteLine("screenshot failed: $($_.Exception.Message) (line $($_.InvocationInfo.ScriptLineNumber))") } finally { $form.Close() } })
 }
+Write-Trace 'window built'
 [void]$form.ShowDialog()

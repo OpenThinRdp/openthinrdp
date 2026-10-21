@@ -296,6 +296,21 @@ try {
   ok 'as text: stored form, new password, unknown key a warning' { -not $p.Errors.Count -and ($p.Lines -contains 'USB_MODE=disks') -and ($p.Lines -contains 'MGMT_PASSWORD=New2') -and $p.Warnings.Count -eq 1 -and $p.Changes.Count -eq 3 }
   Save-ConfText $p
   ok 'as text: saved with its comments, the old file in config\backup' { (Read-Lines $script:CommonFile)[0] -eq '# all' -and (Read-ConfFile $script:CommonFile)['USB_MODE'] -eq 'disks' -and @(Get-ChildItem (Join-Path $tmp 'config\backup') -Filter 'text-test-*').Count -eq 1 }
+  # ---- groups: folders of the management folder; moving a device moves its file
+  New-DeviceGroup 'shop'
+  ok 'group: a folder with its _group.conf' { Test-Path (Join-Path (Get-GroupsDir) 'shop\_group.conf') }
+  ok 'group: a name with a slash refused, an existing one refused' { $a = try { New-DeviceGroup 'a/b'; $false } catch { $true }; $b = try { New-DeviceGroup 'shop'; $false } catch { $true }; $a -and $b }
+  [IO.File]::WriteAllText((Get-HostFile 'tc-g1'), "USB_MODE=disks`r`n")
+  Move-DeviceToGroup 'tc-g1' 'shop'
+  ok 'group: the file of the device moved into the folder, found there' { (Get-HostFile 'tc-g1') -like '*\groups\shop\tc-g1.conf' -and -not (Test-Path (Join-Path $script:ConfigDir 'tc-g1.conf')) -and (Read-ConfFile (Get-HostFile 'tc-g1'))['USB_MODE'] -eq 'disks' }
+  Move-DeviceToGroup 'tc-g2' 'shop'
+  ok 'group: a device without a file gets one in the folder' { Test-Path (Join-Path (Get-GroupsDir) 'shop\tc-g2.conf') }
+  ok 'group: not deleted while it has devices' { try { Remove-DeviceGroup 'shop'; $false } catch { $true } }
+  Move-DeviceToGroup 'tc-g1' ''; Move-DeviceToGroup 'tc-g2' ''
+  ok 'group: back to no group, the exceptions kept, an empty file not left' { (Read-ConfFile (Join-Path $script:ConfigDir 'tc-g1.conf'))['USB_MODE'] -eq 'disks' -and -not (Test-Path (Join-Path $script:ConfigDir 'tc-g2.conf')) }
+  Remove-DeviceGroup 'shop'
+  ok 'group: an empty group deleted' { -not (Test-Path (Join-Path (Get-GroupsDir) 'shop')) }
+  Remove-Item (Join-Path $script:ConfigDir 'tc-g1.conf') -ErrorAction SilentlyContinue
   # ---- power of a device: the Wake-on-LAN packet and the broadcast of its network
   ok 'Wake-on-LAN: 6 x FF and the MAC 16 times; no packet without a MAC' { $wp = Get-WolPacket 'c0:25:a5:b3:a9:8e'; $wp.Length -eq 102 -and $wp[5] -eq 255 -and $wp[6] -eq 0xC0 -and $wp[101] -eq 0x8E -and -not (Get-WolPacket 'none') }
   ok 'Wake-on-LAN: the broadcast of the network the device reported (/23, /24)' { (Get-Broadcast '192.168.0.37/23') -eq '192.168.1.255' -and (Get-Broadcast '10.1.2.3/24') -eq '10.1.2.255' -and -not (Get-Broadcast 'none') }

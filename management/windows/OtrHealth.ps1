@@ -28,7 +28,7 @@
 # seconds); this waits at most $ms.
 # ---------------------------------------------------------------------------------------------
 if (-not ('OtrHealthNet' -as [type])) {
-  Add-Type -TypeDefinition @'
+  Add-OtrType -TypeDefinition @'
 using System;
 using System.IO;
 using System.Threading.Tasks;

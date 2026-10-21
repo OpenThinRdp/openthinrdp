@@ -177,6 +177,17 @@ printf 'HOSTNAME=kiosk-test\r\n' > $OTR_LIB/central-host.conf
 $OTR/central-apply.sh
 ok "host file may set HOSTNAME" 'grep -q "^applied" $OTR_LIB/central-status'
 
+# --- the group layer: between common.conf and the file of the device; it may not set what identifies a device
+printf 'USB_MODE=all\r\nSHUTDOWN_SECS=45\r\nHOSTNAME=from-group\r\nDEVICE_GROUP=other\r\n' > $OTR_LIB/central-group.conf
+printf 'HOSTNAME=kiosk-test\r\nSHUTDOWN_SECS=50\r\n' > $OTR_LIB/central-host.conf
+$OTR/central-apply.sh
+ok "group: its values win over common.conf" 'grep -qx "USB_MODE=all" $OTR_CONF'
+ok "group: the file of the device wins over the group" 'grep -qx "SHUTDOWN_SECS=50" $OTR_CONF'
+ok "group: may not set HOSTNAME or DEVICE_GROUP" '[ "$(hostname)" != from-group ] && ! grep -q "^DEVICE_GROUP=other" $OTR_CONF'
+rm -f $OTR_LIB/central-group.conf; printf 'HOSTNAME=kiosk-test\r\n' > $OTR_LIB/central-host.conf; $OTR/central-apply.sh
+ok "group: removed, its keys go back to common.conf" 'grep -qx "USB_MODE=disks" $OTR_CONF'
+ok "DEVICE_GROUP: a name, nothing else" 'check x "DEVICE_GROUP=shop-1" && ! check x "DEVICE_GROUP=a/b"'
+
 # --- central values win over local changes; keys removed centrally go back to the defaults
 : > $OTR_LIB/central-host.conf
 printf 'USB_MODE=disks\nNTP=a.example.com\n' > $OTR_LIB/central-common.conf
