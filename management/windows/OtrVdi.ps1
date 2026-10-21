@@ -510,10 +510,6 @@ function Get-VdiSignIn($events) {
   }
   $r
 }
-# index of an array of objects by a property, upper case
-function Get-VdiIndex($items, [string]$prop) {
-  $h = @{}; foreach ($i in @($items)) { if ($i -and $i.$prop) { $k = ([string]$i.$prop).ToUpper(); if (-not $h.ContainsKey($k)) { $h[$k] = $i } } }; $h
-}
 function Get-VdiSvcState($obj, [string]$name) { $s = @($obj.Services | Where-Object { $_.Name -eq $name }) | Select-Object -First 1; if ($s) { [string]$s.State } else { '' } }
 # a broker that fails every request: since the count started at least two failures and no more successes than
 # failures, or its last requests (two or three) all failed after a good morning
