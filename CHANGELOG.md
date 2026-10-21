@@ -3,6 +3,19 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.2.9 (2026-10-21)
+
+- **Groups of devices, as folders of the management folder.** `config\groups\<group>\_group.conf` holds the settings
+  of a group (between `common.conf` and each device); the files of its devices sit next to it, so the folder a file
+  is in is the group of the device, and moving the file moves the device. Devices with different accounts, or the
+  same one, in as many groups as you like. The manager shows the devices in collapsible groups, creates and deletes
+  groups, and moves a device to another group (its file moves in the share).
+- **A renamed device just gets its new name**: no empty file of its own is left behind, and it stays in its group.
+- **A faster manager.** The vault opens in 0.2 s instead of 2.4 s after the access code (the PBKDF2 of Windows,
+  the same keys); its C# is compiled once and kept, so it loads in half the time; and while the Health Center reads
+  the servers it no longer stops the window when its page is not open.
+- 0.2.8 (hardware test, package list) was not published on its own: it is part of this release, with the new ISO.
+
 ## 0.2.8 (2026-10-21)
 
 - **Hardware test.** The live system tests the device at its first start, and any device does from Diagnostics
@@ -11,7 +24,7 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
   project* opens a ready-made hardware report on GitHub, sent with your own account; nothing in it identifies the
   device or the network (no name, address, MAC or serial number, checked by the tests).
 - **The package list of every ISO** (`openthinrdp-<version>.packages.txt`), name and version of each package.
-- **New ISO 0.2.8**: the licence (GPLv3), the folder from the domain and the hardware test from the first start.
+- **New ISO**: the licence (GPLv3), the folder from the domain and the hardware test from the first start (built as 0.2.9).
 
 ## 0.2.7 (2026-10-21)
 
