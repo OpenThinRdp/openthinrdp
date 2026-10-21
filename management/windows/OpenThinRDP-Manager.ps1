@@ -2751,7 +2751,32 @@ $list.add_ColumnClick({ param($s, $e)
 Show-SortMark
 $lblListNote = New-Label (Get-Text 'NoteDevices') $fontSmall $Theme.Muted; $lblListNote.AutoSize = $false; $lblListNote.Dock = 'Bottom'; $lblListNote.Height = 46
 $lblListNote.Padding = New-Object System.Windows.Forms.Padding(10, 6, 10, 4); $lblListNote.BackColor = $Theme.Card
-$listCard.Controls.Add($list); $listCard.Controls.Add($lblListNote); $listCard.Controls.Add($listTop)
+# The devices as a tree, as in the Health Center: the site, its groups, the devices, each with the dot of its state (a
+# group: the worst of its devices). $list stays behind it, unseen: search, order and the refresh work on it as before.
+$tvDev = New-Object System.Windows.Forms.TreeView
+$tvDev.Dock = 'Fill'; $tvDev.BorderStyle = 'None'; $tvDev.Font = $fontBase; $tvDev.HideSelection = $false; $tvDev.FullRowSelect = $true; $tvDev.ShowLines = $false
+$tvDev.ItemHeight = 26; $tvDev.ShowNodeToolTips = $true; $tvDev.BackColor = $Theme.Card; $tvDev.ForeColor = $Theme.Text
+$imgDevDots = New-Object System.Windows.Forms.ImageList; $imgDevDots.ColorDepth = 'Depth32Bit'; $imgDevDots.ImageSize = New-Object System.Drawing.Size(16, 22)
+foreach ($k in @('ok', 'off', 'error', 'warn', 'info')) { $imgDevDots.Images.Add($k, (New-Dot $script:KindColor[$k] 16 22)) }
+$tvDev.ImageList = $imgDevDots
+$tvDev.add_AfterSelect({ param($s, $e) if (-not $script:Listing) { Show-TreeNode $e.Node } })
+# the site (Tag '') or a group (its name): its settings in place of the device; a device: its settings as before
+function Show-TreeNode($node) {
+  if (-not $node) { return }
+  if ($node.Tag -is [string]) {
+    $script:ScopeGroup = $node.Tag
+    $lblScope.Text = if ($node.Tag) { Get-Text 'ScopeGroup' $node.Tag (Get-SiteName) } else { Get-Text 'ScopeSite' (Get-SiteName) }
+    $lblComNote.Text = if ($node.Tag) { Get-Text 'ScopeGroupNote' (Get-SiteName) } else { Get-Text 'PageCommonNote' (Get-Text 'ColManagedHere') }
+    $gridCom.Columns[1].HeaderText = if ($node.Tag) { Get-Text 'ColValueGroup' } else { Get-Text 'ColValueAll' }
+    $btnBrandCom.Visible = -not $node.Tag
+    Update-CommonGrid; $devCard.Visible = $false; $scopeWrap.Visible = $true; $scopeWrap.BringToFront()
+  } else {
+    $script:ScopeGroup = ''; $scopeWrap.Visible = $false; $devCard.Visible = $true; $devCard.BringToFront(); Show-Device $node.Tag
+  }
+}
+$tvDev.add_NodeMouseClick({ param($s, $e) if ($e.Button -eq 'Right') { $tvDev.SelectedNode = $e.Node } })
+function Get-WorstKind($kinds) { foreach ($k in 'error', 'warn', 'ok', 'info') { if (@($kinds) -contains $k) { return $k } }; 'off' }
+$listCard.Controls.Add($tvDev); $listCard.Controls.Add($lblListNote); $listCard.Controls.Add($listTop)
 $split.Panel1.Controls.Add($listCard)
 
 # selected device: header (name, state, address, version, last report, session) with its actions
@@ -2920,10 +2945,15 @@ $setTabs = New-Object System.Windows.Forms.TabControl
 $setTabs.Dock = 'Fill'; $setTabs.Padding = New-Object System.Drawing.Point(16, 6); $setTabs.Font = $fontBase
 $tabSetDevices = New-Object System.Windows.Forms.TabPage (Get-Text 'SetTabDevices'); $tabSetHealth = New-Object System.Windows.Forms.TabPage (Get-Text 'SetTabHealth')
 $tabSetManager = New-Object System.Windows.Forms.TabPage (Get-Text 'SetTabManager'); $tabSetCustom = New-Object System.Windows.Forms.TabPage (Get-Text 'SetTabCustom')
-foreach ($tp in @($tabSetDevices, $tabSetHealth, $tabSetManager, $tabSetCustom)) { $tp.BackColor = $Theme.Page; $tp.Padding = New-Object System.Windows.Forms.Padding(0, 10, 0, 0); [void]$setTabs.TabPages.Add($tp) }
+foreach ($tp in @($tabSetHealth, $tabSetManager, $tabSetCustom)) { $tp.BackColor = $Theme.Page; $tp.Padding = New-Object System.Windows.Forms.Padding(0, 10, 0, 0); [void]$setTabs.TabPages.Add($tp) }
 $comWrap.Padding = New-Object System.Windows.Forms.Padding(0)
 $lblComNote = New-Label (Get-Text 'PageCommonNote' (Get-Text 'ColManagedHere')) $fontBase $Theme.Muted; $lblComNote.AutoSize = $false; $lblComNote.Dock = 'Top'; $lblComNote.Height = 48
-$tabSetDevices.Controls.Add($comWrap); $tabSetDevices.Controls.Add($lblComNote)
+# the settings of the site and of each group: in the devices page, when the site or a group is selected in the tree
+$lblScope = New-Label '' $fontBold $Theme.Text; $lblScope.AutoSize = $false; $lblScope.Dock = 'Top'; $lblScope.Height = 34; $lblScope.Padding = New-Object System.Windows.Forms.Padding(14, 10, 14, 0)
+$lblComNote.Padding = New-Object System.Windows.Forms.Padding(14, 2, 14, 0)
+$scopeWrap = New-Panel 'Fill' $Theme.Card; Add-Line $scopeWrap 'Box'; $scopeWrap.Padding = New-Object System.Windows.Forms.Padding(1); $scopeWrap.Visible = $false
+$scopeWrap.Controls.Add($comWrap); $scopeWrap.Controls.Add($lblComNote); $scopeWrap.Controls.Add($lblScope)
+$split.Panel2.Controls.Add($scopeWrap)
 $setWrap = New-Panel 'Fill' $Theme.Page; $setWrap.Padding = New-Object System.Windows.Forms.Padding(12, 0, 12, 12); $setWrap.Controls.Add($setTabs)
 $pageCommon.Controls.Add($setWrap); $pageCommon.Controls.Add((New-PageHeader (Get-Text 'NavCommon') (Get-Text 'PageSettingsNote')))
 
@@ -3550,26 +3580,33 @@ function Update-DeviceList {
     [void]$list.Items.Add($it)
     if ($d.File -eq $sel) { $it.Selected = $true; $script:Selected = $d }
   }
-  # groups of devices, always: the site first (the devices in no group), then its groups, each a collapsible header
-  # (name, devices, how many to look at), kept from one refresh to the next so a collapsed group stays collapsed
-  $site = Get-SiteName
-  $names = @(@(Get-Groups) + @($script:Devices | ForEach-Object Group | Where-Object { $_ }) | Sort-Object -Unique)
-  $list.ShowGroups = $true
-  if (-not $script:LvGroups) { $script:LvGroups = @{} }
-  foreach ($n in @('') + $names) {
-    $g = $script:LvGroups[$n]
-    if (-not $g) { $g = New-Object System.Windows.Forms.ListViewGroup("g:$n", $n); $g.Tag = $n; [void]$list.Groups.Add($g); $script:LvGroups[$n] = $g }
-    $ds = @($script:Devices | Where-Object { [string]$_.Group -eq $n })
-    $bad = @($ds | Where-Object { $_.Kind -in 'error', 'warn' }).Count
-    $label = if ($n) { "$site  $([char]0x203A)  $n" } else { $site }
-    $g.Header = Get-Text 'GroupHeader' $label $ds.Count $(if ($bad) { Get-Text 'GroupHeaderBad' $bad } else { '' })
-  }
-  foreach ($it in $list.Items) { $it.Group = $script:LvGroups[[string]$it.Tag.Group] }
-  foreach ($g in @($list.Groups)) {
-    try { [OtrNative]::Collapsible($list.Handle, [int]$g.GetType().GetProperty('ID', [Reflection.BindingFlags]'NonPublic,Instance').GetValue($g)) } catch { }
-  }
   $list.Sort()
   $list.EndUpdate()
+  # the tree, from the list (search and order already applied): the site with the devices in no group, its groups
+  # (empty ones too: a device can be dragged onto them), the devices; what was open or closed stays as it was
+  $site = Get-SiteName; $open = @{}
+  foreach ($n in $tvDev.Nodes) { $open["$($n.Tag)"] = $n.IsExpanded; foreach ($c in $n.Nodes) { if ($c.Tag -is [string]) { $open[$c.Tag] = $c.IsExpanded } } }
+  $tvDev.BeginUpdate(); $tvDev.Nodes.Clear()
+  $root = $tvDev.Nodes.Add('site', $site); $root.Tag = ''
+  $gn = [ordered]@{}
+  foreach ($g in (@(Get-Groups) + @($script:Devices | ForEach-Object Group | Where-Object { $_ }) | Sort-Object -Unique)) { $x = $root.Nodes.Add("g:$g", $g); $x.Tag = [string]$g; $gn[$g] = $x }
+  $selNode = $null
+  foreach ($it in $list.Items) {
+    $d = $it.Tag; $p = if ($d.Group -and $gn.Contains($d.Group)) { $gn[$d.Group] } else { $root }
+    $dn = $p.Nodes.Add($d.Name, ((@($d.Name, $d.State, $it.SubItems[2].Text, $it.SubItems[3].Text) | Where-Object { $_ }) -join "  $([char]0x00B7)  "))
+    $dn.Tag = $d; $dn.ImageKey = $d.Kind; $dn.SelectedImageKey = $d.Kind; $dn.ToolTipText = $it.ToolTipText
+    if ($script:Selected -and $d.File -eq $script:Selected.File) { $selNode = $dn }
+    if (-not $script:Selected -and -not $selNode) { $selNode = $dn }       # nothing selected yet: the first device
+  }
+  # each group with its dot (the worst state of its devices), how many devices, how many to look at
+  $fill = { param($x, $ds, $label)
+    $kd = Get-WorstKind @($ds | ForEach-Object Kind); $bad = @($ds | Where-Object { $_.Kind -in 'error', 'warn' }).Count
+    $x.Text = Get-Text 'GroupHeader' $label $ds.Count $(if ($bad) { Get-Text 'GroupHeaderBad' $bad } else { '' }); $x.ImageKey = $kd; $x.SelectedImageKey = $kd }
+  & $fill $root @($script:Devices) $site
+  foreach ($g in @($gn.Keys)) { & $fill $gn[$g] @($script:Devices | Where-Object { $_.Group -eq $g }) $g }
+  foreach ($x in @($root) + @($gn.Values)) { $key = [string]$x.Tag; if (-not $open.ContainsKey($key) -or $open[$key]) { $x.Expand() } }
+  if ($selNode) { $tvDev.SelectedNode = $selNode }
+  $tvDev.EndUpdate()
   $script:Listing = $false
   if ($list.SelectedItems.Count) { $list.SelectedItems[0].EnsureVisible() }
   $on = @($script:Devices | Where-Object { $_.Minutes -le $script:StaleMinutes }).Count
@@ -3726,9 +3763,12 @@ function Update-DeviceGrid {
 
 function Update-CommonGrid {
   $script:Loading = $true
-  $common = Read-ConfFile $script:CommonFile
+  $cf = if ($script:ScopeGroup) { Join-Path (Join-Path (Get-GroupsDir) $script:ScopeGroup) '_group.conf' } else { $script:CommonFile }
+  $common = Read-ConfFile $cf
+  # a group: what it does not set comes from the site (shown, not highlighted: valid from the site down)
+  $site = if ($script:ScopeGroup) { Read-ConfFile $script:CommonFile } else { @{} }
   $commented = @{}
-  foreach ($l in (Read-Lines $script:CommonFile)) { if ($l -cmatch '^\s*#\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*?)\s*$') { $commented[$Matches[1]] = $Matches[2] } }
+  foreach ($l in (Read-Lines $cf)) { if ($l -cmatch '^\s*#\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*?)\s*$') { $commented[$Matches[1]] = $Matches[2] } }
   $gridCom.Rows.Clear(); $section = $null
   foreach ($s in @($script:Settings | Where-Object { -not $_.HostOnly })) {
     if ($s.Section -ne $section) { $section = $s.Section; Add-SectionRow $gridCom $section 2 }
@@ -3736,7 +3776,7 @@ function Update-CommonGrid {
     $r.Cells[0].Value = $s.Label
     # value proposed when the key is not managed yet: the commented line, else the first device that
     # reports it, else the project default
-    $v = if ($common.Contains($s.Key)) { $common[$s.Key] } elseif ($commented.ContainsKey($s.Key)) { $commented[$s.Key] } else {
+    $v = if ($common.Contains($s.Key)) { $common[$s.Key] } elseif ($site.Contains($s.Key)) { $site[$s.Key] } elseif ($commented.ContainsKey($s.Key)) { $commented[$s.Key] } else {
       $dd = $script:Devices | Where-Object { $null -ne $_.S["CFG_$($s.Key)"] } | Select-Object -First 1
       if ($dd) { $dd.S["CFG_$($s.Key)"] } else { $s.Default } }
     if ($s.Key -eq 'WIFI_PSK') { $v = if ($common.Contains('WIFI_PSK')) { $script:MarkSaved } else { '' } }
@@ -3783,6 +3823,17 @@ function Clear-Device {
 }
 
 function Save-Common {
+  # a group: the same checks as common.conf, on the file of the group
+  if ($script:ScopeGroup) {
+    $keep = $script:CommonFile, $script:CommonHeader
+    $script:CommonFile = Join-Path (Join-Path (Get-GroupsDir) $script:ScopeGroup) '_group.conf'
+    $script:CommonHeader = @("# Settings for the devices of the group $($script:ScopeGroup) (written by the OpenThinRDP manager).", '')
+    try { Save-CommonScope } finally { $script:CommonFile, $script:CommonHeader = $keep }
+    return
+  }
+  Save-CommonScope
+}
+function Save-CommonScope {
   [void]$gridCom.EndEdit()
   $plan = Get-CommonSavePlan (Get-GridValues $gridCom 1 2) $script:Devices
   if ($plan.Errors.Count) { Show-Message (Get-Text 'MsgInvalidTitle') ((Get-Text 'MsgNotSaved') + "`r`n`r`n- " + ($plan.Errors -join "`r`n- ")); return }
@@ -5514,7 +5565,7 @@ $btnReloadDev.add_Click({ Update-DeviceGrid })
 $btnClearDev.add_Click({ Clear-Device })
 $btnSaveCom.add_Click({ Save-Common })
 $btnTextDev.add_Click({ if ($script:Selected) { Show-ConfTextDialog $script:Selected } })
-$btnTextCom.add_Click({ Show-ConfTextDialog $null })
+$btnTextCom.add_Click({ if ($script:ScopeGroup) { Show-GroupTextDialog $script:ScopeGroup } else { Show-ConfTextDialog $null } })
 # Groups: folders of the management folder (config\groups\<group>), each with its settings and the files of its devices
 function Show-GroupsDialog {
   $dlg = New-Object System.Windows.Forms.Form; Set-WindowIcon $dlg
@@ -5566,7 +5617,15 @@ $miNewGroup.add_Click({ Add-Type -AssemblyName Microsoft.VisualBasic
   # the selected device goes in at once: an empty group has no header to drop on
   if ($script:Selected -and (Confirm-Action (Get-Text 'GroupsTitle') (Get-Text 'GroupMoveNew' $script:Selected.Name $g.Trim()))) { Move-ListDevice $script:Selected $g.Trim() } else { Update-DeviceList } })
 $miGroups.add_Click({ Show-GroupsDialog })
-$list.ContextMenuStrip = $mnuList
+$list.ContextMenuStrip = $mnuList; $tvDev.ContextMenuStrip = $mnuList
+# drag a device onto the site or a group (empty ones too): its file moves in the share
+$tvDev.AllowDrop = $true
+$tvDev.add_ItemDrag({ param($s, $e) if ($e.Item.Tag -isnot [string]) { [void]$tvDev.DoDragDrop($e.Item, [System.Windows.Forms.DragDropEffects]::Move) } })
+$tvDev.add_DragOver({ param($s, $e) $e.Effect = [System.Windows.Forms.DragDropEffects]::Move })
+$tvDev.add_DragDrop({ param($s, $e)
+  $src = $e.Data.GetData([System.Windows.Forms.TreeNode]); if (-not $src) { return }
+  $t = $tvDev.GetNodeAt($tvDev.PointToClient((New-Object System.Drawing.Point($e.X, $e.Y)))); if (-not $t) { return }
+  Move-ListDevice $src.Tag $(if ($t.Tag -is [string]) { $t.Tag } else { [string]$t.Tag.Group }) })
 # drag a device onto a group: the group of the device under the drop, or of the first one below the header dropped on
 $list.AllowDrop = $true
 $list.add_ItemDrag({ param($s, $e) [void]$list.DoDragDrop($e.Item, [System.Windows.Forms.DragDropEffects]::Move) })
@@ -5635,7 +5694,7 @@ $form.add_Shown({
   if ($script:VdiLoaded) { Start-VdiRefresh; $vdiTimer.Start() } else { $dskOuter.Panel1Collapsed = $true }
   # the infrastructure too: the menu shows its problems on any page
   if ($script:HealthLoaded) { Start-HealthRefresh; $hcTimer.Start() } else { Update-HealthView }
-  if ($list.Items.Count) { $list.Items[0].Selected = $true } else { Show-Device $null }
+  if ($tvDev.SelectedNode -and $tvDev.SelectedNode.Tag -isnot [string]) { Show-Device $tvDev.SelectedNode.Tag } else { Show-Device $null }
   $timer.Start()
   # the access code at every start: the vault opened, or created the first time (both can be skipped)
   if ($env:OTR_MANAGER_SCREENSHOT) { if ($env:OTR_MANAGER_VAULT_CODE -and (Test-VaultFile)) { [void](Open-Vault $env:OTR_MANAGER_VAULT_CODE) } }
@@ -5653,6 +5712,8 @@ if ($env:OTR_MANAGER_SCREENSHOT) {   # test: draws the window into a PNG instead
   # an error must close the window and be reported: nobody is there to close it
   $form.add_Shown({ try {
     if ($env:OTR_MANAGER_DEVICE) { foreach ($it in $list.Items) { if ($it.Text -eq $env:OTR_MANAGER_DEVICE) { $it.Selected = $true } } }
+    # OTR_MANAGER_TREE = a node of the device tree to select: site, or g:<group>
+    if ($env:OTR_MANAGER_TREE) { $tn = @($tvDev.Nodes.Find($env:OTR_MANAGER_TREE, $true)) | Select-Object -First 1; if ($tn) { $tvDev.SelectedNode = $tn; Show-TreeNode $tn } }
     # the servers read in the background (without OTR_MANAGER_VDI_DEMO): waited for, at most 120 s
     if ($script:VdiLoaded) { $t0 = Get-Date
       # and the automatic repairs of the Health Center (in repair mode), with the reading that follows them
