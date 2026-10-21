@@ -5,6 +5,11 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
 
 ## Unreleased
 
+- **The Health Center reads in 25 seconds instead of 60**: the hosts, the domain controllers and the other servers are
+  asked together, and SQL Server is read while they answer. The same checks with the same results (compared check
+  by check on a real site).
+- **Leftovers of earlier versions removed from the manager**: 44 texts no window used any more, a function never
+  called, a settings tab built and never shown, values assigned and never read.
 - **A fault that is over gives no warning any more**: critical events and errors of the RDVH agent warn only while
   they go on (the last one within the hour); a broker silent for more than an hour is the row of a broker that is
   gone, not a third broker. A file share witness down for five hours had kept four servers yellow for the next 24.

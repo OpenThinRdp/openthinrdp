@@ -2088,7 +2088,7 @@ function Start-LocalCopySync([string]$from, [string]$to) {
   if ($script:LocalSync -and -not $script:LocalSync.Handle.IsCompleted) { return $false }
   $ps = [powershell]::Create().AddScript({ param($a, $to, $from)
     if (-not (Test-Path -LiteralPath $to)) { New-Item -ItemType Directory -Path $to -Force | Out-Null }
-    $out = & robocopy.exe @a 2>&1
+    $null = & robocopy.exe @a 2>&1
     if ($LASTEXITCODE -lt 8) { [IO.File]::WriteAllText((Join-Path $to 'local-copy.txt'), "$((Get-Date).ToString('yyyy-MM-dd HH:mm')) <- $from") }
     $LASTEXITCODE }).AddArgument((Get-LocalCopyArgs $from $to)).AddArgument($to).AddArgument($from)
   $script:LocalSync = @{ Ps = $ps; Handle = $ps.BeginInvoke() }
@@ -2982,7 +2982,7 @@ $comCard.Controls.Add($gridCom); $comCard.Controls.Add($filterCom); $comCard.Con
 $comWrap.Controls.Add($comCard)
 $setTabs = New-Object System.Windows.Forms.TabControl
 $setTabs.Dock = 'Fill'; $setTabs.Padding = New-Object System.Drawing.Point(16, 6); $setTabs.Font = $fontBase
-$tabSetDevices = New-Object System.Windows.Forms.TabPage (Get-Text 'SetTabDevices'); $tabSetHealth = New-Object System.Windows.Forms.TabPage (Get-Text 'SetTabHealth')
+$tabSetHealth = New-Object System.Windows.Forms.TabPage (Get-Text 'SetTabHealth')
 $tabSetManager = New-Object System.Windows.Forms.TabPage (Get-Text 'SetTabManager'); $tabSetCustom = New-Object System.Windows.Forms.TabPage (Get-Text 'SetTabCustom')
 foreach ($tp in @($tabSetHealth, $tabSetManager, $tabSetCustom)) { $tp.BackColor = $Theme.Page; $tp.Padding = New-Object System.Windows.Forms.Padding(0, 10, 0, 0); [void]$setTabs.TabPages.Add($tp) }
 $comWrap.Padding = New-Object System.Windows.Forms.Padding(0)
@@ -5272,7 +5272,7 @@ function Show-CustomCheckDialog($c) {
   $W = 760; $X0 = 170
   $dlg = New-Object System.Windows.Forms.Form; Set-WindowIcon $dlg
   $dlg.Text = Get-Text 'CustomDlgTitle'; $dlg.Font = $fontBase; $dlg.FormBorderStyle = 'FixedDialog'; $dlg.MaximizeBox = $false; $dlg.MinimizeBox = $false; $dlg.StartPosition = 'CenterParent'
-  $y = 14; $box = @{}
+  $y = 14
   $row = { param($key, $ctl, $h)
     $l = New-Object System.Windows.Forms.Label; $l.Text = Get-Text $key; $l.AutoSize = $true; $l.Location = New-Object System.Drawing.Point(14, ($script:CuY + 4)); $dlg.Controls.Add($l)
     $ctl.SetBounds($X0, $script:CuY, ($W - $X0 - 20), $h); $dlg.Controls.Add($ctl); $script:CuY += $h + 8 }
@@ -5734,7 +5734,7 @@ function Show-GroupsDialog {
   $lb = New-Object System.Windows.Forms.ListBox; $lb.SetBounds(14, 70, 440, 330); $lb.Font = $fontBase
   $fill = { $lb.Items.Clear(); foreach ($g in (Get-Groups)) { $n = @($script:Devices | Where-Object Group -eq $g).Count; [void]$lb.Items.Add((Get-Text 'GroupsItem' $g $n)) } }
   $name = { if ($lb.SelectedIndex -lt 0) { $null } else { (Get-Groups)[$lb.SelectedIndex] } }
-  $y = 70; $mk = { param($k) $b = New-Button $k 160 30; $b.Location = New-Object System.Drawing.Point(466, $script:GrY); $script:GrY += 38; $dlg.Controls.Add($b); $b }
+  $mk = { param($k) $b = New-Button $k 160 30; $b.Location = New-Object System.Drawing.Point(466, $script:GrY); $script:GrY += 38; $dlg.Controls.Add($b); $b }
   $script:GrY = 70
   $bNew = & $mk 'GroupsNew'; $bEdit = & $mk 'GroupsEdit'; $bDel = & $mk 'GroupsDelete'; $bClose = & $mk 'BtnClose'; $bClose.DialogResult = 'Cancel'; $dlg.CancelButton = $bClose
   $dlg.Controls.AddRange(@($hint, $lb))

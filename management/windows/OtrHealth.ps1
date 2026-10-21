@@ -377,6 +377,28 @@ $script:HealthProbe = {
     }
     @{ Res = $res; Fail = $fail }
   }
+  # The same as Invoke-Many in two halves: started now as a job, received when its step comes. The hosts, the
+  # domain controllers and the other servers are asked together (58 s one after the other, the time of the slowest
+  # together); what each step does with the answers does not change.
+  function Request-Many($computers, $sb, $argList) {
+    $computers = @($computers | Where-Object { $_ } | Select-Object -Unique)
+    $j = if ($computers.Count) { Invoke-Command -ComputerName $computers -ScriptBlock $sb -ArgumentList $argList -SessionOption $so -ThrottleLimit 24 -AsJob -ErrorAction SilentlyContinue }
+    @{ Job = $j; Computers = $computers }
+  }
+  function Receive-Many($s) {
+    $res = @{}; $fail = @{}
+    if (-not $s.Job) { return @{ Res = $res; Fail = $fail } }
+    [void](Wait-Job $s.Job -Timeout ([int]([int]$cfg.OperationMs / 1000) + 30))
+    $ev = $null
+    $out = @(Receive-Job $s.Job -ErrorAction SilentlyContinue -ErrorVariable ev)
+    foreach ($o in $out) { if ($o -and $o.PSComputerName) { $res[(Short $o.PSComputerName)] = $o } }
+    foreach ($e in @($ev)) {
+      $t = [string]$e.TargetObject; if (-not $t) { $t = [string]$e.CategoryInfo.TargetName }; if (-not $t) { continue }
+      $why = if ($e.FullyQualifiedErrorId -match 'AccessDenied') { 'denied' } else { (([string]$e.Exception.Message) -split "`n")[0].Trim() }
+      if (-not $res.ContainsKey((Short $t))) { $fail[(Short $t)] = $why }
+    }
+    @{ Res = $res; Fail = $fail }
+  }
   function Merge($list, $r, $names) {
     @(foreach ($k in $names.Keys) {
       $o = $r.Res[$k]
@@ -649,45 +671,19 @@ $r
     } catch { $domain = [pscustomobject]@{ Name = ''; Pdc = ''; Dcs = $dcs; Error = $_.Exception.GetBaseException().Message } }
   }
   $pdc = if ($domain) { [string]$domain.Pdc } else { '' }
-  Step 'hosts' @($cfg.Hosts).Count
-  # ---- 2. hosts, then the nodes their clusters name
+  # ---- the slow readings started together, each received at its step: the hosts, the domain controllers, the
+  # brokers and servers of the settings (a SQL replica only the listener names, a node only a cluster names, are
+  # asked at their own step). A name both broker and server is a broker, as in step 6.
   $hc = [ordered]@{}
   foreach ($h in @($cfg.Hosts)) { if ($h -and -not $hc.Contains((Short $h))) { $hc[(Short $h)] = $h } }
-  $hr = Invoke-Many @($hc.Values) $hostSb @($pdc)
-  if ($cfg.Cluster -ne 'no') {
-    $more = @()
-    foreach ($o in @($hr.Res.Values | Where-Object { $_.Cluster })) {
-      $nn = Invoke-Command -ComputerName $o.Fqdn -SessionOption $so -ErrorAction SilentlyContinue -ScriptBlock { @(Get-ClusterNode | ForEach-Object { "$($_.Name)" }) }
-      foreach ($n in @($nn)) { if ($n -and -not $hc.Contains((Short $n))) { $hc[(Short $n)] = $n; $more += $n } }
-    }
-    if ($more.Count) { $r2 = Invoke-Many $more $hostSb @($pdc); foreach ($k in $r2.Res.Keys) { $hr.Res[$k] = $r2.Res[$k] }; foreach ($k in $r2.Fail.Keys) { $hr.Fail[$k] = $r2.Fail[$k] } }
-  }
-  $hosts = @(Merge $null $hr $hc)
-  Step 'clusters'
-  # ---- 3. each cluster once, on its first node that answered
-  $clusters = @()
-  if ($cfg.Cluster -ne 'no') {
-    foreach ($g in @($hosts | Where-Object { $_.Reachable -and $_.Cluster } | Group-Object Cluster)) {
-      $node = $g.Group[0]
-      try { $c = Invoke-Command -ComputerName $node.Fqdn -ScriptBlock $clusterSb -SessionOption $so -ErrorAction Stop; $c | Add-Member -NotePropertyName Reachable -NotePropertyValue $true -Force; $clusters += $c }
-      catch { $clusters += [pscustomobject]@{ Name = $g.Name; Node = $node.Name; Reachable = $false; Error = (($_.Exception.Message) -split "`n")[0] } }
-    }
-  }
-  Step 'dcs' @($cfg.Dcs).Count
-  # ---- 4. domain controllers, then the other servers (brokers, SQL replicas): what every server tells about itself
-  $dr = Invoke-Many @($dcNames.Values) $dcSb @($pdc)
-  $dcsOut = @(Merge $null $dr $dcNames)
-  # the domain ports, from here: what the clients see
-  foreach ($x in $dcsOut) {
-    $ip = @($domain.Dcs | Where-Object { (Short $_.Name) -eq $x.Name } | ForEach-Object Ip) | Select-Object -First 1
-    $ports = [ordered]@{}; foreach ($p in 389, 88, 53, 445, 3268, 9389) { $ports["$p"] = [bool](Test-Tcp $(if ($ip) { $ip } else { $x.Fqdn }) $p 2000) }
-    $x | Add-Member -NotePropertyName Ports -NotePropertyValue ([pscustomobject]$ports) -Force; $x | Add-Member -NotePropertyName Ip -NotePropertyValue $ip -Force
-    # a real LDAP question to that DC, from here (open ports are not an answering directory)
-    $lq = $null; $lqErr = $null
-    try { $de = New-Object DirectoryServices.DirectoryEntry("LDAP://$($x.Fqdn)"); $ds = New-Object DirectoryServices.DirectorySearcher($de, '(objectClass=*)')
-      $ds.SearchScope = 'Base'; $ds.ClientTimeout = [TimeSpan]::FromSeconds(8); $lq = [bool]$ds.FindOne() } catch { $lq = $false; $lqErr = (("$($_.Exception.GetBaseException().Message)") -split "`n")[0] }
-    $x | Add-Member -NotePropertyName Ldap -NotePropertyValue $lq -Force; $x | Add-Member -NotePropertyName LdapError -NotePropertyValue $lqErr -Force
-  }
+  $early = [ordered]@{}; $earlyB = @()
+  foreach ($n in @($cfg.Brokers)) { $k = Short $n; if ($n -and -not $early.Contains($k) -and -not $hc.Contains($k) -and -not $dcNames.Contains($k)) { $early[$k] = $n; $earlyB += $n } }
+  foreach ($n in @($cfg.Servers)) { $k = Short $n; if ($n -and -not $early.Contains($k) -and -not $hc.Contains($k) -and -not $dcNames.Contains($k)) { $early[$k] = $n } }
+  $jHosts = Request-Many @($hc.Values) $hostSb @($pdc)
+  $jDcs = Request-Many @($dcNames.Values) $dcSb @($pdc)
+  $jBr = Request-Many $earlyB $brokerSb @($pdc)
+  $jSv = Request-Many @($early.Values | Where-Object { $earlyB -notcontains $_ }) $serverSb @($pdc)
+  # ---- SQL here, while the hosts, the domain controllers and the servers asked above answer (it needs none of them)
   # SQL Server, from here with the account of the manager (Windows authentication); a list of rows as plain objects
   function Invoke-Sql([string]$server, [string]$q, [bool]$listener = $false, [string]$db = 'master') {
     $cs = "Server=$server;Database=$db;Integrated Security=SSPI;Encrypt=False;Connect Timeout=8;Application Name=OpenThinRDP Manager" + $(if ($listener) { ';MultiSubnetFailover=True' } else { '' })
@@ -749,6 +745,43 @@ $r
     $first = @($sql.Nodes | Where-Object { @($_.Services).Count }) | Select-Object -First 1
     if ($first) { try { $sql.Cluster = Invoke-Command -ComputerName $first.Server -ScriptBlock $clusterSb -SessionOption $so -ErrorAction Stop } catch { } }
   }
+  Step 'hosts' @($cfg.Hosts).Count
+  # ---- 2. hosts, then the nodes their clusters name
+  $hr = Receive-Many $jHosts
+  if ($cfg.Cluster -ne 'no') {
+    $more = @()
+    foreach ($o in @($hr.Res.Values | Where-Object { $_.Cluster })) {
+      $nn = Invoke-Command -ComputerName $o.Fqdn -SessionOption $so -ErrorAction SilentlyContinue -ScriptBlock { @(Get-ClusterNode | ForEach-Object { "$($_.Name)" }) }
+      foreach ($n in @($nn)) { if ($n -and -not $hc.Contains((Short $n))) { $hc[(Short $n)] = $n; $more += $n } }
+    }
+    if ($more.Count) { $r2 = Invoke-Many $more $hostSb @($pdc); foreach ($k in $r2.Res.Keys) { $hr.Res[$k] = $r2.Res[$k] }; foreach ($k in $r2.Fail.Keys) { $hr.Fail[$k] = $r2.Fail[$k] } }
+  }
+  $hosts = @(Merge $null $hr $hc)
+  Step 'clusters'
+  # ---- 3. each cluster once, on its first node that answered
+  $clusters = @()
+  if ($cfg.Cluster -ne 'no') {
+    foreach ($g in @($hosts | Where-Object { $_.Reachable -and $_.Cluster } | Group-Object Cluster)) {
+      $node = $g.Group[0]
+      try { $c = Invoke-Command -ComputerName $node.Fqdn -ScriptBlock $clusterSb -SessionOption $so -ErrorAction Stop; $c | Add-Member -NotePropertyName Reachable -NotePropertyValue $true -Force; $clusters += $c }
+      catch { $clusters += [pscustomobject]@{ Name = $g.Name; Node = $node.Name; Reachable = $false; Error = (($_.Exception.Message) -split "`n")[0] } }
+    }
+  }
+  Step 'dcs' @($cfg.Dcs).Count
+  # ---- 4. domain controllers, then the other servers (brokers, SQL replicas): what every server tells about itself
+  $dr = Receive-Many $jDcs
+  $dcsOut = @(Merge $null $dr $dcNames)
+  # the domain ports, from here: what the clients see
+  foreach ($x in $dcsOut) {
+    $ip = @($domain.Dcs | Where-Object { (Short $_.Name) -eq $x.Name } | ForEach-Object Ip) | Select-Object -First 1
+    $ports = [ordered]@{}; foreach ($p in 389, 88, 53, 445, 3268, 9389) { $ports["$p"] = [bool](Test-Tcp $(if ($ip) { $ip } else { $x.Fqdn }) $p 2000) }
+    $x | Add-Member -NotePropertyName Ports -NotePropertyValue ([pscustomobject]$ports) -Force; $x | Add-Member -NotePropertyName Ip -NotePropertyValue $ip -Force
+    # a real LDAP question to that DC, from here (open ports are not an answering directory)
+    $lq = $null; $lqErr = $null
+    try { $de = New-Object DirectoryServices.DirectoryEntry("LDAP://$($x.Fqdn)"); $ds = New-Object DirectoryServices.DirectorySearcher($de, '(objectClass=*)')
+      $ds.SearchScope = 'Base'; $ds.ClientTimeout = [TimeSpan]::FromSeconds(8); $lq = [bool]$ds.FindOne() } catch { $lq = $false; $lqErr = (("$($_.Exception.GetBaseException().Message)") -split "`n")[0] }
+    $x | Add-Member -NotePropertyName Ldap -NotePropertyValue $lq -Force; $x | Add-Member -NotePropertyName LdapError -NotePropertyValue $lqErr -Force
+  }
   Step 'servers' (@($cfg.Servers).Count + @($cfg.Brokers).Count)
   # ---- 6. the other servers: every Windows server that answers gets what every server tells about itself. The
   # brokers (with their certificate and database), the SQL replicas, the server VMs of the hosts (their Windows says
@@ -759,8 +792,13 @@ $r
   $vmServers = @()
   foreach ($n in @($(if ($sql) { $sql.Nodes | ForEach-Object Server })) + @($cfg.Servers) + $vmServers) { $k = Short $n; if ($n -and -not $sv.Contains($k) -and -not $hc.Contains($k) -and -not $dcNames.Contains($k)) { $sv[$k] = $n } }
   $bOnly = [ordered]@{}; $sOnly = [ordered]@{}; foreach ($k in $sv.Keys) { if ($isBroker.ContainsKey($k)) { $bOnly[$k] = $sv[$k] } else { $sOnly[$k] = $sv[$k] } }
-  $br = Invoke-Many @($bOnly.Values) $brokerSb @($pdc)
-  $sr = Invoke-Many @($sOnly.Values) $serverSb @($pdc)
+  # asked with the hosts; the ones known only now (a SQL replica the listener named) asked now
+  $br = Receive-Many $jBr; $sr = Receive-Many $jSv
+  $askedB = @($jBr.Computers | ForEach-Object { Short $_ }); $askedS = @($jSv.Computers | ForEach-Object { Short $_ })
+  $lateB = @($bOnly.Keys | Where-Object { $askedB -notcontains $_ } | ForEach-Object { $bOnly[$_] })
+  $lateS = @($sOnly.Keys | Where-Object { $askedS -notcontains $_ } | ForEach-Object { $sOnly[$_] })
+  if ($lateB.Count) { $r2 = Invoke-Many $lateB $brokerSb @($pdc); foreach ($k in $r2.Res.Keys) { $br.Res[$k] = $r2.Res[$k] }; foreach ($k in $r2.Fail.Keys) { $br.Fail[$k] = $r2.Fail[$k] } }
+  if ($lateS.Count) { $r2 = Invoke-Many $lateS $serverSb @($pdc); foreach ($k in $r2.Res.Keys) { $sr.Res[$k] = $r2.Res[$k] }; foreach ($k in $r2.Fail.Keys) { $sr.Fail[$k] = $r2.Fail[$k] } }
   foreach ($k in $br.Res.Keys) { $sr.Res[$k] = $br.Res[$k] }; foreach ($k in $br.Fail.Keys) { $sr.Fail[$k] = $br.Fail[$k] }
   $servers = @(Merge $null $sr $sv)
   # RD Gateway and RD Web answer on 443, from here (what the clients from outside see)
