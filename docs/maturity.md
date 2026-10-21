@@ -14,11 +14,11 @@ and what is still missing. It is updated when something changes. What runs where
   and accept only that one (`UPDATE_KEY=site`), so a compromised GitHub account cannot reach its devices.
 - The keys of the manager live in an encrypted vault; device secrets (folder password, Wi-Fi key, SSH host keys) are
   kept in the TPM when there is one. The model and its known limits: [security.md](security.md).
+- The packages of an image (name and version) are published with every ISO (`openthinrdp-<version>.packages.txt`);
+  update packages change only OpenThinRDP and FreeRDP, Debian security updates come from Debian.
 
 **Not yet**
 - No independent security audit. We cannot provide one ourselves; reviews and reports are welcome.
-- No SBOM per release yet: the packages of an image are those of Debian 13 at build time plus FreeRDP, but the list
-  is not published with each release.
 
 ## Automated testing
 
@@ -49,7 +49,8 @@ laboratory, weighing stations, a wall screen on Wi-Fi). From the event logs the 
 | automatic reconnections | 57 |
 | starts of the kiosk | 261 |
 
-**Not yet**: months of data, and fleets other than ours. The numbers will be updated here as they grow; a fleet
+**Not yet**: months of data, and fleets other than ours; the hardware test of the live system (0.2.8) lets anyone
+send a hardware report from their own devices. The numbers will be updated here as they grow; a fleet
 report in the manager (uptime, failed updates, recovery times) is planned.
 
 ## Tests on a production device

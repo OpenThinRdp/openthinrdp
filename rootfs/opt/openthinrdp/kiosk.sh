@@ -531,11 +531,28 @@ diag_port(){ timeout 3 bash -c "</dev/tcp/$1/$2" 2>/dev/null && echo "$L_DIAG_OK
 diag_dialog(){
   local r=99
   if [ $GREETER = 1 ]; then
-    diag_text | ui text --heading="$(plain "$L_DIAG")" --text="$(plain "$L_DIAG_TEXT")" --t-close="$L_CLOSE"; r=${PIPESTATUS[1]}
+    diag_text | ui text --heading="$(plain "$L_DIAG")" --text="$(plain "$L_DIAG_TEXT")" --t-close="$L_CLOSE" --button="$L_TEST:20"; r=${PIPESTATUS[1]}
+    [ "$r" = 20 ] && { selftest_dialog; return; }
   fi
   # the earlier yad window when the screen of ui.py cannot open
   [ "$r" = 0 ] || diag_text | yad --text-info --wrap $IMG --title="$L_DIAG" --width=780 --height=540 --center --fontname="Monospace 10" \
           --text="$L_DIAG_TEXT" --button="$L_CLOSE:0" 2>/dev/null
+}
+# Hardware test (selftest.sh, as root): the report, and on request a hardware report on GitHub, filled in and
+# opened in the browser; the person sends it with their own GitHub account, nothing leaves the device by itself.
+selftest_dialog(){
+  local f=/run/openthinrdp-selftest.md rc
+  { echo 20; echo "# $L_TEST_RUN"; sudo -n "$OTR/selftest.sh" --save >/dev/null 2>&1; echo 100; } \
+    | ui message --progress --icon=busy --heading="$(plain "$L_TEST")" --text="$(plain "$L_TEST_RUN")"
+  [ -s $f ] || return 0
+  ui text --heading="$(plain "$L_TEST")" --text="$(plain "$L_TEST_TEXT")" --t-close="$L_CLOSE" --button="$L_TEST_SEND:21" < $f; rc=$?
+  [ "$rc" = 21 ] || return 0
+  local t b
+  t=$(printf 'Hardware report: %s %s' "$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)" "$(cat /sys/class/dmi/id/product_name 2>/dev/null)" \
+      | python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.stdin.read().strip()))')
+  b=$(head -c 6000 $f | python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.stdin.read()))')
+  ev "hardware report opened on GitHub to be sent"
+  "$OTR/browser.sh" kiosk "https://github.com/OpenThinRdp/openthinrdp/issues/new?labels=hardware-report&title=$t&body=$b"
 }
 diag_text(){
   . "$OTR/lib/netif.sh"
@@ -908,6 +925,8 @@ first_update(){
   wait_update
 }
 first_update
+# the live system (from the USB stick) tests the hardware at its first start: what anyone trying it wants to know
+otr_installed || [ -f /tmp/openthinrdp-selftest-shown ] || { : > /tmp/openthinrdp-selftest-shown; selftest_dialog; }
 
 # --- main loop ----------------------------------------------------------------------------------
 # first start: no broker yet -> the settings dialog opens by itself (it is the setup of a new device).

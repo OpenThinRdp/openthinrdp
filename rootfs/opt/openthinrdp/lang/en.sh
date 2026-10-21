@@ -284,3 +284,7 @@ V_SUPPORT="Support text contains characters that are not allowed (angle brackets
 V_LOGO="Logo: full path of a .png file"
 V_COLOR="Color not valid (#rrggbb):"
 V_PIN="SETTINGS_PIN_SHA256: 64 hexadecimal characters or empty"
+L_TEST="Hardware test"
+L_TEST_RUN="Testing the hardware and the network: a few seconds..."
+L_TEST_TEXT="What OpenThinRDP finds on this device. Nothing that identifies it or the network is in the report."
+L_TEST_SEND="Send to the OpenThinRDP project (GitHub)"

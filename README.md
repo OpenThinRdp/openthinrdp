@@ -157,6 +157,9 @@ What the device needs: [Requirements](#requirements).
 - **Settings dialog on the device** (optionally behind a PIN): broker or PC, network (DHCP, static, Wi-Fi),
   management folder and its account, USB mode, web button, power schedule, language. A new device names itself
   from its network card (`thinclient-1a2b3c`).
+- **Hardware test**: started by itself on the live system and from Diagnostics on any device, it checks processor,
+  memory, disk, graphics driver, missing firmware, network, sound, USB, TPM, Secure Boot and the remote desktop, and
+  can open a ready-made hardware report on GitHub (no name, address or serial number in it).
 - **Diagnostics for the help desk**, no PIN needed (the ℹ button): network, can each broker or PC be reached,
   time, management folder, last events. Read only.
 - **Locked down**: no desktop, no menus, no text consoles (Ctrl+Alt+F1..F12 do nothing), no password-less

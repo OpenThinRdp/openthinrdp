@@ -281,3 +281,7 @@ V_SUPPORT="Il testo dell'assistenza contiene caratteri non ammessi (parentesi an
 V_LOGO="Logo: percorso completo di un file .png"
 V_COLOR="Colore non valido (#rrggbb):"
 V_PIN="SETTINGS_PIN_SHA256: 64 caratteri esadecimali o vuoto"
+L_TEST="Test dell'hardware"
+L_TEST_RUN="Prova dell'hardware e della rete: qualche secondo..."
+L_TEST_TEXT="Cosa trova OpenThinRDP su questa postazione. Nel resoconto non c'è niente che la identifichi o identifichi la rete."
+L_TEST_SEND="Invia al progetto OpenThinRDP (GitHub)"

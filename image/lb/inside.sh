@@ -91,4 +91,7 @@ chmod +x config/hooks/normal/*.hook.chroot
 echo "=== lb build $(date)"
 lb build
 cp live-image-amd64.hybrid.iso /out/openthinrdp-$V.iso 2>/dev/null || cp openthinrdp*.iso /out/openthinrdp-$V.iso
+# the list of the packages of the image, published with each ISO (name and version, one per line)
+{ cp live-image-amd64.packages /out/openthinrdp-$V.packages.txt 2>/dev/null && [ -s /out/openthinrdp-$V.packages.txt ]; } \
+  || dpkg-query --admindir=chroot/var/lib/dpkg -W -f '${Package}\t${Version}\n' > /out/openthinrdp-$V.packages.txt
 cd /out && sha256sum openthinrdp-$V.iso > openthinrdp-$V.iso.sha256 && ls -lh
