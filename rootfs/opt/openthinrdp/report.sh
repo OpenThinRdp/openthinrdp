@@ -47,7 +47,9 @@ share_from_domain(){
 }
 if [ -z "$RS" ] && [ -f "$CRED" ]; then share_from_domain; RS=$(cat "$FROMDOM" 2>/dev/null); fi
 SHARE=$(echo "$RS" | tr '\\' '/')
-IPC=$(ip -4 -o addr show dev "$IF" 2>/dev/null | awk '{print $4}' | head -1)
+IPC=$(nic_ipv4 "$IF")
+# no address on the main adapter: the one of the default route (the device is reachable there)
+if [ -z "$IPC" ]; then R=$(route_nic); [ -n "$R" ] && IPC=$(nic_ipv4 "$R") && [ -n "$IPC" ] && IF=$R; fi
 # only an xfreerdp3 with /u: is a session (the kiosk also runs "xfreerdp3 --version")
 SU=""; for P in $(pgrep -x xfreerdp3); do
   SU=$(tr '\0' '\n' < "/proc/$P/cmdline" 2>/dev/null | sed -n 's#^/u:##p' | head -1); [ -n "$SU" ] && break; done

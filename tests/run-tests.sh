@@ -659,5 +659,13 @@ ok "usb-hold: only VID:PID ids are accepted" '! $OTR/usb-hold.sh hold "abcd:1234
 ok "usb-hold: a held entry that is not a hub port is never written" 'mkdir -p /tmp/x-port1; echo 1 > /tmp/x-port1/disable; printf "%s\n" /sys/devices/../../tmp/x-port1 /tmp/x-port1 > /run/openthinrdp-usb-held; $OTR/usb-hold.sh release && [ "$(cat /tmp/x-port1/disable)" = 1 ] && [ ! -e /run/openthinrdp-usb-held ]'
 ok "usb-hold: the kiosk may run it through sudo" 'grep -q "/opt/openthinrdp/usb-hold.sh" /etc/sudoers.d/openthinrdp'
 
+# #80: the address of the device comes from the default route when its main adapter has none
+. /opt/openthinrdp/lib/netif.sh
+RN=$(route_nic)
+ok "netif: route_nic names the adapter of the default route" '[ -z "$(ip -4 route show default)" ] || [ -n "$RN" ]'
+ok "netif: nic_ipv4 of that adapter is an IPv4 with prefix" '[ -z "$RN" ] || [[ $(nic_ipv4 "$RN") =~ ^[0-9]+(\.[0-9]+){3}/[0-9]+$ ]]'
+ok "netif: nic_ipv4 of a missing adapter is empty" '[ -z "$(nic_ipv4 nosuchnic0)" ]'
+ok "report: falls back to the route when the main adapter has no address" 'grep -q "IPC=\$(nic_ipv4 \"\$R\")" /opt/openthinrdp/report.sh'
+
 echo "passed $PASS, failed $FAIL"
 [ $FAIL = 0 ]

@@ -10,3 +10,8 @@ main_nic(){
   for i in $(wifi_nics); do ip -4 -o addr show dev "$i" 2>/dev/null | grep -q inet && { echo "$i"; return; }; done
   { wired_nics; wifi_nics; } | head -1
 }
+# The adapter the default route goes out of, and its IPv4 with the prefix: when the main adapter has no address
+# (a name outside en*/eth*/wl*, a bridge, an adapter that came up after another one), this is where the device
+# really is on the network
+route_nic(){ ip -4 route show default 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit }}'; }
+nic_ipv4(){ [ -n "$1" ] && ip -4 -o addr show dev "$1" scope global 2>/dev/null | awk '{print $4}' | head -1; }

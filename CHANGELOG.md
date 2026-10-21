@@ -5,6 +5,9 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
 
 ## Unreleased
 
+- **An address for every device that is on the network**: when its main adapter has no IPv4, a device reports the
+  address and adapter of its default route instead of `IP=none`; and for a report without an address the manager
+  looks the name of the device up in the DNS before saying it has none (remote screen, power and commands) (#80).
 - **The age of a device right in every time zone**: devices write the time of their report in UTC too
   (`UPDATED_UTC`), and the manager uses it. The ISO is built with `Etc/UTC`: a manager two hours east of UTC saw
   every device two hours old, as *off or offline* (#80).

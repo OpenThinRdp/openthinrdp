@@ -341,6 +341,10 @@ try {
   $st = @{ UPDATED = $nowUtc.AddHours(-7).ToString('yyyy-MM-dd HH:mm:ss'); UPDATED_UTC = $nowUtc.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'") }
   ok 'report time: UPDATED_UTC wins over the local time of the device' { [Math]::Abs(((Get-Date) - (Get-ReportTime $st)).TotalMinutes) -lt 2 }
   ok 'report time: without UPDATED_UTC the local time as before' { (Get-ReportTime @{ UPDATED = '2026-10-21 08:00:00' }) -eq [datetime]'2026-10-21 08:00:00' }
+  # #80: a report without an address (IP=none): the name of the device in the DNS
+  ok 'device address: the one of the report, without its prefix' { (Get-DeviceIp ([pscustomobject]@{ Name = 'x'; S = @{ IP = '10.1.2.3/24' } })) -eq '10.1.2.3' }
+  ok 'device address: IP=none falls back to the DNS name' { (Get-DeviceIp ([pscustomobject]@{ Name = 'localhost'; S = @{ IP = 'none' } })) -eq '127.0.0.1' }
+  ok 'device address: neither gives empty' { (Get-DeviceIp ([pscustomobject]@{ Name = 'no-such-device.invalid'; S = @{ IP = 'none' } })) -eq '' }
 } finally { Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue }
 
 Write-Host ''
