@@ -448,7 +448,7 @@ function Get-OtrBasics([string]$pdc, [bool]$isDc) {
   [pscustomobject]@{ Fqdn = $fqdn; Os = "$($os.Caption)"; Build = "$($os.BuildNumber)"; Gateway = $gw; RdWeb = $rw
     Ips = @(Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notmatch '^(127\.|169\.254\.)' } | ForEach-Object { [pscustomobject]@{ Ip = $_.IPAddress; Skip = [bool]$_.SkipAsSource } })
     MemTotalMB = [int]($os.TotalVisibleMemorySize / 1024); MemFreeMB = [int]($os.FreePhysicalMemory / 1024); Boot = Iso $os.LastBootUpTime
-    Disks = $disks; Stuck = $stuck; Failed = $failed; Reboot = $reboot; ErrorCount = $ev.Count; Critical = @($ev | Where-Object { $_.Level -eq 1 }).Count; Errors = $top
+    Disks = $disks; Stuck = $stuck; Failed = $failed; Reboot = $reboot; ErrorCount = $ev.Count; Critical = @($ev | Where-Object { $_.Level -eq 1 }).Count; CriticalLast = Iso (@($ev | Where-Object { $_.Level -eq 1 }) | Select-Object -First 1).TimeCreated; Errors = $top
     TimeSource = $src; Skew = $skew; SkewError = $skewErr; SecureChannel = $sc; Apipa = $apipa }
 }
 '@
@@ -945,7 +945,11 @@ function Add-HcBasics($n, $o, [string]$role, [datetime]$now, [string]$pdc, $dcs)
   $failed = @($o.Failed | Where-Object { $_ })
   if ($failed.Count) { [void](Add-HcCheck $n 'warn' 'Failed' @((($failed | Select-Object -First 6 | ForEach-Object { "$($_.Display) ($($_.Name))" }) -join ', ')) 'ServiceStart' $failed[0].Name) }
   if (@($o.Reboot).Count) { [void](Add-HcCheck $n 'warn' 'Reboot' @(((@($o.Reboot) | ForEach-Object { Get-Text "HcReboot_$_" }) -join ', ')) -why (Get-Text "HcW_Reboot_$role")) }
-  if ([int]$o.Critical -gt 0) { [void](Add-HcCheck $n 'warn' 'Critical' @([int]$o.Critical, ((@($o.Errors | Where-Object { [int]$_.Level -eq 1 } | Select-Object -First 2 | ForEach-Object { "$($_.Source) $($_.Id)" })) -join ', '))) }
+  # critical events: only while they go on. The last one more than an hour ago = over (a witness that came back, a
+  # restart already done): nothing to warn about, they stay in the errors of the day (a reading of before 0.2.12
+  # has no time: as before)
+  $cLast = ConvertFrom-VdiTime $o.CriticalLast
+  if ([int]$o.Critical -gt 0 -and (-not $cLast -or ($now - $cLast).TotalMinutes -le 60)) { [void](Add-HcCheck $n 'warn' 'Critical' @([int]$o.Critical, ((@($o.Errors | Where-Object { [int]$_.Level -eq 1 } | Select-Object -First 2 | ForEach-Object { "$($_.Source) $($_.Id)" })) -join ', '))) }
   if ([int]$o.ErrorCount -gt 0) {
     $top = @($o.Errors | Select-Object -First 3 | ForEach-Object { "$($_.Source) $($_.Id) x$($_.Count)" }) -join ', '
     Add-HcFact $n 'HcFErrors' (Get-Text 'HcErrorsDay' $o.ErrorCount $top)
@@ -1150,7 +1154,9 @@ function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
     # the RDVH agent: attaches that failed, and the maintenance restarts of the desktops (users cannot sign in to them
     # meanwhile)
     if ($h.PSObject.Properties['Agent'] -and $h.Agent) {
-      if ([int]$h.Agent.Failures -gt 0) { [void](Add-HcCheck $hn 'warn' 'AgentFails' @([int]$h.Agent.Failures, (Format-VdiClock (ConvertFrom-VdiTime $h.Agent.LastFailure) $now))) }
+      # errors of the agent: only while they go on (the last one within the hour), as the critical events
+      $aLast = ConvertFrom-VdiTime $h.Agent.LastFailure
+      if ([int]$h.Agent.Failures -gt 0 -and (-not $aLast -or ($now - $aLast).TotalMinutes -le 60)) { [void](Add-HcCheck $hn 'warn' 'AgentFails' @([int]$h.Agent.Failures, (Format-VdiClock (ConvertFrom-VdiTime $h.Agent.LastFailure) $now))) }
       $mt = @($h.Agent.Maintenance | Where-Object { $_ -and $_.Vm })
       if ($mt.Count) { [void](Add-HcCheck $hn 'info' 'AgentMaint' @($mt.Count, ((@($mt | Select-Object -Last 4 | ForEach-Object { "$($_.Vm) $(Format-VdiClock (ConvertFrom-VdiTime $_.Time) $now)$(if ($null -ne $_.Seconds) { " ($($_.Seconds) s)" })" })) -join ', '))) }
     }
@@ -1656,7 +1662,10 @@ function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
         Add-HcDone $bn 'RdsDb' @('RdsDbUnread', 'PhantomBroker')
         Add-HcFact $bn 'HcFRdsDb' "$($rdb.Server) / $($rdb.Database)"
         foreach ($row in @($rdb.Brokers | Where-Object { $_ -and $bNames -notcontains (Get-HcShort $_.Name) })) {
-          if ([int]$row.Minutes -le 15) { [void](Add-HcCheck $bn 'info' 'ThirdBroker' @($row.Name, [int]$row.Minutes)) } else { [void](Add-HcCheck $bn 'warn' 'PhantomBroker' @($row.Name, [int]$row.Minutes)) }
+          # silent for more than an hour: the row of a broker that is gone (removed from the farm), nobody sends it
+          # requests any more; not a fault going on
+          if ([int]$row.Minutes -le 15) { [void](Add-HcCheck $bn 'info' 'ThirdBroker' @($row.Name, [int]$row.Minutes)) }
+          elseif ([int]$row.Minutes -le 60) { [void](Add-HcCheck $bn 'warn' 'PhantomBroker' @($row.Name, [int]$row.Minutes)) }
         }
         $offNoIp = @($rdb.NoIp | Where-Object { $v = $m.Index["vm:$(([string]$_).ToUpper())"]; $v -and $v.Data.State -ne 'Running' })
         if ($offNoIp.Count) { [void](Add-HcCheck $bn 'info' 'NoIpOff' @($offNoIp.Count, (($offNoIp | Select-Object -First 8) -join ', '))) }

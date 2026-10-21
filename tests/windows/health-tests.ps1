@@ -347,6 +347,15 @@ try {
   $script:Text = Read-LanguageTexts $script:LangDir 'it'
   $mi = ConvertTo-HealthModel (Copy-Raw) $null $now $set
   ok 'the model in Italian' { $mi.Headline -match '^Problemi: 2, avvisi: 10:' -and @($mi.Index['vm:VM-CAROL'].Checks)[0].Title -eq 'Salvata con vTPM' -and @($mi.Index['host:HV2'].Facts | Where-Object { $_.Label -eq 'Memoria' }).Count }
+  # ---- a fault that is over gives no warning (the NAS witness down 11:34-16:57 kept four servers yellow for 24 h)
+  $tn = [datetime]'2026-10-21 22:00'
+  $basic = { param($last) $nd = [pscustomobject]@{ Id = 'host:T'; Checks = (New-Object System.Collections.ArrayList); Facts = (New-Object System.Collections.ArrayList); Done = @{} }
+    $o = [pscustomobject]@{ Reachable = $true; Critical = 64; CriticalLast = $last; ErrorCount = 64; Errors = @([pscustomobject]@{ Source = 'Microsoft-Windows-FailoverClustering'; Id = 1564; Count = 64; Level = 1; Text = 'witness' }) }
+    try { Add-HcBasics $nd $o 'server' $tn '' @() } catch { }
+    @($nd.Checks | Where-Object { $_.Id -eq 'Critical' -and $_.Kind -eq 'warn' }).Count }
+  ok 'critical events: the last one 5 hours ago, no warning' { (& $basic '2026-10-21T16:58:33') -eq 0 }
+  ok 'critical events: the last one 20 minutes ago, a warning' { (& $basic '2026-10-21T21:40:00') -eq 1 }
+  ok 'critical events: a reading without the time (older version), a warning as before' { (& $basic $null) -eq 1 }
   # ---- the areas of the settings: every check in exactly one, an area switched on has what it needs
   $allIds = @($script:Text.Keys | Where-Object { $_ -like 'HcT_*' } | ForEach-Object { $_.Substring(4) })
   $inAreas = @($script:HcAreas.Values | ForEach-Object { $_.Checks })
