@@ -4,6 +4,8 @@ OpenThinRDP is numbered 0.x, but it is not a prototype: it runs a company's whol
 This page says what is used in production, what is available but not exercised by that fleet, and what does
 not exist yet, so you know what to test before rolling it out.
 
+Is it ready for your production? Area by area, with the evidence and what is still missing: [maturity.md](maturity.md).
+
 ## The production fleet
 
 - **14 Dell OptiPlex 3000 Thin Clients** (BIOS 1.19 to 1.37) in offices, at the tills, in a laboratory and at
