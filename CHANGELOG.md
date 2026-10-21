@@ -3,6 +3,12 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## Unreleased
+
+- **A device before 0.2.9 is not moved into a group**: it looks for its file only in `config\`, so in a group it
+  lost the settings of its own (they went back to the defaults). The manager now refuses the move and says to update
+  the device first.
+
 ## 0.2.10 (2026-10-21)
 
 - **An address for every device that is on the network**: when its main adapter has no IPv4, a device reports the

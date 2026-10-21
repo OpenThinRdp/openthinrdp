@@ -2112,6 +2112,7 @@
   ErrGroupName           = 'Nome del gruppo: lettere, cifre, punto, trattino o trattino basso, al massimo 64.'
   ErrGroupExists         = 'Il gruppo {0} esiste già.'
   ErrGroupMissing        = 'Il gruppo {0} non esiste.'
+  ErrGroupOldVersion     = "{0} ha la versione {1}: legge la sua configurazione da un gruppo solo dalla 0.2.9. Aggiornatela prima (Aggiornamenti), poi spostatela: un file in un gruppo, per lei, non esiste e le sue impostazioni tornerebbero quelle di fabbrica."
   ErrGroupNotEmpty       = 'Il gruppo {0} ha ancora postazioni: prima spostale in un altro gruppo.'
   GroupHeader            = '{0}   {1} postazioni{2}'
   GroupHeaderBad         = ', {0} da guardare'

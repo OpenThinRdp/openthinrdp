@@ -2120,6 +2120,7 @@
   ErrGroupName           = 'A group name: letters, digits, dot, dash or underscore, at most 64.'
   ErrGroupExists         = 'The group {0} already exists.'
   ErrGroupMissing        = 'The group {0} does not exist.'
+  ErrGroupOldVersion     = '{0} runs {1}: it reads its configuration from a group only from 0.2.9. Update it first (Updates), then move it: to it a file in a group does not exist, and its settings would go back to the defaults.'
   ErrGroupNotEmpty       = 'The group {0} still has devices: move them to another group first.'
   GroupHeader            = '{0}   {1} devices{2}'
   GroupHeaderBad         = ', {0} to look at'
