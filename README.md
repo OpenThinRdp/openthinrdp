@@ -296,7 +296,7 @@ The result is `out/openthinrdp-<version>.iso`. See [docs/building.md](docs/build
 ## Documentation
 
 - [CHANGELOG.md](CHANGELOG.md): what changed in each release.
-- [docs/status.md](docs/status.md): what is in production, what is only tested, what does not exist yet.
+- [docs/status.md](docs/status.md): what is in production, what is only tested, what does not exist yet; [docs/maturity.md](docs/maturity.md): production readiness area by area, with the evidence.
 - [docs/configuration.md](docs/configuration.md): every setting.
 - [docs/faq.md](docs/faq.md): frequently asked questions.
 - Guides: [replacing Dell ThinOS on Dell thin clients](docs/guides/replace-dell-thinos.md), [turning an old PC into a thin client](docs/guides/old-pc-thin-client.md).
