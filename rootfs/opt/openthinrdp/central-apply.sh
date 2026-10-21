@@ -10,18 +10,20 @@
 ST=$OTR_LIB/central-status
 COMMON=$OTR_LIB/central-common.conf
 HOSTF=$OTR_LIB/central-host.conf
+# the group of the device (report.sh): config\groups\<group>\_group.conf, between common.conf and the file of the device
+GROUPF=$OTR_LIB/central-group.conf
 # Central values win: a key set centrally is written into the device settings again every time, so a change made
 # in the settings dialog lasts only until the next run. A key REMOVED from the central files is removed from the
 # device settings too (it goes back to site.conf or the defaults), otherwise devices would keep the last central
 # value and quietly differ from the ones installed later.
 MANAGED=$OTR_LIB/central-managed
 # keys that only the file of a single device may set (they identify the device)
-HOST_ONLY="HOSTNAME DEFAULT_USER NETMODE IPADDR VPN_ADDRESS"
+HOST_ONLY="HOSTNAME DEFAULT_USER NETMODE IPADDR VPN_ADDRESS DEVICE_GROUP"
 KEYS="$(cfg_keys | tr '\n' ' ')WIFI_PSK MGMT_PASSWORD EAP_PASSWORD"
 # secrets: compared through their hash (save-config.sh --print), applied with the value of the central file
 SECRETS="WIFI_PSK MGMT_PASSWORD EAP_PASSWORD"
 
-[ -f "$COMMON" ] || [ -f "$HOSTF" ] || [ -s "$MANAGED" ] || { echo "no central configuration" > "$ST"; exit 0; }
+[ -f "$COMMON" ] || [ -f "$GROUPF" ] || [ -f "$HOSTF" ] || [ -s "$MANAGED" ] || { echo "no central configuration" > "$ST"; exit 0; }
 
 # files written on Windows: CRLF, BOM, spaces around "=", comments with # or ;
 read_conf(){ sed '1s/^\xEF\xBB\xBF//' "$1" | tr -d '\r' | sed -E 's/^[[:space:]]+//; s/[[:space:]]*=[[:space:]]*/=/; s/[[:space:]]+$//' | grep -E '^[A-Z][A-Z0-9_]*='; }
@@ -34,6 +36,7 @@ merge(){ local f=$1 scope=$2 line k
     GIVEN[$k]=${line#*=}
   done < <(read_conf "$f"); }
 merge "$COMMON" common
+merge "$GROUPF" common     # a group may not set what identifies a device either
 merge "$HOSTF" host
 
 T=$(mktemp); E=$(mktemp); chmod 600 "$T" "$E"; trap 'rm -f "$T" "$E"' EXIT

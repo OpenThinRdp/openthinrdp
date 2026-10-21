@@ -150,6 +150,7 @@ OLDEPW=$(head -1 "$(secret_path eap-password)" 2>/dev/null)
 { [ "${V[DOT1X]}" != off ] || { [ "${V[WIFI]}" = on ] && [ "${V[WIFI_SECURITY]}" != psk ]; }; } && ! command -v wpa_supplicant >/dev/null && err "$V_NOWPA_8021X"
 
 # --- management
+V[DEVICE_GROUP]=$(get DEVICE_GROUP); [ -z "${V[DEVICE_GROUP]}" ] || [[ ${V[DEVICE_GROUP]} =~ ^[A-Za-z0-9._-]{1,64}$ ]] || err "$V_GROUP"
 V[MGMT_SHARE]=$(get MGMT_SHARE)
 [ -z "${V[MGMT_SHARE]}" ] || [[ ${V[MGMT_SHARE]} =~ $SHARERE ]] || err "$V_SHARE"
 # account of the management folder: the user in the settings, the password ONLY in the TPM or a root-only file, like the

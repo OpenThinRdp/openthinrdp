@@ -10,6 +10,9 @@ mounts it every 5 minutes, at boot and at every new event, writes its status and
   status\SUMMARY.csv           one line per device (rewritten by the devices)
   config\common.conf           settings for every device
   config\<hostname>.conf       settings for one device (wins over common.conf)
+  config\groups\<group>\_group.conf      settings for a group of devices (between common.conf and each device)
+  config\groups\<group>\<hostname>.conf  the file of a device of that group: the folder it is in IS its group;
+                               moving it to another group folder (manager: Group..., or by hand) moves the device
   config\authorized_keys       SSH public keys of the administrators (optional)
   config\branding\logo.png, splash.png              logo and background picture for every device (optional)
   config\branding\<hostname>\logo.png, splash.png   for one device (wins over the common ones)
