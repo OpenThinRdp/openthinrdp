@@ -2556,7 +2556,7 @@ function New-PageHeader([string]$title, [string]$text) {
 function New-HelpPanel([string]$default) {
   $p = New-Panel 'Bottom' $Theme.Page 104; Add-Line $p 'Top'
   $p.Padding = New-Object System.Windows.Forms.Padding(14, 8, 14, 6)
-  $t = New-Label '' $fontBold; $t.AutoSize = $false; $t.Dock = 'Top'; $t.Height = 22
+  $t = New-Label '' $fontBold; $t.AutoSize = $false; $t.Dock = 'Top'; $t.Height = 22; $t.Visible = $false
   $b = New-Label $default $fontBase $Theme.Muted; $b.AutoSize = $false; $b.Dock = 'Fill'
   $p.Controls.Add($b); $p.Controls.Add($t)
   $p.Tag = @{ Line = 'Top'; Title = $t; Body = $b; Default = $default }
@@ -2569,6 +2569,8 @@ function New-HelpPanel([string]$default) {
   $p
 }
 function Show-Help($panel, $s) {
+  # nothing selected: no empty title line, the whole room to the text
+  $panel.Tag.Title.Visible = [bool]$s
   if ($s) { $panel.Tag.Title.Text = "$($s.Label)   $([char]0x00B7)   $($s.Key)"; $panel.Tag.Body.Text = $s.Help; $panel.Tag.Body.ForeColor = $Theme.Text }
   else { $panel.Tag.Title.Text = ''; $panel.Tag.Body.Text = $panel.Tag.Default; $panel.Tag.Body.ForeColor = $Theme.Muted }
 }
@@ -2663,10 +2665,11 @@ function New-NavButton([string]$textKey, [string]$glyph, [int]$index) {
   $b.add_Paint({ param($s, $e)
     if ($s.Tag.Index -eq $script:Page) { $br = New-Object System.Drawing.SolidBrush($Theme.Accent); $e.Graphics.FillRectangle($br, 0, 8, 4, $s.Height - 16); $br.Dispose() }
     if ($s.Tag.Count) {
-      $r = New-Object System.Drawing.Rectangle(0, 0, ($s.Width - 16), $s.Height)
+      # only icons: the count small in the top right corner, off the icon
+      $r = if ($script:NavCompact) { New-Object System.Drawing.Rectangle(0, 3, ($s.Width - 5), 18) } else { New-Object System.Drawing.Rectangle(0, 0, ($s.Width - 16), $s.Height) }
       # a count in a colour of its own: who cannot sign in now, problems of the servers
       $cc = if ($s.Tag.ContainsKey('CountColor') -and $s.Tag.CountColor) { $s.Tag.CountColor } else { $Theme.ShellMuted }
-      [System.Windows.Forms.TextRenderer]::DrawText($e.Graphics, [string]$s.Tag.Count, $fontSmall, $r, $cc, [System.Windows.Forms.TextFormatFlags]'Right, VerticalCenter')
+      [System.Windows.Forms.TextRenderer]::DrawText($e.Graphics, [string]$s.Tag.Count, $fontSmall, $r, $cc, [System.Windows.Forms.TextFormatFlags]$(if ($script:NavCompact) { 'Right, Top' } else { 'Right, VerticalCenter' }))
     } })
   $b.add_Click({ param($s, $e) Select-Page $s.Tag.Index })
   $b
@@ -2686,6 +2689,18 @@ $script:NavButtons = @($navDevices, $navCommon, $navKeys, $navProblems, $navVaul
 # to the SSH keys, the versions after the settings
 # the SSH keys of the devices are on the Vault page: their button stays out of the menu (index 2 leads there)
 foreach ($b in @($navProblems, $navVault, $navUpdates, $navCommon, $navHealth, $navDevices)) { $nav.Controls.Add($b) }
+# on a narrow window (a small laptop, a foldable) the column keeps only its icons, the names in the tooltips
+$script:NavCompact = $false
+function Set-NavFit([int]$width) {
+  $c = $width -gt 0 -and $width -lt 1200
+  if ($c -eq $script:NavCompact) { return }
+  $script:NavCompact = $c; $nav.Width = $(if ($c) { 64 } else { 210 })
+  foreach ($b in $script:NavButtons) {
+    if (-not $b.Tag.ContainsKey('Label')) { $b.Tag.Label = $b.Text }
+    $b.Text = $(if ($c) { '' } else { $b.Tag.Label }); $b.Padding = New-Object System.Windows.Forms.Padding($(if ($c) { 22 } else { 18 }), 0, 0, 0)
+    $tips.SetToolTip($b, $(if ($c) { $b.Tag.Label.Trim() } else { '' }))
+  }
+}
 
 # ---------------- Devices page: list | selected device ----------------
 $pageDevices = New-Panel 'Fill' $Theme.Page
@@ -2704,17 +2719,17 @@ $split.add_SizeChanged({ Set-SplitFit })
 
 # list card: search, counts, the list, a note on how often it changes
 $listCard = New-Panel 'Fill' $Theme.Card; Add-Line $listCard 'Box'; $listCard.Padding = New-Object System.Windows.Forms.Padding(1)
-$listTop = New-Panel 'Top' $Theme.Card 72
+$listTop = New-Panel 'Top' $Theme.Card 98
 $txtDevSearch = New-SearchBox 'SearchDevices' 200; $txtDevSearch.Location = New-Object System.Drawing.Point(12, 12); $txtDevSearch.Anchor = 'Top, Left, Right'
 $lblDevCount = New-Label '' $fontSmall $Theme.Muted; $lblDevCount.Location = New-Object System.Drawing.Point(12, 46)
-# the groups in sight, right of the count: a new group, and the groups (the same as the right click on the list)
-$lnkNewGroup = New-Object System.Windows.Forms.LinkLabel; $lnkNewGroup.Text = '+ ' + (Get-Text 'GroupsNew'); $lnkNewGroup.AutoSize = $true; $lnkNewGroup.Font = $fontSmallBold; $lnkNewGroup.Anchor = 'Top, Right'
-$lnkGroups = New-Object System.Windows.Forms.LinkLabel; $lnkGroups.Text = Get-Text 'GroupsManage'; $lnkGroups.AutoSize = $true; $lnkGroups.Font = $fontSmall; $lnkGroups.Anchor = 'Top, Right'
+# the groups in sight, on a line of their own under the count: a new group, and the groups (the same as the right click on the list)
+$lnkNewGroup = New-Object System.Windows.Forms.LinkLabel; $lnkNewGroup.Text = '+ ' + (Get-Text 'GroupsNew'); $lnkNewGroup.AutoSize = $true; $lnkNewGroup.Font = $fontSmallBold; $lnkNewGroup.Anchor = 'Top, Left'
+$lnkGroups = New-Object System.Windows.Forms.LinkLabel; $lnkGroups.Text = Get-Text 'GroupsManage'; $lnkGroups.AutoSize = $true; $lnkGroups.Font = $fontSmall; $lnkGroups.Anchor = 'Top, Left'
 foreach ($l in $lnkNewGroup, $lnkGroups) { $l.LinkColor = $Theme.Accent; $l.ActiveLinkColor = $Theme.Accent; $l.LinkBehavior = 'HoverUnderline' }
 $listTop.Controls.AddRange(@($txtDevSearch, $lblDevCount, $lnkNewGroup, $lnkGroups))
 $listTop.add_Resize({ param($s, $e) $txtDevSearch.Width = [Math]::Max(80, $s.ClientSize.Width - 24)
-  $lnkGroups.Location = New-Object System.Drawing.Point(($s.ClientSize.Width - 12 - $lnkGroups.PreferredWidth), 46)
-  $lnkNewGroup.Location = New-Object System.Drawing.Point(($lnkGroups.Left - 14 - $lnkNewGroup.PreferredWidth), 46) })
+  $lnkNewGroup.Location = New-Object System.Drawing.Point(12, 72)
+  $lnkGroups.Location = New-Object System.Drawing.Point(($lnkNewGroup.Left + $lnkNewGroup.PreferredWidth + 18), 72) })
 $lnkNewGroup.add_LinkClicked({ $miNewGroup.PerformClick() })
 $lnkGroups.add_LinkClicked({ Show-GroupsDialog })
 
@@ -2781,12 +2796,14 @@ $split.Panel1.Controls.Add($listCard)
 
 # selected device: header (name, state, address, version, last report, session) with its actions
 $devCard = New-Panel 'Fill' $Theme.Card; Add-Line $devCard 'Box'; $devCard.Padding = New-Object System.Windows.Forms.Padding(1)
-$devHead = New-Panel 'Top' $Theme.Card 92; Add-Line $devHead 'Bottom'
+$devHead = New-Panel 'Top' $Theme.Card 136; Add-Line $devHead 'Bottom'
 $lblDevName = New-Label '' $fontTitle; $lblDevName.Location = New-Object System.Drawing.Point(18, 12)
 $lblDevState = New-Label '' $fontSmallBold; $lblDevState.Padding = New-Object System.Windows.Forms.Padding(8, 3, 8, 3); $lblDevState.Visible = $false
 $lblDevInfo = New-Label '' $fontBase $Theme.Muted; $lblDevInfo.Location = New-Object System.Drawing.Point(20, 56)
-$devActions = New-Object System.Windows.Forms.FlowLayoutPanel; $devActions.AutoSize = $true; $devActions.AutoSizeMode = 'GrowAndShrink'; $devActions.WrapContents = $false
-$devActions.FlowDirection = 'RightToLeft'; $devActions.BackColor = $Theme.Card; $devActions.Anchor = 'Top, Right'
+# the actions on a line of their own under the address, always with their text: on a narrow window they wrap, they
+# never cover the name or the state
+$devActions = New-Object System.Windows.Forms.FlowLayoutPanel; $devActions.AutoSize = $true; $devActions.AutoSizeMode = 'GrowAndShrink'; $devActions.WrapContents = $true
+$devActions.FlowDirection = 'LeftToRight'; $devActions.BackColor = $Theme.Card
 $btnRemoteDev = New-ActionButton 'BtnRemoteScreen' 'Screen' 'primary'
 $btnBrandDev = New-ActionButton 'BtnBranding' 'Picture' 'secondary'
 # only on a device with VPN=openvpn: its profile does not go through the folder
@@ -2800,19 +2817,24 @@ $btnPowerDev = New-ActionButton 'BtnDevicePower' 'Power' 'secondary'
 $mnuPower = New-Object System.Windows.Forms.ContextMenuStrip; $mnuPower.Font = $fontBase
 foreach ($k in 'wake', 'reboot', 'poweroff', 'report', 'command') { $it = $mnuPower.Items.Add((Get-Text "PwrMenu_$k")); $it.Tag = $k; $it.add_Click({ param($s, $e) if ($script:Selected) { Invoke-DeviceAction $script:Selected $s.Tag } }) }
 $btnPowerDev.add_Click({ $mnuPower.Show($btnPowerDev, (New-Object System.Drawing.Point(0, $btnPowerDev.Height))) })
-foreach ($b in @($btnRemoteDev, $btnPowerDev, $btnBrandDev, $btnTrackDev, $btnVpnDev, $btnDot1xDev)) { $b.Margin = New-Object System.Windows.Forms.Padding(8, 0, 0, 0); $devActions.Controls.Add($b) }
+# its group: which one it is in, and moving it to another
+$btnGroupDev = New-ActionButton 'BtnDeviceGroup' 'Folder' 'secondary'
+foreach ($b in @($btnRemoteDev, $btnPowerDev, $btnTrackDev, $btnGroupDev, $btnBrandDev, $btnVpnDev, $btnDot1xDev)) { $b.Margin = New-Object System.Windows.Forms.Padding(0, 0, 8, 8); $devActions.Controls.Add($b) }
 $tips.SetToolTip($btnRemoteDev, (Get-Text 'TipRemoteScreen')); $tips.SetToolTip($btnVpnDev, (Get-Text 'TipVpnProfile')); $tips.SetToolTip($btnTrackDev, (Get-Text 'TipDeviceVersion'))
 $tips.SetToolTip($btnDot1xDev, (Get-Text 'TipDot1x'))
 $devHead.Controls.AddRange(@($lblDevName, $lblDevState, $lblDevInfo, $devActions))
-# the actions in the top right corner, over the first line only: the line under the name keeps the whole width
-# the actions keep only their icons when the name and state of the device leave too little room for their text
+# the header grows with the lines of the actions; past two lines the secondary ones keep only their icon (the name
+# in the tooltip), the remote screen and the power actions keep their text
 $script:DevActionsCompact = $false
+function Get-FlowRows($buttons, [int]$w) { $rows = 1; $x = 0; foreach ($b in $buttons) { $bw = Get-FullWidth @($b); if ($x -gt 0 -and $x + $bw -gt $w) { $rows++; $x = 0 }; $x += $bw }; $rows }
 function Set-DeviceActionsFit {
-  $left = [Math]::Max($lblDevName.Right, $(if ($lblDevState.Visible) { $lblDevState.Right } else { 0 }))
-  $shown = @($btnRemoteDev, $btnPowerDev, $btnBrandDev, $btnTrackDev, $btnVpnDev, $btnDot1xDev | Where-Object { $_.Visible })
-  $compact = ($devHead.ClientSize.Width - 16 - $left - 24) -lt (Get-FullWidth $shown)
-  if ($compact -ne $script:DevActionsCompact) { $script:DevActionsCompact = $compact; Set-CompactButtons @($btnRemoteDev, $btnPowerDev, $btnBrandDev, $btnTrackDev, $btnVpnDev, $btnDot1xDev) $compact }
-  $devActions.Location = New-Object System.Drawing.Point(($devHead.ClientSize.Width - $devActions.Width - 16), 14)
+  $w = $devHead.ClientSize.Width - 34; if ($w -lt 60) { return }
+  $compact = (Get-FlowRows @($devActions.Controls | Where-Object { $_.Visible }) $w) -gt 2
+  if ($compact -ne $script:DevActionsCompact) { $script:DevActionsCompact = $compact; Set-CompactButtons @($btnTrackDev, $btnGroupDev, $btnBrandDev, $btnVpnDev, $btnDot1xDev) $compact }
+  $devActions.MaximumSize = New-Object System.Drawing.Size($w, 0)
+  $devActions.Location = New-Object System.Drawing.Point(18, 90)
+  $h = 90 + $devActions.GetPreferredSize((New-Object System.Drawing.Size($w, 0))).Height + 6
+  if ($devHead.Height -ne $h) { $devHead.Height = $h }
   # the line under the name ends with ... when it does not fit; the whole of it in the tooltip
   $lblDevInfo.AutoSize = $false; $lblDevInfo.AutoEllipsis = $true; $lblDevInfo.Height = 24
   $lblDevInfo.Width = [Math]::Max(100, $devHead.ClientSize.Width - $lblDevInfo.Left - 16); $tips.SetToolTip($lblDevInfo, $lblDevInfo.Text)
@@ -2912,8 +2934,7 @@ $btnReloadDev = New-ActionButton 'BtnUndo' 'Undo' 'secondary'
 $btnClearDev = New-ActionButton 'BtnRemoveExceptions' 'Delete' 'danger'
 $lblDirtyDev = New-Label (Get-Text 'Unsaved') $fontSmallBold $script:KindColor.warn; $lblDirtyDev.Margin = New-Object System.Windows.Forms.Padding(6, 8, 0, 0); $lblDirtyDev.Visible = $false
 $btnTextDev = New-ActionButton 'BtnAsText' 'Document' 'secondary'
-$btnGroupDev = New-ActionButton 'BtnDeviceGroup' 'Folder' 'secondary'
-$barDev = New-ActionBar @($btnSaveDev, $btnReloadDev, $btnTextDev, $btnGroupDev, $lblDirtyDev) @($btnClearDev)
+$barDev = New-ActionBar @($btnSaveDev, $btnReloadDev, $btnTextDev, $lblDirtyDev) @($btnClearDev)
 $filterDev = New-FilterBar $gridDev
 $tabDevSettings.Controls.Add($gridDev); $tabDevSettings.Controls.Add($filterDev); $tabDevSettings.Controls.Add($helpDev); $tabDevSettings.Controls.Add($barDev)
 
@@ -2953,6 +2974,13 @@ $lblScope = New-Label '' $fontBold $Theme.Text; $lblScope.AutoSize = $false; $lb
 $lblComNote.Padding = New-Object System.Windows.Forms.Padding(14, 2, 14, 0)
 $scopeWrap = New-Panel 'Fill' $Theme.Card; Add-Line $scopeWrap 'Box'; $scopeWrap.Padding = New-Object System.Windows.Forms.Padding(1); $scopeWrap.Visible = $false
 $scopeWrap.Controls.Add($comWrap); $scopeWrap.Controls.Add($lblComNote); $scopeWrap.Controls.Add($lblScope)
+# the note as tall as its text: never cut in the middle of a sentence
+function Set-ComNoteFit {
+  $w = $lblComNote.ClientSize.Width - $lblComNote.Padding.Horizontal; if ($w -lt 60) { return }
+  $h = [System.Windows.Forms.TextRenderer]::MeasureText($lblComNote.Text, $lblComNote.Font, (New-Object System.Drawing.Size($w, 0)), [System.Windows.Forms.TextFormatFlags]'WordBreak').Height + $lblComNote.Padding.Vertical + 8
+  if ($lblComNote.Height -ne $h) { $lblComNote.Height = $h }
+}
+$lblComNote.add_SizeChanged({ Set-ComNoteFit }); $lblComNote.add_TextChanged({ Set-ComNoteFit })
 $split.Panel2.Controls.Add($scopeWrap)
 $setWrap = New-Panel 'Fill' $Theme.Page; $setWrap.Padding = New-Object System.Windows.Forms.Padding(12, 0, 12, 12); $setWrap.Controls.Add($setTabs)
 $pageCommon.Controls.Add($setWrap); $pageCommon.Controls.Add((New-PageHeader (Get-Text 'NavCommon') (Get-Text 'PageSettingsNote')))
@@ -3485,6 +3513,7 @@ $script:Pages = @($pageDevices, $pageCommon, $pageKeys, $pageProblems, $pageVaul
 foreach ($p in $script:Pages) { $p.Visible = $false; $content.Controls.Add($p) }
 # Fill first, then the edges: the last one added takes its side first
 $root.Controls.Add($content); $root.Controls.Add($nav); $root.Controls.Add($header); $root.Controls.Add($bar)
+$root.add_Resize({ Set-NavFit $root.ClientSize.Width })
 $form.Controls.Add($root)
 
 # ---------------------------------------------------------------------------------------------
@@ -3623,7 +3652,7 @@ function Update-DeviceList {
 function Update-DeviceHeader($d) {
   if (-not $d) {
     $lblDevName.Text = Get-Text 'NoDevice'; $lblDevState.Visible = $false; $lblDevInfo.Text = ''
-    $btnRemoteDev.Enabled = $false; $btnPowerDev.Enabled = $false; $btnBrandDev.Enabled = $false; $btnTrackDev.Enabled = $false; $btnVpnDev.Visible = $false; $btnDot1xDev.Visible = $false; return
+    $btnRemoteDev.Enabled = $false; $btnPowerDev.Enabled = $false; $btnGroupDev.Enabled = $false; $btnBrandDev.Enabled = $false; $btnTrackDev.Enabled = $false; $btnVpnDev.Visible = $false; $btnDot1xDev.Visible = $false; return
   }
   $s = $d.S
   $lblDevName.Text = $d.Name
@@ -3639,7 +3668,7 @@ function Update-DeviceHeader($d) {
   if ($script:Rollout) { $t = Get-DeviceTrack $d.Name $script:Rollout
     if ($t.Kind -eq 'pilot') { $parts += Get-Text 'DevPilot' } elseif ($t.Kind -eq 'own') { $parts += Get-Text 'DevOwnVersion' $t.Target } }
   $lblDevInfo.Text = $parts -join $dot
-  $btnRemoteDev.Enabled = $true; $btnPowerDev.Enabled = $true; $btnBrandDev.Enabled = $true; $btnTrackDev.Enabled = $true; $btnVpnDev.Visible = ($s['CFG_VPN'] -eq 'openvpn')
+  $btnRemoteDev.Enabled = $true; $btnPowerDev.Enabled = $true; $btnGroupDev.Enabled = $true; $btnBrandDev.Enabled = $true; $btnTrackDev.Enabled = $true; $btnVpnDev.Visible = ($s['CFG_VPN'] -eq 'openvpn')
   $btnDot1xDev.Visible = ($s['CFG_DOT1X'] -in 'peap', 'tls') -or ($s['CFG_WIFI'] -eq 'on' -and $s['CFG_WIFI_SECURITY'] -in 'peap', 'tls')
   Set-DeviceActionsFit
 }
@@ -3724,7 +3753,7 @@ function Update-DeviceGrid {
   $script:Loading = $true
   $common = Read-ConfFile $script:CommonFile
   # the settings of its group count as common ones for this device (between common.conf and its own file)
-  if ($d.Group) { $gc = Read-ConfFile (Join-Path (Join-Path (Get-GroupsDir) $d.Group) '_group.conf'); foreach ($k in @($gc.Keys)) { $common[$k] = $gc[$k] } }
+  $gc = @{}; if ($d.Group) { $gc = Read-ConfFile (Join-Path (Join-Path (Get-GroupsDir) $d.Group) '_group.conf'); foreach ($k in @($gc.Keys)) { $common[$k] = $gc[$k] } }
   $exc = Read-ConfFile (Get-HostFile $d.Name)
   $gridDev.Rows.Clear(); $section = $null
   $arrow = [string][char]0x2192
@@ -3735,16 +3764,17 @@ function Update-DeviceGrid {
     $use = $exc.Contains($s.Key)
     $inCommon = -not $s.HostOnly -and $common.Contains($s.Key)
     # where the value in force comes from, and the one on its way when the device has not applied it yet
-    $src = if ($use) { 'SrcThis' } elseif ($inCommon) { 'SrcCommon' } else { 'SrcDevice' }
+    $src = if ($use) { 'SrcThis' } elseif ($inCommon -and $gc.Contains($s.Key)) { 'SrcGroup' } elseif ($inCommon) { 'SrcCommon' } else { 'SrcDevice' }
+    $srcText = if ($src -eq 'SrcGroup') { Get-Text 'SrcGroup' $d.Group } else { Get-Text $src }
     $target = if ($use) { $exc[$s.Key] } elseif ($inCommon) { $common[$s.Key] } else { $null }
     $pending = $false
     if ($null -ne $target -and $null -ne $now -and $s.Key -notin 'WIFI_PSK', 'SETTINGS_PIN_SHA256') { $pending = (ConvertTo-Canonical $s.Key $target) -cne [string]$now }
     $i = $gridDev.Rows.Add(); $r = $gridDev.Rows[$i]
     $r.Cells[0].Value = $s.Label; $r.Cells[1].Value = [string]$nowText; $r.Tag = $s
     # on its way: where it comes from and the value in the tooltip, the cell stays short
-    $r.Cells[2].Value = if ($pending) { "$arrow " + (Get-Text 'SrcPending') } else { Get-Text $src }
+    $r.Cells[2].Value = if ($pending) { "$arrow " + (Get-Text 'SrcPending') } else { $srcText }
     $r.Cells[2].Style.ForeColor = if ($pending) { $script:KindColor.warn } elseif ($use) { New-Color '#a16207' } elseif ($inCommon) { $Theme.Accent } else { $Theme.Muted }
-    $r.Cells[2].ToolTipText = if ($pending) { Get-Text 'TipPending' (Get-Text $src) (ConvertTo-Canonical $s.Key $target) } elseif ($s.HostOnly) { Get-Text 'ValDeviceOnly' } elseif ($common.Contains($s.Key)) { "common.conf: $(if ($s.Key -in 'WIFI_PSK', 'SETTINGS_PIN_SHA256') { $script:MarkSaved } else { $common[$s.Key] })" } else { Get-Text 'ValDeviceDecides' }
+    $r.Cells[2].ToolTipText = if ($pending) { Get-Text 'TipPending' $srcText (ConvertTo-Canonical $s.Key $target) } elseif ($s.HostOnly) { Get-Text 'ValDeviceOnly' } elseif ($common.Contains($s.Key)) { "$(if ($gc.Contains($s.Key)) { "groups\$($d.Group)\_group.conf" } else { 'common.conf' }): $(if ($s.Key -in 'WIFI_PSK', 'SETTINGS_PIN_SHA256') { $script:MarkSaved } else { $common[$s.Key] })" } else { Get-Text 'ValDeviceDecides' }
     $r.Cells[1].ToolTipText = [string]$nowText
     # without an exception the cell proposes the current value: ticking the box alone pins it
     $init = if ($use) { $exc[$s.Key] } elseif ($null -ne $now -and $s.Key -ne 'SETTINGS_PIN_SHA256') { $now } else { '' }
@@ -5732,7 +5762,8 @@ if ($env:OTR_MANAGER_SCREENSHOT) {   # test: draws the window into a PNG instead
   # OTR_MANAGER_DEVICE = the device to select, OTR_MANAGER_ROW = the setting whose help shows
   # an error must close the window and be reported: nobody is there to close it
   $form.add_Shown({ try {
-    if ($env:OTR_MANAGER_DEVICE) { foreach ($it in $list.Items) { if ($it.Text -eq $env:OTR_MANAGER_DEVICE) { $it.Selected = $true } } }
+    # OTR_MANAGER_DEVICE = the device to select: its node in the tree (the key of a node is the name of its device)
+    if ($env:OTR_MANAGER_DEVICE -and -not $env:OTR_MANAGER_TREE) { $env:OTR_MANAGER_TREE = $env:OTR_MANAGER_DEVICE }
     # OTR_MANAGER_TREE = a node of the device tree to select: site, or g:<group>
     if ($env:OTR_MANAGER_TREE) { $tn = @($tvDev.Nodes.Find($env:OTR_MANAGER_TREE, $true)) | Select-Object -First 1; if ($tn) { $tvDev.SelectedNode = $tn; Show-TreeNode $tn } }
     # the servers read in the background (without OTR_MANAGER_VDI_DEMO): waited for, at most 120 s
