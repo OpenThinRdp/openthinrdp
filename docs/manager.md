@@ -473,7 +473,7 @@ the new version. The **Updates** page shows the manager's version and has **Chec
   When the file server is down, the manager offers to open the local copy, so the Health Center works when it is
   needed most; *Open the local copy* opens it by hand, or start with `-Folder <local copy>`. The title says *(LOCAL
   COPY)*: what is changed there stays there and does not reach the file server.
-- **The manager updates itself**: its block is in this tab too.
+- **The manager updates itself**: its block is on the Updates page, under the updates of the devices.
 
 ## Starting it, and the command line
 
