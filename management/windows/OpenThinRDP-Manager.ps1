@@ -4136,7 +4136,8 @@ function Show-BrandingDialog($d) {
   $close = New-Button 'BtnClose' 100 27; $close.Location = New-Object System.Drawing.Point((688 - $close.Width), ($y + 2)); $close.DialogResult = 'Cancel'
   $dlg.Controls.Add($close); $dlg.CancelButton = $close
   $dlg.ClientSize = New-Object System.Drawing.Size(700, ($y + 40)); $dlg.Tag = $dlg.ClientSize
-  if ($env:OTR_MANAGER_BRANDING_SHOT) {   # test: draws the dialog into a PNG and closes it
+  if ($env:OTR_MANAGER_HCSET_SHOT) { $form.add_Shown({ Show-HealthSettingsDialog; $form.Close() }) }
+if ($env:OTR_MANAGER_BRANDING_SHOT) {   # test: draws the dialog into a PNG and closes it
     # control by control at their own size: Windows clamps the dialog to a small test screen, not its controls
     $dlg.add_Shown({ try { $dlg.Refresh(); $cs = $dlg.Tag; $b = New-Object System.Drawing.Bitmap($cs.Width, $cs.Height)
       $gb = [System.Drawing.Graphics]::FromImage($b); $gb.Clear($dlg.BackColor); $gb.Dispose()
@@ -5258,7 +5259,14 @@ function Show-HealthSettingsDialog {
   $W = 880; $script:HsY = 12; $grids = @{}
   $dlg = New-Object System.Windows.Forms.Form; Set-WindowIcon $dlg
   $dlg.Text = Get-Text 'HcSetTitle'; $dlg.Font = $fontBase; $dlg.FormBorderStyle = 'FixedDialog'; $dlg.MaximizeBox = $false; $dlg.MinimizeBox = $false; $dlg.StartPosition = 'CenterParent'
-  $pan = New-Object System.Windows.Forms.Panel; $pan.AutoScroll = $true; $pan.Dock = 'Fill'
+  # one tab per part of the infrastructure, the note and the switch above them, Save and Cancel always in sight
+  $dlg.ClientSize = New-Object System.Drawing.Size(($W + 20), 660)
+  $top = New-Object System.Windows.Forms.Panel; $top.Dock = 'Top'; $top.Height = 108
+  $tabs = New-Object System.Windows.Forms.TabControl; $tabs.Dock = 'Fill'; $tabs.Padding = New-Object System.Drawing.Point(14, 6); $tabs.Font = $fontBase
+  $bottom = New-Object System.Windows.Forms.Panel; $bottom.Dock = 'Bottom'; $bottom.Height = 56
+  $newTab = { param([string]$key) $tp = New-Object System.Windows.Forms.TabPage (Get-Text $key); $tp.BackColor = $Theme.Card
+    $p = New-Object System.Windows.Forms.Panel; $p.AutoScroll = $true; $p.Dock = 'Fill'; $tp.Controls.Add($p); [void]$tabs.TabPages.Add($tp); $script:HsY = 12; $p }
+  $pan = $top
   $addText = { param([string]$text, $font, $color, [int]$x = 14)
     $l = New-Object System.Windows.Forms.Label; $l.Text = $text; $l.Font = $font; if ($color) { $l.ForeColor = $color }
     $l.MaximumSize = New-Object System.Drawing.Size(($W - 40 - $x), 0); $l.AutoSize = $true; $l.Location = New-Object System.Drawing.Point($x, $script:HsY); $pan.Controls.Add($l)
@@ -5283,30 +5291,35 @@ function Show-HealthSettingsDialog {
   & $addText (Get-Text 'HcSetNote' $script:SettingsFile) $fontBase $Theme.Muted
   $chk = New-Object System.Windows.Forms.CheckBox; $chk.Text = Get-Text 'HcSetEnabled'; $chk.Checked = [bool]$s.Enabled; $chk.AutoSize = $true; $chk.Location = New-Object System.Drawing.Point(14, $script:HsY); $pan.Controls.Add($chk); $script:HsY += 34
   $two = @('Name', 'Note')
+  $pan = & $newTab 'HcTabHyperV'
   & $addGrid 'HvHosts' $two $inv.HvHosts
   $lc = New-Object System.Windows.Forms.Label; $lc.Text = Get-Text 'HcInvCluster'; $lc.AutoSize = $true; $lc.Location = New-Object System.Drawing.Point(14, ($script:HsY + 4)); $pan.Controls.Add($lc)
   $cbCl = New-Object System.Windows.Forms.ComboBox; $cbCl.DropDownStyle = 'DropDownList'; $cbCl.Font = $fontBase; [void]$cbCl.Items.AddRange(@((Get-Text 'HcInvNo'), (Get-Text 'HcInvYes'))); $cbCl.SelectedIndex = $(if ($inv.HvCluster -eq 'yes') { 1 } else { 0 })
   $cbCl.SetBounds(240, $script:HsY, 100, 26); $pan.Controls.Add($cbCl); $script:HsY += 34
   $tbClName = & $addBox 'HcInvClusterName' $inv.ClusterName 300
   $cbCl.add_SelectedIndexChanged({ $tbClName.Enabled = $cbCl.SelectedIndex -eq 1 }); $tbClName.Enabled = $cbCl.SelectedIndex -eq 1
+  $pan = & $newTab 'HcTabDomain'
   & $addGrid 'Dcs' $two $inv.Dcs
   & $addGrid 'DnsList' $two $inv.DnsList
   & $addGrid 'BrokerList' $two $inv.BrokerList
   $tbBroker = & $addBox 'HcSetBrokerName' $s.BrokerName
   & $addGrid 'Gateways' $two $inv.Gateways
   & $addGrid 'RdWebs' $two $inv.RdWebs
+  $pan = & $newTab 'HcTabSql'
   & $addText (Get-Text 'HcInvSql') $fontBold $null
   $tbSql = & $addBox 'HcSetSql' $s.SqlListener
   & $addGrid 'SqlReplicas' $two $inv.SqlReplicas
   & $addGrid 'SqlSingle' $two $inv.SqlSingle
   & $addGrid 'FileServers' $two $inv.FileServers
   & $addGrid 'OtherServers' $two $inv.OtherServers
+  $pan = & $newTab 'HcTabDevices'
   & $addGrid 'DeviceList' @('Name', 'Address', 'Ports', 'Share', 'Mac', 'Note') $inv.DeviceList
   & $addText (Get-Text 'HcInvMore') $fontBold $null
   $tbCrit = & $addBox 'HcSetCritical' $s.CriticalVms
   $tbBPath = & $addBox 'HcSetBackup' $s.BackupPath
   $tbBText = & $addBox 'HcSetBackupText' $s.BackupText
   $tbBHours = & $addBox 'HcSetBackupHours' ([string]$s.BackupHours) 80
+  $pan = & $newTab 'HcTabChecks'
   $tbLim = & $addBox 'HcSetLimits' $s.Limits 420 2
   & $addText (Get-Text 'HcSetLimitsHint') $fontSmall $Theme.Muted 240
   # every check by its title: ticked = performed; a check switched off is never shown, not even as OK
@@ -5315,15 +5328,20 @@ function Show-HealthSettingsDialog {
   $hcIds = @($script:Text.Keys | Where-Object { $_ -like 'HcT_*' } | ForEach-Object { $_.Substring(4) } |
     Sort-Object { (Get-Text "HcT_$_") -replace '\s*\{\d+\}', '' })
   $clb = New-Object System.Windows.Forms.CheckedListBox; $clb.CheckOnClick = $true; $clb.Font = $fontBase; $clb.IntegralHeight = $false
-  foreach ($id in $hcIds) { [void]$clb.Items.Add(((Get-Text "HcT_$id") -replace '\s*\{\d+\}', ''), (@($s.Off) -notcontains $id)) }
+  # two checks with the same title (a placeholder taken out): the name of the check after it
+  $titles = @($hcIds | ForEach-Object { ((Get-Text "HcT_$_") -replace '\s*\{\d+\}', '').Trim() })
+  for ($k = 0; $k -lt $hcIds.Count; $k++) { $tt = $titles[$k]; if (@($titles | Where-Object { $_ -eq $tt }).Count -gt 1) { $tt = "$tt  ($($hcIds[$k]))" }; [void]$clb.Items.Add($tt, (@($s.Off) -notcontains $hcIds[$k])) }
   $clb.SetBounds(14, $script:HsY, ($W - 160), 300); $pan.Controls.Add($clb); $script:HsY += 308
-  $err = New-Object System.Windows.Forms.Label; $err.ForeColor = $script:KindColor.error; $err.SetBounds(14, $script:HsY, ($W - 40), 36); $pan.Controls.Add($err); $script:HsY += 40
-  $ok = New-Button 'BtnSave' 110 28; $cancel = New-Button 'BtnCancel' 100 28
-  $cancel.Location = New-Object System.Drawing.Point(($W - 40 - $cancel.Width), $script:HsY); $ok.Location = New-Object System.Drawing.Point(($cancel.Left - 8 - $ok.Width), $script:HsY)
-  $cancel.DialogResult = 'Cancel'; $dlg.CancelButton = $cancel; $pan.Controls.AddRange(@($ok, $cancel)); $script:HsY += 42
-  $dlg.Controls.Add($pan)
-  $wa = [System.Windows.Forms.Screen]::FromControl($form).WorkingArea
-  $dlg.ClientSize = New-Object System.Drawing.Size(($W + 20), [Math]::Min($script:HsY + 6, $wa.Height - 80))
+  $err = New-Object System.Windows.Forms.Label; $err.ForeColor = $script:KindColor.error; $err.SetBounds(14, 6, ($W - 260), 44); $bottom.Controls.Add($err)
+  $ok = New-Button 'BtnSave' 110 30; $cancel = New-Button 'BtnCancel' 100 30
+  $cancel.Location = New-Object System.Drawing.Point(($W + 20 - 16 - $cancel.Width), 12); $ok.Location = New-Object System.Drawing.Point(($cancel.Left - 8 - $ok.Width), 12)
+  $cancel.DialogResult = 'Cancel'; $dlg.CancelButton = $cancel; $bottom.Controls.AddRange(@($ok, $cancel))
+  $dlg.Controls.Add($tabs); $dlg.Controls.Add($top); $dlg.Controls.Add($bottom)
+  $err = New-Object System.Windows.Forms.Label; $err.ForeColor = $script:KindColor.error; $err.SetBounds(14, 6, ($W - 260), 44); $bottom.Controls.Add($err)
+  $ok = New-Button 'BtnSave' 110 30; $cancel = New-Button 'BtnCancel' 100 30
+  $cancel.Location = New-Object System.Drawing.Point(($W + 20 - 16 - $cancel.Width), 12); $ok.Location = New-Object System.Drawing.Point(($cancel.Left - 8 - $ok.Width), 12)
+  $cancel.DialogResult = 'Cancel'; $dlg.CancelButton = $cancel; $bottom.Controls.AddRange(@($ok, $cancel))
+  $dlg.Controls.Add($tabs); $dlg.Controls.Add($top); $dlg.Controls.Add($bottom)
   $read = { param($g, $cols) @(foreach ($row in $g.Rows) { if ($row.IsNewRow) { continue }; $o = [ordered]@{}; foreach ($c in $cols) { $o[$c] = "$($row.Cells[$c].Value)".Trim() }; if ($o.Name) { [pscustomobject]$o } }) }
   $ok.add_Click({
     $n = Get-HealthSettings; $i = New-HealthInventory
@@ -5336,6 +5354,8 @@ function Show-HealthSettingsDialog {
     if ($why) { $err.Text = $why; return }
     try { Save-HealthSettings $n } catch { $err.Text = $_.Exception.Message; return }
     $dlg.DialogResult = 'OK' })
+  # test: the dialog drawn into OTR_MANAGER_HCSET_SHOT (OTR_MANAGER_HCSET_TAB = the tab), then closed
+  if ($env:OTR_MANAGER_HCSET_SHOT) { $dlg.add_Shown({ $tabs.SelectedIndex = [int]$env:OTR_MANAGER_HCSET_TAB; $dlg.Refresh(); $bm = New-Object System.Drawing.Bitmap($dlg.Width, $dlg.Height); $dlg.DrawToBitmap($bm, (New-Object System.Drawing.Rectangle(0, 0, $dlg.Width, $dlg.Height))); $bm.Save($env:OTR_MANAGER_HCSET_SHOT); $dlg.Close() }) }
   try { if ($dlg.ShowDialog($form) -eq 'OK') { $barText.Text = Get-Text 'HcSetSaved'; Update-SettingsTabs; Start-HealthRefresh -Queue; Start-VdiRefresh -Queue } } finally { $dlg.Dispose() }
 }
 $hcTimer = New-Object System.Windows.Forms.Timer; $hcTimer.Interval = $script:HealthRefreshSeconds * 1000
@@ -5703,6 +5723,7 @@ $form.add_Shown({
   # a newer manager? In the background: the window does not wait for GitHub (a screenshot only with OTR_MANAGER_RELEASES)
   if (-not $env:OTR_MANAGER_SCREENSHOT -or $env:OTR_MANAGER_RELEASES) { try { Start-ManagerCheck } catch { } }
 })
+if ($env:OTR_MANAGER_HCSET_SHOT) { $form.add_Shown({ Show-HealthSettingsDialog; $form.Close() }) }
 if ($env:OTR_MANAGER_BRANDING_SHOT) {   # test: the logo dialog (of OTR_MANAGER_BRANDING_HOST, or common) into a PNG
   $form.add_Shown({ Show-BrandingDialog ($script:Devices | Where-Object Name -eq $env:OTR_MANAGER_BRANDING_HOST | Select-Object -First 1); $form.Close() })
 }

@@ -2129,4 +2129,9 @@
   ScopeGroup             = 'Group {0}  ({1})'
   ScopeGroupNote         = 'Ticked: set for this group, it wins over {0} for its devices and each device can still change it. Not ticked: it comes from {0} (the value shown).'
   ColValueGroup          = 'Value for the group'
+  HcTabHyperV            = 'Hyper-V'
+  HcTabDomain            = 'Domain and desktops'
+  HcTabSql               = 'SQL and files'
+  HcTabDevices           = 'Devices and backups'
+  HcTabChecks            = 'Checks'
 }
