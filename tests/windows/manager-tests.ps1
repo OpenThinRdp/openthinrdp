@@ -306,6 +306,13 @@ try {
   Move-DeviceToGroup 'tc-g2' 'shop'
   ok 'group: a device without a file gets one in the folder' { Test-Path (Join-Path (Get-GroupsDir) 'shop\tc-g2.conf') }
   ok 'group: not deleted while it has devices' { try { Remove-DeviceGroup 'shop'; $false } catch { $true } }
+  # a device before 0.2.9 does not look into groups: moving it there would lose its settings (Finco, 21/10)
+  $keepDevices = $script:Devices
+  $script:Devices = @([pscustomobject]@{ Name = 'tc-old'; S = @{ SOFTWARE = 'OpenThinRDP 0.2.7' } }, [pscustomobject]@{ Name = 'tc-new'; S = @{ SOFTWARE = 'OpenThinRDP 0.2.10' } })
+  [IO.File]::WriteAllText((Get-HostFile 'tc-old'), "DEFAULT_USER=cassa`r`n")
+  ok 'group: a device on 0.2.7 refused, its file left in config' { $r = try { Move-DeviceToGroup 'tc-old' 'shop'; $false } catch { $_.Exception.Message -match '0\.2\.7' }; $r -and (Test-Path (Join-Path $script:ConfigDir 'tc-old.conf')) }
+  ok 'group: a device on 0.2.10 moved' { Move-DeviceToGroup 'tc-new' 'shop'; Test-Path (Join-Path (Get-GroupsDir) 'shop\tc-new.conf') }
+  Move-DeviceToGroup 'tc-new' ''; $script:Devices = $keepDevices
   Move-DeviceToGroup 'tc-g1' ''; Move-DeviceToGroup 'tc-g2' ''
   ok 'group: back to no group, the exceptions kept, an empty file not left' { (Read-ConfFile (Join-Path $script:ConfigDir 'tc-g1.conf'))['USB_MODE'] -eq 'disks' -and -not (Test-Path (Join-Path $script:ConfigDir 'tc-g2.conf')) }
   Remove-DeviceGroup 'shop'

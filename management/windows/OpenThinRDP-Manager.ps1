@@ -276,10 +276,17 @@ function New-DeviceGroup([string]$name) {
   Add-ChangeLog "group $name created"
 }
 # the file of a device moves to the folder of the group ('' = no group): the device follows at its next report
+# the first version of the devices that reads config\groups\<group>\<device>.conf
+$script:GroupsMinVersion = '0.2.9'
 function Move-DeviceToGroup([string]$device, [string]$group) {
   $from = Get-HostFile $device
   $dir = if ($group) { Join-Path (Get-GroupsDir) $group } else { $script:ConfigDir }
   if (-not (Test-Path -LiteralPath $dir)) { throw (Get-Text 'ErrGroupMissing' $group) }
+  # a device before 0.2.9 looks for its file only in config\: in a group it would lose every setting of its own
+  # (a device that never reported is let through: it is installed with a version that knows groups)
+  if ($group) { $d = @($script:Devices | Where-Object Name -eq $device) | Select-Object -First 1
+    $v = if ($d) { (([string]$d.S['SOFTWARE']).Trim() -split '\s+')[-1] } else { '' }
+    if ($v -match '^\d+\.\d+' -and (Compare-Version $v $script:GroupsMinVersion) -lt 0) { throw (Get-Text 'ErrGroupOldVersion' $device $v) } }
   $to = Join-Path $dir "$device.conf"
   if ($from -ieq $to) { return }
   if (Test-Path -LiteralPath $from) { Move-Item -LiteralPath $from -Destination $to }
