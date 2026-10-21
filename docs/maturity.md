@@ -52,6 +52,25 @@ laboratory, weighing stations, a wall screen on Wi-Fi). From the event logs the 
 **Not yet**: months of data, and fleets other than ours. The numbers will be updated here as they grow; a fleet
 report in the manager (uptime, failed updates, recovery times) is planned.
 
+## Tests on a production device
+
+On one device of the production fleet (Dell OptiPlex 3000 Thin Client at a weighing station, outside working hours,
+through its management folder and the manager, no hand-made shortcuts), 20-21 October 2026:
+
+| test | result |
+|---|---|
+| **Rollback**: the device pinned to the previous version (`UPDATE_TO`) | back from 0.2.3 to 0.2.1 in **30 s** from the change in the folder, 4 s of install, the reason in its event log |
+| **Interrupted update**: the install killed (`SIGKILL`) one second after it started | the device still knew it had the old version and **installed again by itself** after the 10 minute pause; 4 s, the kiosk restarted, nothing done by hand |
+| **Network cut**: cable link down for 30 s | reachable again after 41 s, status in the folder again at the next 5 minute report, no restart |
+| **Zero-touch**: management folder emptied, only the domain account left | the folder read from NETLOGON with the device's account, status sent there **1 s** later |
+| **Sign-in through each broker**: two users, one through each RD Connection Broker | sessions open on their VMs in 17 s and 28 s |
+| **Power**: switch off, Wake-on-LAN, restart from the manager | off in 7 s, up again by Wake-on-LAN in 21 s, back after a restart in 29 s |
+
+What these tests found and fixed: on devices converted from another system the account is only in the credentials
+file, and emptying the folder was refused (safely: the device kept its previous settings); fixed in 0.2.7. The
+manager's *Name it in the domain* missed the account the devices report and wrote its first entry on the comment
+line; fixed in 0.2.4.
+
 ## Release quality
 
 **Covered**: every release has its notes in the [CHANGELOG](../CHANGELOG.md); a fleet can stay on a version
