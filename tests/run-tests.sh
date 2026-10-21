@@ -59,6 +59,10 @@ ok "bad time refused" '! check x "POWER_ON_TIME=25:00"'
 ok "bad USB id refused" '! check x "USB_REDIRECT=1eaf:00x9"'
 ok "unknown language refused" '! check x "LANGUAGE=xx"'
 ok "Dutch accepted" 'check x "LANGUAGE=nl"'
+# the hardware test: a report with its counts, and nothing in it that identifies the device or the network
+ST=$($OTR/selftest.sh 2>/dev/null)
+ok "selftest.sh: a report with its counts and its sections" 'echo "$ST" | grep -qE "^[0-9]+ OK, [0-9]+ warnings, [0-9]+ problems" && echo "$ST" | grep -q "^### Network" && echo "$ST" | grep -q "^### Remote desktop"'
+ok "selftest.sh: no IPv4 or MAC address in the report (and it never prints the host name)" '! echo "$ST" | grep -qE "([0-9]{1,3}\.){3}[0-9]{1,3}|([0-9a-f]{2}:){5}[0-9a-f]{2}" && ! grep -q hostname /src/rootfs/opt/openthinrdp/selftest.sh'
 # no folder, updates from the folder: refused without an account, accepted with the account only in the credentials
 # file (devices converted from another system have no MGMT_USER), as found on a production device (#97)
 ok "no folder and no account: folder updates refused" '! check x "$(printf "UPDATE_FROM=share\nMGMT_SHARE=")"'

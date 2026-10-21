@@ -408,7 +408,11 @@ if MODE == 'text':
         if not data: return False
         buf.insert(buf.get_end_iter(), data.decode('utf-8', 'replace')); return True
     GLib.io_add_watch(sys.stdin, GLib.PRIORITY_DEFAULT, GLib.IO_IN | GLib.IO_HUP, on_text)
-    row = Gtk.Box(); bc = button(A.t_close or 'Close', 'primary', lambda *_: leave(0)); row.pack_end(bc, False, False, 0)
+    row = Gtk.Box(spacing=10); bc = button(A.t_close or 'Close', 'primary', lambda *_: leave(0)); row.pack_end(bc, False, False, 0)
+    # more buttons (--button LABEL:CODE), left of Close: the code they end with
+    for b in A.button:
+        lbl, _, c = b.rpartition(':')
+        if lbl and c.isdigit(): row.pack_start(button(lbl, 'secondary', lambda *_, c=int(c): leave(c)), False, False, 0)
     card.pack_start(row, False, False, 0)
     win.connect('key-press-event', lambda _w, e: e.keyval == Gdk.KEY_Escape and leave(0))
     code = 0

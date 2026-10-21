@@ -3,6 +3,16 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.2.8 (2026-10-21)
+
+- **Hardware test.** The live system tests the device at its first start, and any device does from Diagnostics
+  (*Hardware test*): processor, memory, disk, graphics driver, missing firmware, kernel errors, network, DNS, clock,
+  sound, USB, TPM, Secure Boot, FreeRDP with UDP, the broker and the management folder. *Send to the OpenThinRDP
+  project* opens a ready-made hardware report on GitHub, sent with your own account; nothing in it identifies the
+  device or the network (no name, address, MAC or serial number, checked by the tests).
+- **The package list of every ISO** (`openthinrdp-<version>.packages.txt`), name and version of each package.
+- **New ISO 0.2.8**: the licence (GPLv3), the folder from the domain and the hardware test from the first start.
+
 ## 0.2.7 (2026-10-21)
 
 - **Zero-touch on devices converted from another system.** Their account is only in the credentials file, without

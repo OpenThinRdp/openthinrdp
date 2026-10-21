@@ -284,3 +284,7 @@ V_SUPPORT="Support text bevat tekens die niet toegestaan zijn (angle brackets, &
 V_LOGO="Logo: volledig pad naar een .png bestand"
 V_COLOR="Kleur niet geldig (#rrggbb):"
 V_PIN="INSTELLINGEN_PIN_SHA256: 64 hexadecimale tekens of leeg"
+L_TEST="Hardwaretest"
+L_TEST_RUN="De hardware en het netwerk worden getest: een paar seconden..."
+L_TEST_TEXT="Wat OpenThinRDP op dit apparaat vindt. Niets in het rapport identificeert het apparaat of het netwerk."
+L_TEST_SEND="Naar het OpenThinRDP-project sturen (GitHub)"
