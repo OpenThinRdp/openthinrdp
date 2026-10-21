@@ -5,6 +5,9 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
 
 ## Unreleased
 
+- **The age of a device right in every time zone**: devices write the time of their report in UTC too
+  (`UPDATED_UTC`), and the manager uses it. The ISO is built with `Etc/UTC`: a manager two hours east of UTC saw
+  every device two hours old, as *off or offline* (#80).
 - **The actions of a device on a line of their own, with their names**: remote screen, power and commands, version,
   group, logo. They used to be bare icons in the top right corner and, on a small screen, covered the state of the
   device. Past two lines only the secondary ones keep just their icon.
