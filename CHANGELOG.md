@@ -10,6 +10,15 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
   is in is the group of the device, and moving the file moves the device. Devices with different accounts, or the
   same one, in as many groups as you like. The manager shows the devices in collapsible groups, creates and deletes
   groups, and moves a device to another group (its file moves in the share).
+- **The devices as a tree, as in the Health Center**: the site (your domain), its groups and the devices, each with
+  the dot of its state. Selecting the site shows the settings of every device (moved here from the Settings page),
+  a group its own (what is ticked is set there and wins from there down, the rest shows the value inherited from
+  the site), a device its own. Drag a device onto a group, or right click; *New group* above the tree.
+- **Health Center settings in tabs** (Hyper-V, domain and desktops, SQL and files, devices and backups, checks),
+  in a window of fixed size with Save always in sight. The updates of the manager are on the Updates page.
+- **Fewer false problems in the Health Center**: a former broker still named as fallback by some devices is no
+  longer shown as a broker failing every sign-in, nor as missing in the permissions of the hosts; the time source
+  of a server is not judged before the domain controllers are read.
 - **A renamed device just gets its new name**: no empty file of its own is left behind, and it stays in its group.
 - **A faster manager.** The vault opens in 0.2 s instead of 2.4 s after the access code (the PBKDF2 of Windows,
   the same keys); its C# is compiled once and kept, so it loads in half the time; and while the Health Center reads
