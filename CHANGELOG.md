@@ -3,6 +3,11 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.2.14 (2026-10-22)
+
+- **How many updates, on Updates in the menu**: a number instead of a dot, one for the devices (a release on GitHub
+  newer than the one published to them) and one for the manager; the tooltip says which.
+
 ## 0.2.13 (2026-10-22)
 
 - **A connection can always be left**: *Cancel* on the connecting screen ends the attempt and goes back to the

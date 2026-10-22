@@ -4453,7 +4453,7 @@ function Update-UpdatesView {
 # ---------------- the manager updates itself ----------------
 $script:ManagerOffer = $null; $script:ManagerChecking = $false; $script:ManagerCheckError = $null
 # the notice in the top bar: only when a newer manager is there
-# Something new to take, in sight on any page: an orange dot on Updates in the menu and on the Release buttons when
+# Something new to take, in sight on any page: how many updates on Updates in the menu (orange), a dot on the Release buttons when
 # GitHub has a release newer than the one published to the devices, on Updates also for a newer manager. From the
 # check of the manager (at the start, then every 6 hours) and the LATEST.txt of the folder (every minute).
 $script:GitHubLatest = ''; $script:DeviceOffer = $false
@@ -4464,7 +4464,8 @@ function Update-UpdateBadges {
   $mgr = [bool]($script:ManagerOffer -and $script:ManagerOffer.Status -eq 'Available')
   $tip = @($(if ($dev) { Get-Text 'BadgeDevices' $script:GitHubLatest $(if ($pub) { $pub } else { Get-Text 'UpdNone' }) }), $(if ($mgr) { Get-Text 'BadgeManager' $script:ManagerOffer.Version })) | Where-Object { $_ }
   if ($dev -ne $script:DeviceOffer) { $script:DeviceOffer = $dev; $btnRelease.Invalidate(); $btnUpdRelease.Invalidate() }
-  $c = if ($dev -or $mgr) { [string][char]0x25CF } else { '' }
+  # how many: one for the devices (a release newer than the published one), one for the manager
+  $nUp = [int]$dev + [int]$mgr; $c = if ($nUp) { "$nUp" } else { '' }
   if ($navUpdates.Tag.Count -ne $c) { $navUpdates.Tag.Count = $c; $navUpdates.Tag.CountColor = $script:KindColor.warn; $navUpdates.Invalidate() }
   $tips.SetToolTip($navUpdates, $(if ($tip) { $tip -join "`r`n" } elseif ($script:NavCompact) { $navUpdates.Tag.Label.Trim() } else { '' }))
   foreach ($b in $btnRelease, $btnUpdRelease) { $tips.SetToolTip($b, $(if ($dev) { Get-Text 'BadgeDevices' $script:GitHubLatest $(if ($pub) { $pub } else { Get-Text 'UpdNone' }) } else { '' })) }
