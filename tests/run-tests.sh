@@ -702,5 +702,7 @@ ok "report: no file of this device = its last central settings kept, said once" 
 
 ok "ui: the buttons of a progress screen take no keyboard (an Enter after the password never presses Cancel)" 'grep -q "if A.progress: bt.set_can_focus(False)" $OTR/ui.py'
 
+ok "kiosk: a session disconnected from the manager goes back to the sign-in, never reconnects" 'grep -q "if \[ -f /tmp/kiosk.disconnect \]; then rm -f /tmp/kiosk.disconnect" $OTR/kiosk.sh'
+
 echo "passed $PASS, failed $FAIL"
 [ $FAIL = 0 ]

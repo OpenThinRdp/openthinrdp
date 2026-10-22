@@ -705,7 +705,7 @@ vm_wait(){ local now m rc
 session(){
   local U="$1" P="$2" att=0 max=8 txt="$L_P_CONNECTING" B BRHA st d ec thr xp wp udponly=0 noudp=0 vmfails=0 vmwait=0 vmlog=0 ctmo=150
   BRHA=$(cfg BROKER)
-  rm -f /tmp/kiosk.cancel /tmp/kiosk.stopped /tmp/kiosk.timeout
+  rm -f /tmp/kiosk.cancel /tmp/kiosk.stopped /tmp/kiosk.timeout /tmp/kiosk.disconnect
   [ "$3" = reconnect ] && { max=40; txt="$L_P_RECONNECTING"; }
   LAST_ERR=""; LAST_EC=""
   thr=$(cfg_num SESSION_THRESHOLD 10)
@@ -810,6 +810,9 @@ session(){
     # Ended by the Cancel button (5: back to the sign-in, no message), or killed stuck or without a desktop in
     # time (6: said on the screen, never retried by itself)
     if [ -f /tmp/kiosk.cancel ]; then rm -f /tmp/kiosk.cancel /tmp/kiosk.stopped /tmp/kiosk.timeout; ev "connection of $U cancelled with the button after ${d}s"; return 5; fi
+    # disconnected by an administrator from the manager (the flag, then FreeRDP ended): the session stays open on its
+    # desktop, this device goes back to the sign-in and does not reconnect
+    if [ -f /tmp/kiosk.disconnect ]; then rm -f /tmp/kiosk.disconnect; ev "session of $U disconnected from the manager after $(duration $d)"; return 5; fi
     if [ -f /tmp/kiosk.stopped ] || [ -f /tmp/kiosk.timeout ]; then
       if [ -f /tmp/kiosk.stopped ]; then STOP_MSG=$L_E_STOPPED; else STOP_MSG=$(printf "$L_E_TIMEOUT" "$ctmo"); fi
       rm -f /tmp/kiosk.stopped /tmp/kiosk.timeout; return 6
