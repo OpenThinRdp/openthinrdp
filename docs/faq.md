@@ -61,8 +61,9 @@ No: Debian 13 no longer supports 32-bit only CPUs.
 
 ### Does it really use RDP over UDP?
 
-Yes. FreeRDP has no UDP transport in any release yet; OpenThinRDP ships FreeRDP with the pull request that adds it
-([#13608](https://github.com/FreeRDP/FreeRDP/pull/13608)), which we test and report on. With `TRANSPORT=auto` the
+Yes. FreeRDP merged its UDP transport on 20 October 2026 ([#13608](https://github.com/FreeRDP/FreeRDP/pull/13608),
+which we tested and reported on), but no release has it yet and it is built switched off unless asked for:
+OpenThinRDP ships FreeRDP built with it on. With `TRANSPORT=auto` the
 session uses UDP, and TCP when UDP is blocked. On a line losing 50% of its packets it kept 19-21 frames per second,
 where TCP was down to 0.6 at 20% ([udp.md](udp.md)).
 
