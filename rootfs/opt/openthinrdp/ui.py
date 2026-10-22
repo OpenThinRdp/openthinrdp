@@ -212,7 +212,8 @@ def net_icon(kind='none', level=0, size=20, color=(1, 1, 1)):
             cr.arc(cx, cy, s * 0.22 * k, -math.pi * 0.78, -math.pi * 0.22); cr.stroke()
         cr.set_source_rgba(r, g, b, 0.95 if st['kind'] == 'wifi' else 0.30); cr.arc(cx, cy, s * 0.07, 0, 2 * math.pi); cr.fill()
         if st['kind'] == 'none':
-            cr.set_source_rgba(0.94, 0.27, 0.27, 1.0); cr.move_to(s * 0.15, s * 0.15); cr.line_to(s * 0.85, s * 0.85); cr.stroke()
+            # the slash red in a card, white on the red pill of the sign-in screen
+            cr.set_source_rgba(*((1, 1, 1, 1.0) if st['color'] == (1, 1, 1) else (0.94, 0.27, 0.27, 1.0))); cr.move_to(s * 0.15, s * 0.15); cr.line_to(s * 0.85, s * 0.85); cr.stroke()
     d.connect('draw', draw); d.st = st
     return d
 

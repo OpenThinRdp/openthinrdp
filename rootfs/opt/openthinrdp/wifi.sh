@@ -13,6 +13,9 @@
 . /opt/openthinrdp/lib/common.sh
 . "$OTR/lib/netif.sh"
 WL=$(wifi_nics | head -1)
+# the Wi-Fi started in a scope of its own: wpa_supplicant and the DHCP client must outlive whatever started this script
+# (a transient service kills every process of its group when it ends: the Wi-Fi came up and went down again)
+up(){ systemd-run --scope --quiet --collect ifup "$WL" >/dev/null 2>&1 < /dev/null || ifup "$WL" >/dev/null 2>&1; }
 
 # iw scan output -> the lines above (stdin to stdout); a function on its own for the tests
 parse_scan(){
@@ -51,7 +54,7 @@ case "$1" in
     # the network for the try: its name in hex (any character is safe), the key as wpa_passphrase computes it
     hex=$(printf '%s' "$SSID" | od -An -tx1 | tr -d ' \n')
     key=$(wpa_passphrase "$SSID" "$PSK" 2>/dev/null | sed -n 's/^[[:space:]]*psk=\([0-9a-f]\{64\}\)$/\1/p')
-    [ -n "$key" ] || { echo "result invalid"; rm -rf "$T"; [ "$was_on" = on ] && ifup "$WL" >/dev/null 2>&1; exit 0; }
+    [ -n "$key" ] || { echo "result invalid"; rm -rf "$T"; [ "$was_on" = on ] && up; exit 0; }
     ( umask 077; printf 'ctrl_interface=%s/ctrl\ncountry=%s\nnetwork={\n  ssid=%s\n  scan_ssid=1\n  psk=%s\n}\n' "$T" "$(cfg WIFI_COUNTRY)" "$hex" "$key" > "$T/conf" )
     [ -n "$(cfg WIFI_COUNTRY)" ] || sed -i '/^country=$/d' "$T/conf"
     echo "step test"
@@ -68,7 +71,7 @@ case "$1" in
     stop_test
     if [ $res != ok ]; then
       # the Wi-Fi of before, as it was
-      [ "$was_on" = on ] && ifup "$WL" >/dev/null 2>&1
+      [ "$was_on" = on ] && up
       ev "Wi-Fi from the page: $SSID not joined ($res), the settings of before kept"
       echo "result $res"; exit 0
     fi
@@ -76,10 +79,10 @@ case "$1" in
     f=$(mktemp); chmod 600 "$f"
     printf 'WIFI=on\nWIFI_SSID=%s\nWIFI_SECURITY=psk\nWIFI_PSK=%s\n' "$SSID" "$PSK" > "$f"
     msg=$("$OTR/save-config.sh" "$f" 2>&1); r=$?; rm -f "$f"
-    if [ $r -ne 0 ]; then [ "$was_on" = on ] && ifup "$WL" >/dev/null 2>&1; echo "result saveerror $(echo "$msg" | head -1)"; exit 0; fi
-    # save-config.sh applied it; started again here in case the adapter was not up (a device on cable)
+    if [ $r -ne 0 ]; then [ "$was_on" = on ] && up; echo "result saveerror $(echo "$msg" | head -1)"; exit 0; fi
+    # save-config.sh applied it, in the group of processes of its caller: started again here in a scope of its own
     echo "step dhcp"
-    ifup "$WL" >/dev/null 2>&1
+    timeout -s KILL 20 ifdown --force "$WL" >/dev/null 2>&1; up
     ipa=""
     for i in $(seq 1 40); do ipa=$(ip -4 -o addr show dev "$WL" scope global 2>/dev/null | awk '{print $4}' | head -1); [ -n "$ipa" ] && break; sleep 0.5; done
     central=""; grep -qs '^WIFI_SSID=' "$OTR_LIB"/central-*.conf && ! grep -qsxF "WIFI_SSID=$SSID" "$OTR_LIB"/central-*.conf && central=" central"
