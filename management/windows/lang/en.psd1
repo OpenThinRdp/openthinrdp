@@ -1341,7 +1341,7 @@
   HcX_Guardian           = 'The keys of the guardian {0} are missing here.'
   HcW_Guardian           = 'The VMs with a vTPM made there cannot start on this node: their failover is only on paper. Export the certificates of "Shielded VM Local Certificates" with their keys and import them here.'
   HcT_Room               = 'Room for a failure'
-  HcX_Room               = 'If {0} stops, its VMs need {1}; the other nodes have {2} free.'
+  HcX_Room               = 'If {0} stops, its VMs need {1} to restart; the other nodes have {2} free.'
   HcW_Room               = 'The cluster restarts the VMs of a failed node on the others only while their memory is enough.'
   HcT_DomainUnread       = 'Domain not read'
   HcX_DomainUnread       = '{0}'

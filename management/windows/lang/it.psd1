@@ -1333,7 +1333,7 @@
   HcX_Guardian           = 'Qui mancano le chiavi del guardian {0}.'
   HcW_Guardian           = 'Le VM con vTPM create là non possono partire su questo nodo: il loro failover è solo sulla carta. Esporta i certificati di "Shielded VM Local Certificates" con le chiavi e importali qui.'
   HcT_Room               = 'Spazio per un guasto'
-  HcX_Room               = 'Se {0} si ferma, le sue VM chiedono {1}; gli altri nodi ne hanno {2} liberi.'
+  HcX_Room               = 'Se {0} si ferma, le sue VM chiedono {1} per ripartire; gli altri nodi ne hanno {2} liberi.'
   HcW_Room               = 'Il cluster riavvia sugli altri nodi le VM di un nodo guasto solo finché la loro memoria basta.'
   HcT_DomainUnread       = 'Dominio non letto'
   HcX_DomainUnread       = '{0}'
