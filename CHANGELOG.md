@@ -3,6 +3,15 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.2.15 (2026-10-22)
+
+- **Two more commands for a device in the manager**: *Force update* (looks for an update at once, also past the
+  3-hour pause of GitHub; an open session stays open) and *Disconnect the session* (its desktop stays open, the device
+  goes back to the sign-in and does not reconnect; the device needs 0.2.15).
+- **A restart or power off that did not reach the device says so**: they run 2 seconds later on the device, so the
+  command answers before the connection drops. A failed connection used to count as done (*restarting*, with
+  nothing sent).
+
 ## 0.2.14 (2026-10-22)
 
 - **How many updates, on Updates in the menu**: a number instead of a dot, one for the devices (a release on GitHub

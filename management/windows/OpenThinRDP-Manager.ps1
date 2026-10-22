@@ -2877,7 +2877,7 @@ $btnTrackDev = New-ActionButton 'BtnDeviceVersion' 'Download' 'secondary'
 # power on (Wake-on-LAN), restart, switch off, report now, a command: one button with its menu
 $btnPowerDev = New-ActionButton 'BtnDevicePower' 'Power' 'secondary'
 $mnuPower = New-Object System.Windows.Forms.ContextMenuStrip; $mnuPower.Font = $fontBase
-foreach ($k in 'wake', 'reboot', 'poweroff', 'report', 'command') { $it = $mnuPower.Items.Add((Get-Text "PwrMenu_$k")); $it.Tag = $k; $it.add_Click({ param($s, $e) if ($script:Selected) { Invoke-DeviceAction $script:Selected $s.Tag } }) }
+foreach ($k in 'wake', 'reboot', 'poweroff', 'disconnect', 'update', 'report', 'command') { $it = $mnuPower.Items.Add((Get-Text "PwrMenu_$k")); $it.Tag = $k; $it.add_Click({ param($s, $e) if ($script:Selected) { Invoke-DeviceAction $script:Selected $s.Tag } }) }
 $btnPowerDev.add_Click({ $mnuPower.Show($btnPowerDev, (New-Object System.Drawing.Point(0, $btnPowerDev.Height))) })
 # its group: which one it is in, and moving it to another
 $btnGroupDev = New-ActionButton 'BtnDeviceGroup' 'Folder' 'secondary'
@@ -5598,13 +5598,29 @@ function Invoke-DeviceAction($d, [string]$kind) {
   if ($ip -notmatch '^\d{1,3}(\.\d{1,3}){3}$') { Show-Message $title (Get-Text 'ErrRemoteNoIp'); return }
   if ($d.S['CFG_SSH'] -ne 'on') { Show-Message $title (Get-Text 'ErrRemoteNoSsh'); return }
   $user = Get-SessionUser $d.S
-  $cmd = switch ($kind) { 'reboot' { 'sudo systemctl reboot' } 'poweroff' { 'sudo systemctl poweroff' } 'report' { 'sudo systemctl start openthinrdp-report.service' } default { '' } }
+  # restart and power off in 2 s (a timer on the device): the command answers 0 before the connection drops, so an
+  # exit 255 is always a connection that failed, shown with its reason (it used to count as done: "restart sent"
+  # with nothing sent). Update: the 3-hour pause of GitHub cleared, then the report checks and installs at once.
+  # Disconnect: a flag the kiosk reads (0.2.15 and later: back to the sign-in, no reconnection), then FreeRDP ends;
+  # the session stays open on its desktop.
+  if ($kind -eq 'disconnect' -and (Compare-Version (Get-Version $d.S) '0.2.15') -lt 0) { Show-Message $title (Get-Text 'PwrDisconnectOld' $name (Get-Version $d.S)); return }
+  $cmd = switch ($kind) {
+    'reboot' { 'sudo systemd-run --quiet --on-active=2 systemctl reboot' }
+    'poweroff' { 'sudo systemd-run --quiet --on-active=2 systemctl poweroff' }
+    'report' { 'sudo systemctl start openthinrdp-report.service' }
+    'update' { 'sudo rm -f /var/lib/openthinrdp/update/github-checked; sudo systemctl start openthinrdp-report.service' }
+    'disconnect' { 'pgrep -x xfreerdp3 >/dev/null || exit 3; sudo -u kiosk touch /tmp/kiosk.disconnect && sudo pkill -TERM -x xfreerdp3' }
+    default { '' } }
   if ($kind -eq 'command') {
     Add-Type -AssemblyName Microsoft.VisualBasic
     $cmd = [Microsoft.VisualBasic.Interaction]::InputBox((Get-Text 'PwrCommandAsk' $name), $title, '')
     if (-not $cmd.Trim()) { return }
   }
-  $ask = switch ($kind) { 'reboot' { Get-Text 'PwrRebootAsk' $name } 'poweroff' { Get-Text 'PwrOffAsk' $name } 'report' { $null } default { Get-Text 'PwrCommandConfirm' $name $cmd "`r`n`r`n" } }
+  $ask = switch ($kind) { 'reboot' { Get-Text 'PwrRebootAsk' $name } 'poweroff' { Get-Text 'PwrOffAsk' $name } 'report' { $null }
+    'update' { Get-Text 'PwrUpdateAsk' $name } 'disconnect' { Get-Text 'PwrDisconnectAsk' $name $(if ($user) { $user } else { '?' }) }
+    default { Get-Text 'PwrCommandConfirm' $name $cmd "`r`n`r`n" } }
+  # the warning of an open session: not for a disconnect, which is about it
+  if ($kind -eq 'disconnect') { $user = $null }
   if ($ask -and $user) { $ask += "`r`n`r`n" + (Get-Text 'PwrSessionWarn' $user) }
   if ($ask -and -not (Confirm-Action $title $ask $(if ($user -or $kind -eq 'command') { 'Button2' } else { 'Button1' }))) { return }
   if (-not (Request-VaultOpen)) { return }
@@ -5613,8 +5629,8 @@ function Invoke-DeviceAction($d, [string]$kind) {
   $form.Cursor = 'WaitCursor'
   try { $r = Invoke-DeviceSsh $ip $cmd $key $name } finally { $form.Cursor = 'Default' }
   Add-ChangeLog "${name}: $kind ($cmd) -> exit $($r.Code)"
-  # reboot and poweroff end the connection themselves (255): that is the expected answer
-  if ($kind -in 'reboot', 'poweroff' -and $r.Code -in 0, 255) { $barText.Text = Get-Text "Pwr${kind}Done" $name; return }
+  if ($kind -in 'reboot', 'poweroff', 'update', 'disconnect' -and $r.Code -eq 0) { $barText.Text = Get-Text "Pwr${kind}Done" $name; return }
+  if ($kind -eq 'disconnect' -and $r.Code -eq 3) { Show-Message $title (Get-Text 'PwrNoSession' $name); return }
   if ($kind -eq 'report' -and $r.Code -eq 0) { $barText.Text = Get-Text 'PwrReportDone' $name; return }
   $out = if ($r.Text) { $r.Text } else { Get-Text 'PwrNoOutput' }
   if ($out.Length -gt 6000) { $out = $out.Substring(0, 6000) + "`r`n..." }

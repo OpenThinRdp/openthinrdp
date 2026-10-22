@@ -2065,6 +2065,14 @@
   PwrrebootDone          = '{0} si sta riavviando.'
   PwrpoweroffDone        = '{0} si sta spegnendo.'
   PwrReportDone          = '{0} ha mandato lo stato: aggiorna l''elenco.'
+  PwrMenu_update         = 'Forza aggiornamento'
+  PwrMenu_disconnect     = 'Disconnetti la sessione'
+  PwrUpdateAsk           = "Cercare subito un aggiornamento su {0}? Se c'è una versione più nuova si installa adesso; una sessione aperta resta aperta e la nuova versione parte alla fine."
+  PwrDisconnectAsk       = "Disconnettere la sessione di {1} su {0}? Il suo desktop resta aperto con i programmi com'erano; la postazione torna alla schermata di accesso e non si ricollega da sola."
+  PwrupdateDone          = '{0} sta cercando un aggiornamento: se ce n''è uno si installa ora (lo stato lo dice entro qualche minuto).'
+  PwrdisconnectDone      = 'Sessione su {0} disconnessa: la postazione è alla schermata di accesso.'
+  PwrNoSession           = '{0} non ha una sessione aperta.'
+  PwrDisconnectOld       = "{0} ha la versione {1}: disconnette dal gestore solo dalla 0.2.15 (prima si ricollegherebbe da sola). Aggiornatela prima."
   BtnGroups              = 'Gruppi...'
   BtnDeviceGroup         = 'Gruppo...'
   GroupsTitle            = 'Gruppi di postazioni'
