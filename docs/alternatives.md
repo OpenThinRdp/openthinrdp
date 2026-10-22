@@ -21,10 +21,12 @@ For a fleet of Remote Desktop clients, here is what it means.
 ([hardware](hardware.md#drivers-all-of-debians)). A device that works with Mint or Ubuntu of the same period works
 with OpenThinRDP too. Neither side has a driver advantage.
 
-**No RDP over UDP.** Remmina and the `xfreerdp` of the distributions use the distribution's FreeRDP. FreeRDP has no
-UDP transport in any release yet: it is the pull request [#13608](https://github.com/FreeRDP/FreeRDP/pull/13608),
-which OpenThinRDP builds and ships. So on a busy server, on Wi-Fi or through a VPN the session runs over TCP. On a
-line that loses packets, TCP queues the screen while UDP keeps it moving ([the numbers](udp.md#on-a-lossy-line)).
+**No RDP over UDP.** Remmina and the `xfreerdp` of the distributions use the distribution's FreeRDP. FreeRDP merged
+its UDP transport on 20 October 2026 ([#13608](https://github.com/FreeRDP/FreeRDP/pull/13608)), but no release has it
+yet, and it is built switched off unless asked for (it is marked experimental): the packages of the distributions do
+not have it. OpenThinRDP ships FreeRDP built with it on. Without it, on a busy server, on Wi-Fi or through a VPN the
+session runs over TCP. On a line that loses packets, TCP queues the screen while UDP keeps it moving
+([the numbers](udp.md#on-a-lossy-line)).
 
 **A desktop to lock down.** Users can open other programs, change the settings, fill the disk. Making it a kiosk is
 your work: automatic sign-in, no terminal, no other applications, no text consoles, a session that comes back by
