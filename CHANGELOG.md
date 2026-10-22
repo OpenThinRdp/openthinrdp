@@ -3,7 +3,7 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
-## Unreleased
+## 0.2.13 (2026-10-22)
 
 - **A connection can always be left**: *Cancel* on the connecting screen ends the attempt and goes back to the
   sign-in; with no desktop after 150 seconds the attempt ends by itself and says so; a FreeRDP stopped by the
