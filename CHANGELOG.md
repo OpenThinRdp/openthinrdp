@@ -5,6 +5,10 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
 
 ## Unreleased
 
+- **New versions in sight, with what they change**: an orange dot on Updates in the menu and on *Release from
+  GitHub* when GitHub has a release newer than the one published to the devices (and on Updates for a newer
+  manager); the Updates page says which version GitHub has. Before *Release from GitHub* and *Update the manager*
+  a window shows the notes of every version in between, then asks. The check runs at the start and every 6 hours.
 - **The Health Center reads in 25 seconds instead of 60**: the hosts, the domain controllers and the other servers are
   asked together, and SQL Server is read while they answer. The same checks with the same results (compared check
   by check on a real site).

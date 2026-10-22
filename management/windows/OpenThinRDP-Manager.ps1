@@ -666,6 +666,50 @@ function Get-ReleaseFile([string]$base, [string]$name, [string]$dest) {
   if ($base -match '^https?://') { Invoke-WebRequest -UseBasicParsing -Uri "$base/$name" -OutFile $dest -TimeoutSec 300 -ErrorAction Stop }
   else { Copy-Item -LiteralPath (Join-Path $base $name) -Destination $dest -ErrorAction Stop }
 }
+# What changed between two versions: the notes of every release after $from up to $to, newest first, as plain text
+# (the Markdown of GitHub without its marks). $json = the answer of the GitHub API already read (tests,
+# OTR_MANAGER_NOTES = a file with it). '' when GitHub does not answer: the update goes on without them.
+function ConvertFrom-ReleaseMarkdown([string]$md) {
+  @("$md" -split "`r?`n" | ForEach-Object {
+    $l = $_ -replace '\[([^\]]+)\]\([^)]+\)', '$1' -replace '\*\*', '' -replace '`', '' -replace '^#+\s*', ''
+    $b = $l -match '^(\s*)[-*] (.*)$'; if ($b) { $l = "$($Matches[1])$([char]0x2022) $($Matches[2])" }
+    $l -replace '(?<![\w*])\*([^*\s][^*]*)\*(?![\w*])', '$1' }) -join "`r`n" -replace '(\r\n){3,}', "`r`n`r`n" -replace '^(\r\n)+|(\r\n)+$', ''
+}
+function Get-ReleaseNotes([string]$from, [string]$to, $json = $null) {
+  try {
+    if ($null -eq $json -and $env:OTR_MANAGER_NOTES) { $json = Get-Content -LiteralPath $env:OTR_MANAGER_NOTES -Raw | ConvertFrom-Json }
+    if ($null -eq $json) {
+      [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+      $json = Invoke-RestMethod -Uri "https://api.github.com/repos/$(Get-ReleaseRepo)/releases?per_page=40" -Headers @{ 'User-Agent' = 'OpenThinRDP-Manager' } -TimeoutSec 20 -ErrorAction Stop
+    }
+    $sel = @(@($json) | Where-Object { -not $_.draft -and -not $_.prerelease } | ForEach-Object { [pscustomobject]@{ V = ([string]$_.tag_name) -replace '^v', ''; Body = [string]$_.body } } |
+      Where-Object { $_.V -match '^\d+\.\d+' -and (-not $from -or $from -notmatch '^\d' -or (Compare-Version $_.V $from) -gt 0) -and (-not $to -or (Compare-Version $_.V $to) -le 0) })
+    (@(Get-NewestFirst @($sel | ForEach-Object { [pscustomobject]@{ Version = $_.V; Body = $_.Body } }) | ForEach-Object { "$(Get-Text 'NotesVersion' $_.Version)`r`n`r`n$(ConvertFrom-ReleaseMarkdown $_.Body)" })) -join "`r`n`r`n"
+  } catch { '' }
+}
+# The notes in a window before an update: what it is (the question), what changes (scrolling), go on or not
+function Show-NotesDialog([string]$title, [string]$intro, [string]$notes, [string]$okKey) {
+  $dlg = New-Object System.Windows.Forms.Form; Set-WindowIcon $dlg
+  $dlg.Text = $title; $dlg.Font = $fontBase; $dlg.StartPosition = 'CenterParent'; $dlg.MinimizeBox = $false; $dlg.BackColor = $Theme.Card
+  $wa = [System.Windows.Forms.Screen]::FromControl($form).WorkingArea
+  $dlg.Size = New-Object System.Drawing.Size([Math]::Min(860, $wa.Width - 24), [Math]::Min(680, $wa.Height - 24))
+  $top = New-Panel 'Top' $Theme.Card 60; $top.Padding = New-Object System.Windows.Forms.Padding(18, 14, 18, 6)
+  $lb = New-Label $intro $fontBase $Theme.Text; $lb.AutoSize = $false; $lb.Dock = 'Fill'; $top.Controls.Add($lb)
+  $hd = New-Label (Get-Text 'NotesHeading') $fontSmallBold $Theme.Muted; $hd.AutoSize = $false; $hd.Dock = 'Top'; $hd.Height = 24; $hd.Padding = New-Object System.Windows.Forms.Padding(18, 4, 18, 0)
+  $tb = New-Object System.Windows.Forms.TextBox; $tb.Multiline = $true; $tb.ReadOnly = $true; $tb.ScrollBars = 'Vertical'; $tb.WordWrap = $true; $tb.Dock = 'Fill'
+  $tb.Font = $fontBase; $tb.BackColor = $Theme.Page; $tb.BorderStyle = 'None'; $tb.Text = $(if ("$notes".Trim()) { $notes } else { Get-Text 'NotesNone' })
+  $mid = New-Panel 'Fill' $Theme.Card; $mid.Padding = New-Object System.Windows.Forms.Padding(18, 0, 18, 8); $mid.Controls.Add($tb)
+  $bottom = New-Panel 'Bottom' $Theme.Card 58; Add-Line $bottom 'Top'
+  $ok = New-ActionButton $okKey 'Download' 'primary'; $no = New-ActionButton 'BtnCancel'
+  $ok.DialogResult = 'OK'; $no.DialogResult = 'Cancel'; $dlg.AcceptButton = $ok; $dlg.CancelButton = $no; $bottom.Controls.AddRange(@($ok, $no))
+  $bottom.add_Resize({ param($p, $e) $no.Location = New-Object System.Drawing.Point(($p.ClientSize.Width - 18 - $no.Width), 13); $ok.Location = New-Object System.Drawing.Point(($no.Left - 8 - $ok.Width), 13) })
+  $top.add_Resize({ param($p, $e) $h = (Measure-Note $lb.Text ($p.ClientSize.Width - $p.Padding.Horizontal)) + $p.Padding.Vertical + 6; if ($p.Height -ne $h) { $p.Height = $h } })
+  $dlg.Controls.Add($mid); $dlg.Controls.Add($hd); $dlg.Controls.Add($top); $dlg.Controls.Add($bottom)
+  $dlg.add_Shown({ $tb.SelectionStart = 0; $tb.SelectionLength = 0; $ok.Focus() })
+  # test: the window drawn into OTR_MANAGER_NOTES_SHOT, then closed (answer: no)
+  if ($env:OTR_MANAGER_NOTES_SHOT) { $dlg.add_Shown({ $dlg.Refresh(); $bm = New-Object System.Drawing.Bitmap($dlg.Width, $dlg.Height); $dlg.DrawToBitmap($bm, (New-Object System.Drawing.Rectangle(0, 0, $dlg.Width, $dlg.Height))); $bm.Save($env:OTR_MANAGER_NOTES_SHOT); $dlg.Close() }) }
+  try { $dlg.ShowDialog($form) -eq 'OK' } finally { $dlg.Dispose() }
+}
 # $true = good signature of a key of the key file, $false = bad, $null = not checked here (no key file)
 function Test-ReleaseSignature([string]$sig, [string]$file, [string]$keyFile) {
   if (-not $keyFile -or -not (Test-Path -LiteralPath $keyFile)) { return $null }
@@ -3659,7 +3703,7 @@ function Update-DeviceList {
   $on = @($script:Devices | Where-Object { $_.Minutes -le $script:StaleMinutes }).Count
   $bad = @($script:Devices | Where-Object { $_.Kind -in 'error', 'warn' }).Count
   $lblDevCount.Text = Get-Text 'DevCount' $script:Devices.Count $on $bad
-  $navDevices.Tag.Count = "$($script:Devices.Count)"; $navDevices.Invalidate()
+  $navDevices.Tag.Count = "$($script:Devices.Count)"; $navDevices.Invalidate(); try { Update-UpdateBadges } catch { }
   $upd = try { Get-PublishedUpdate } catch { '?' }
   if ($script:Rollout -and $script:Rollout.Pinned) { $upd = Get-Text 'UpdFleetPinned' $upd $script:Rollout.Fleet $script:Rollout.Pilots.Count }
   $barText.Text = Get-Text 'StatusBar' $script:Folder $script:Devices.Count $on $upd (Get-Date) $(if ($renamed.Count) { Get-Text 'StatusRenamed' ($renamed -join ', ') } else { '' })
@@ -4266,6 +4310,9 @@ function Start-ReleaseImport {
     $sg = Get-ReleaseSigning $rel
     if ($sg.Error) { Show-Message (Get-Text 'RelTitle') $sg.Error 'Error'; return }
     $st = Get-RolloutState
+    # first what changes from the version published now to this one; then where it goes
+    $form.Cursor = 'WaitCursor'; $notes = Get-ReleaseNotes ([string]$st.Latest) $rel.Version; $form.Cursor = 'Default'
+    if (-not (Show-NotesDialog (Get-Text 'RelTitle') (Get-Text 'RelNotesIntro' $rel.Version $(if ($st.Latest) { $st.Latest } else { Get-Text 'UpdNone' })) $notes 'BtnNext')) { return }
     # the others stay on the version published now: there must be one, signed, to keep them on
     $l = Join-Path (Get-UpdatesDir) 'LATEST.txt'
     $stay = if ($st.Pinned) { $st.Fleet } elseif ($st.Latest -and (Test-Path -LiteralPath "$l.sig")) { $st.Latest } else { $null }
@@ -4376,6 +4423,8 @@ function Update-UpdatesView {
   if ($st) {
     $vers = @(Get-ChoosableVersions)
     $lines += Get-Text 'UpdNoteLatest' $(if ($st.Latest) { $st.Latest } else { Get-Text 'UpdNone' })
+    # the latest on GitHub (from the check of the manager): newer than the published one, said so
+    if ($script:GitHubLatest) { $lines += if ($script:DeviceOffer) { Get-Text 'UpdNoteGitHubNew' $script:GitHubLatest } else { Get-Text 'UpdNoteGitHub' $script:GitHubLatest } }
     $lines += if ($st.Pinned) { Get-Text 'UpdNoteFleetPinned' $st.Fleet } else { Get-Text 'UpdNoteFleetLatest' }
     $lines += if ($st.Pilots.Count) { Get-Text 'UpdNotePilots' $st.Pilots.Count ($st.Pilots -join ', ') } else { Get-Text 'UpdNoPilots' }
     if ($st.Own.Count) { $lines += Get-Text 'UpdNoteOwn' (@($st.Own.Keys | ForEach-Object { "$_ ($($st.Own[$_]))" }) -join ', ') }
@@ -4401,7 +4450,30 @@ function Update-UpdatesView {
 # ---------------- the manager updates itself ----------------
 $script:ManagerOffer = $null; $script:ManagerChecking = $false; $script:ManagerCheckError = $null
 # the notice in the top bar: only when a newer manager is there
+# Something new to take, in sight on any page: an orange dot on Updates in the menu and on the Release buttons when
+# GitHub has a release newer than the one published to the devices, on Updates also for a newer manager. From the
+# check of the manager (at the start, then every 6 hours) and the LATEST.txt of the folder (every minute).
+$script:GitHubLatest = ''; $script:DeviceOffer = $false
+function Update-UpdateBadges {
+  $pub = ''; $f = Join-Path $script:Folder 'updates\LATEST.txt'
+  if (Test-Path -LiteralPath $f) { $pub = (Read-Lines $f | Where-Object { $_ -match '^version=' } | Select-Object -First 1) -replace '^version=', '' }
+  $dev = [bool]($script:GitHubLatest -and (-not $pub -or (Compare-Version $script:GitHubLatest $pub) -gt 0))
+  $mgr = [bool]($script:ManagerOffer -and $script:ManagerOffer.Status -eq 'Available')
+  $tip = @($(if ($dev) { Get-Text 'BadgeDevices' $script:GitHubLatest $(if ($pub) { $pub } else { Get-Text 'UpdNone' }) }), $(if ($mgr) { Get-Text 'BadgeManager' $script:ManagerOffer.Version })) | Where-Object { $_ }
+  if ($dev -ne $script:DeviceOffer) { $script:DeviceOffer = $dev; $btnRelease.Invalidate(); $btnUpdRelease.Invalidate() }
+  $c = if ($dev -or $mgr) { [string][char]0x25CF } else { '' }
+  if ($navUpdates.Tag.Count -ne $c) { $navUpdates.Tag.Count = $c; $navUpdates.Tag.CountColor = $script:KindColor.warn; $navUpdates.Invalidate() }
+  $tips.SetToolTip($navUpdates, $(if ($tip) { $tip -join "`r`n" } elseif ($script:NavCompact) { $navUpdates.Tag.Label.Trim() } else { '' }))
+  foreach ($b in $btnRelease, $btnUpdRelease) { $tips.SetToolTip($b, $(if ($dev) { Get-Text 'BadgeDevices' $script:GitHubLatest $(if ($pub) { $pub } else { Get-Text 'UpdNone' }) } else { '' })) }
+}
+# the dot on a Release button: top right, over its corner
+foreach ($b in @($btnRelease, $btnUpdRelease)) {
+  $b.add_Paint({ param($s, $e) if (-not $script:DeviceOffer) { return }
+    $e.Graphics.SmoothingMode = 'AntiAlias'; $br = New-Object System.Drawing.SolidBrush($script:KindColor.warn)
+    $e.Graphics.FillEllipse($br, ($s.Width - 13), 3, 9, 9); $br.Dispose() })
+}
 function Update-ManagerNotice {
+  Update-UpdateBadges
   $on = [bool]($script:ManagerOffer -and $script:ManagerOffer.Status -eq 'Available')
   # the bar back to full texts, then fitted again with the notice in it or not
   Set-CompactButtons @($btnMgrNotice, $btnVaultTool, $btnPerm, $btnRelease, $btnOpen, $btnRefresh) $false; $script:ToolbarCompact = $false
@@ -4439,6 +4511,8 @@ function Start-ManagerCheck([switch]$Loud) {
       if (-not $st.H.IsCompleted) { [void]$st.PS.BeginStop($null, $null); throw 'timeout' }
       [void]$st.PS.EndInvoke($st.H)
       $script:ManagerOffer = Test-ManagerOffer $st.Dir
+      # the same signed LATEST.txt says the version of the devices of that release
+      $script:GitHubLatest = if ($script:ManagerOffer.Status -in 'Available', 'UpToDate', 'NoManager') { [string]$script:ManagerOffer.Version } else { '' }
     } catch { if ($st.Loud) { $script:ManagerCheckError = $_.Exception.GetBaseException().Message } }
     finally { if ($st.H.IsCompleted) { $st.PS.Dispose() }; Remove-Item -LiteralPath $st.Dir -Recurse -Force -ErrorAction SilentlyContinue }
     Update-ManagerNotice; if ($st.Loud) { Update-UpdatesView }
@@ -4452,7 +4526,9 @@ function Start-ManagerUpdate {
   $o = $script:ManagerOffer; if (-not $o -or $o.Status -ne 'Available') { return }
   $unsaved = $lblDirtyDev.Visible -or $lblDirtyCom.Visible -or $lblDirtyKeys.Visible
   $msg = (Get-Text 'MgrConfirm' $script:ManagerVersion $o.Version $script:ManagerDir) + $(if ($unsaved) { Get-Text 'MgrUnsaved' } else { '' })
-  if (-not (Confirm-Action (Get-Text 'MgrTitle') $msg $(if ($unsaved) { 'Button2' } else { 'Button1' }))) { return }
+  # the question with what changes from this version to that one
+  $form.Cursor = 'WaitCursor'; $notes = Get-ReleaseNotes $script:ManagerVersion $o.Version; $form.Cursor = 'Default'
+  if (-not (Show-NotesDialog (Get-Text 'MgrTitle') $msg $notes 'BtnUpdateManager')) { return }
   $form.Cursor = 'WaitCursor'; $barText.Text = Get-Text 'MgrUpdating' $o.Version; [System.Windows.Forms.Application]::DoEvents()
   try { $r = Update-Manager $o } catch { $form.Cursor = 'Default'; $barText.Text = ''; Show-Message (Get-Text 'MgrTitle') $_.Exception.Message 'Error'; return }
   $form.Cursor = 'Default'
@@ -5861,8 +5937,12 @@ $form.add_Shown({
   Update-VaultView
   # a newer manager? In the background: the window does not wait for GitHub (a screenshot only with OTR_MANAGER_RELEASES)
   if (-not $env:OTR_MANAGER_SCREENSHOT -or $env:OTR_MANAGER_RELEASES) { try { Start-ManagerCheck } catch { } }
+  # and again every 6 hours: the window stays open all day, a release can come out meanwhile
+  if (-not $env:OTR_MANAGER_SCREENSHOT) { $script:MgrTimer = New-Object System.Windows.Forms.Timer; $script:MgrTimer.Interval = 6 * 3600 * 1000; $script:MgrTimer.add_Tick({ try { Start-ManagerCheck } catch { } }); $script:MgrTimer.Start() }
 })
 if ($env:OTR_MANAGER_HCSET_SHOT) { $form.add_Shown({ Show-HealthSettingsDialog; $form.Close() }) }
+# test: the notes window of a release, OTR_MANAGER_NOTES_FROM to OTR_MANAGER_NOTES_TO, drawn into OTR_MANAGER_NOTES_SHOT
+if ($env:OTR_MANAGER_NOTES_SHOT -and $env:OTR_MANAGER_NOTES_TO) { $form.add_Shown({ [void](Show-NotesDialog (Get-Text 'RelTitle') (Get-Text 'RelNotesIntro' $env:OTR_MANAGER_NOTES_TO $env:OTR_MANAGER_NOTES_FROM) (Get-ReleaseNotes $env:OTR_MANAGER_NOTES_FROM $env:OTR_MANAGER_NOTES_TO) 'BtnNext'); $form.Close() }) }
 if ($env:OTR_MANAGER_BRANDING_SHOT) {   # test: the logo dialog (of OTR_MANAGER_BRANDING_HOST, or common) into a PNG
   $form.add_Shown({ Show-BrandingDialog ($script:Devices | Where-Object Name -eq $env:OTR_MANAGER_BRANDING_HOST | Select-Object -First 1); $form.Close() })
 }
