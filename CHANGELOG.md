@@ -3,6 +3,12 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## Unreleased
+
+- **Room for a failure counted on the memory a VM needs to restart**: a VM with dynamic memory restarts on another
+  node with its startup memory, not with what it grew to during the day. 123 GB of memory in use were 114 GB to
+  restart, and a node with 121 GB free was reported as too small.
+
 ## 0.2.15 (2026-10-22)
 
 - **Two more commands for a device in the manager**: *Force update* (looks for an update at once, also past the

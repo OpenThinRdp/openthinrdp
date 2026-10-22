@@ -1391,7 +1391,9 @@ function ConvertTo-HealthModel($raw, $vdi, [datetime]$now, $settings = $null) {
     }
     # room for a failure: the memory of the running VMs of each node against the free memory of the other nodes up
     foreach ($h in $members) {
-      $need = (@(@($h.Vms | Where-Object { $_ -and $_.State -eq 'Running' -and $_.Clustered }) | ForEach-Object { [double]$_.MemoryMB }) + 0 | Measure-Object -Sum).Sum / 1024
+      # what they need to START on another node: their startup memory (a VM with dynamic memory restarts with it,
+      # not with what it grew to during the day: 123 GB of memory in use were 114 GB to restart); without it, in use
+      $need = (@(@($h.Vms | Where-Object { $_ -and $_.State -eq 'Running' -and $_.Clustered }) | ForEach-Object { [double]$(if ([int]$_.StartupMB -gt 0) { $_.StartupMB } else { $_.MemoryMB }) }) + 0 | Measure-Object -Sum).Sum / 1024
       $others = @($members | Where-Object { $_.Name -ne $h.Name })
       $up = @($c.Nodes | Where-Object { $_.State -eq 'Up' } | ForEach-Object { Get-HcShort $_.Name })
       $free = (@($others | Where-Object { $up -contains $_.Name } | ForEach-Object { [double]$_.MemFreeMB }) + 0 | Measure-Object -Sum).Sum / 1024
