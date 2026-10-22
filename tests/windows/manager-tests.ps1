@@ -343,6 +343,15 @@ try {
   $script:Text = Read-LanguageTexts $script:LangDir 'it'
   $mi = ConvertTo-VdiModel $raw $devs $now
   ok 'the model in Italian' { $mi.Headline -match '^Non riescono' -and (@($mi.Rows | Where-Object { $_.UserKey -eq 'FRANK' }))[0].State -eq 'Secondo tentativo' }
+  # the notes of the releases between two versions, before an update (GitHub API answer as a fixture)
+  $rels = @([pscustomobject]@{ tag_name = 'v0.2.11'; draft = $false; prerelease = $false; body = "`n`n- **A frozen session** reconnects (#115)`n`n`n`n- see [the PR](https://x/115), *+ Add*" },
+    [pscustomobject]@{ tag_name = 'v0.2.10'; draft = $false; prerelease = $false; body = '- UTC time' },
+    [pscustomobject]@{ tag_name = 'v0.2.12-rc1'; draft = $false; prerelease = $true; body = 'pre' },
+    [pscustomobject]@{ tag_name = 'v0.2.9'; draft = $false; prerelease = $false; body = '- groups' })
+  $nt = Get-ReleaseNotes '0.2.9' '0.2.11' $rels
+  ok 'release notes: the versions after the installed one up to the new one, newest first, no pre-release' { $nt -match '0\.2\.11' -and $nt -match '0\.2\.10' -and $nt -notmatch 'groups' -and $nt -notmatch 'pre' -and $nt.IndexOf('0.2.11') -lt $nt.IndexOf('0.2.10') }
+  ok 'release notes: plain text (no ** nor * nor links, no runs of empty lines), bullets' { $nt -match ([char]0x2022 + ' A frozen session reconnects') -and $nt -notmatch '\*' -and $nt -match 'see the PR, \+ Add' -and $nt -notmatch 'https://x' -and $nt -notmatch '(\r\n){3}' }
+  ok 'release notes: nothing published yet, every release up to the new one' { (Get-ReleaseNotes '' '0.2.10' $rels) -match 'groups' }
   # #80: a device in another time zone (the ISO is built with Etc/UTC) is not hours old because of it
   $nowUtc = [datetime]::UtcNow
   $st = @{ UPDATED = $nowUtc.AddHours(-7).ToString('yyyy-MM-dd HH:mm:ss'); UPDATED_UTC = $nowUtc.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'") }
