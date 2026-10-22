@@ -3,7 +3,7 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
-## Unreleased
+## 0.2.12 (2026-10-22)
 
 - **New versions in sight, with what they change**: an orange dot on Updates in the menu and on *Release from
   GitHub* when GitHub has a release newer than the one published to the devices (and on Updates for a newer
