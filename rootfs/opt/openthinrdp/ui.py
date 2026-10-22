@@ -247,6 +247,9 @@ if MODE == 'message':
         for b in A.button:
             text, _, c = b.rpartition(':')
             bt = Gtk.Button(label=text); bt.get_style_context().add_class('primary' if c == A.primary else 'secondary')
+            # a progress screen: its buttons only by mouse or touch (before show_all, or GTK focuses the first one).
+            # An Enter pressed twice after the password would otherwise press Cancel on the screen that follows it.
+            if A.progress: bt.set_can_focus(False)
             bt.connect('clicked', lambda _b, c=int(c): leave(c)); row.pack_start(bt, False, False, 0); buttons[c] = bt
         card.pack_start(row, False, False, 0)
     if A.timeout:
@@ -298,7 +301,8 @@ if MODE == 'message':
             return True
         poll(); GLib.timeout_add(700, poll)
     win.show_all()
-    if A.default in buttons: buttons[A.default].grab_focus()
+    if A.progress: pass                     # no button takes the keyboard there (above)
+    elif A.default in buttons: buttons[A.default].grab_focus()
     elif buttons: list(buttons.values())[0].grab_focus()
     Gtk.main(); sys.exit(code)
 

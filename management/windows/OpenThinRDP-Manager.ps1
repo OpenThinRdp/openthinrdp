@@ -3909,7 +3909,10 @@ function Clear-Device {
   $f = Get-HostFile $d.Name
   if (-not (Test-Path -LiteralPath $f)) { Show-Message (Get-Text 'MsgNoExceptionsTitle') (Get-Text 'MsgNoExceptions' $d.Name) 'Information'; return }
   if (-not (Confirm-Action (Get-Text 'ConfirmRemoveTitle') (Get-Text 'ConfirmRemove' $d.Name) 'Button2')) { return }
-  Move-Item -LiteralPath $f -Destination (Get-BackupPath $f)
+  # an empty file, not no file: a device that finds no file of its own keeps its last settings (a file moved by hand,
+  # a folder copied in part, a version that does not see groups); an empty one says "no exceptions any more"
+  Copy-Item -LiteralPath $f -Destination (Get-BackupPath $f)
+  [IO.File]::WriteAllText($f, (($script:HostHeader -join "`r`n") + "`r`n"), $script:Utf8)
   Add-ChangeLog "$($d.Name).conf: all exceptions removed"
   Update-DeviceGrid
 }

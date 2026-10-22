@@ -417,6 +417,8 @@ ok "RD Gateway: use always, detect (rileva), anything else always" 'printf "RDP_
   eval "$(sed -n '/^connect(){/,/^}/p; /^vm_alive(){/,/^  sleep 5/p' $OTR/kiosk.sh)"
   usb_reclaim(){ :; }; reset_cam(){ :; }; usb_opt(){ echo /usb:auto; }; touch_ids(){ :; }; usb_sound_card(){ return 1; }
   sleep(){ :; }; xrandr(){ :; }; sudo(){ :; }; xfreerdp3(){ printf '%s\n' "$@" > /tmp/frdp.args; }
+  # FreeRDP starts through setsid (no console): here it runs the stub above
+  setsid(){ [ "$1" = -w ] && shift; "$@"; }
   HASUDP=1 HASCAM=0 NTLMPKG=n KRBPKG=k
   cp $OTR_CONF /tmp/conf.save
   printf 'RDP_AUTH=ntlm\n' > $OTR_CONF; connect u p rdbroker.example.test; cp /tmp/frdp.args /tmp/frdp.none
@@ -686,6 +688,19 @@ OTR_LOG=$(mktemp -d); touch /tmp/kiosk.log; hang_report $DEAF
 ok "watchdog: hang_report keeps its sockets and threads in session-hang.log" 'grep -q "^=== .* FreeRDP $DEAF" $OTR_LOG/session-hang.log && grep -q "unread [1-9]" $OTR_LOG/session-hang.log && grep -q "wchan=" $OTR_LOG/session-hang.log'
 kill $SRV $DEAF $READER 2>/dev/null; rm -rf "${OTR_LOG:?}"; OTR_LOG=/var/log/openthinrdp
 ok "kiosk: no systemctl is-active on the collected update unit (journal noise every 5 s)" '! grep -q "is-active -q openthinrdp-update" $OTR/kiosk.sh && grep -q "^updating()" $OTR/lib/common.sh'
+
+# a connection can always be left: Cancel while it connects, a time limit, a stopped FreeRDP, never an empty user
+ok "kiosk: Cancel on the connecting screen kills the attempt and goes back to the sign-in" 'grep -q -- "--button=\"\$L_CANCEL:30\"" $OTR/kiosk.sh && grep -q "touch /tmp/kiosk.cancel" $OTR/kiosk.sh && grep -q "\[ \$res -eq 5 \] && break" $OTR/kiosk.sh'
+ok "kiosk: no desktop after the time limit, or FreeRDP stopped (state T): killed, said, not retried" 'grep -q "touch /tmp/kiosk.timeout" $OTR/kiosk.sh && grep -q "touch /tmp/kiosk.stopped" $OTR/kiosk.sh && grep -q "return 6" $OTR/kiosk.sh'
+ok "kiosk: FreeRDP without a console (setsid, stdin /dev/null): it can never wait for an answer on tty1" 'grep -q "setsid -w xfreerdp3" $OTR/kiosk.sh && grep -q "< /dev/null > /tmp/kiosk.log" $OTR/kiosk.sh'
+ok "kiosk: an empty user is the default one read again, else the name is asked" 'grep -q "U=\$(cfg DEFAULT_USER)" $OTR/kiosk.sh && grep -q "L_E_NOUSER" $OTR/kiosk.sh'
+# setsid really leaves no console: a program that opens /dev/tty fails at once instead of waiting
+ok "setsid: no controlling terminal for the child" '! setsid -w sh -c "exec 3</dev/tty" 2>/dev/null'
+
+# the file of a device gone from the folder: its last settings stay (21/10: a default user and a kiosk lost)
+ok "report: no file of this device = its last central settings kept, said once" 'grep -q "central-host.missing" $OTR/report.sh && grep -q "its last settings kept" $OTR/report.sh'
+
+ok "ui: the buttons of a progress screen take no keyboard (an Enter after the password never presses Cancel)" 'grep -q "if A.progress: bt.set_can_focus(False)" $OTR/ui.py'
 
 echo "passed $PASS, failed $FAIL"
 [ $FAIL = 0 ]

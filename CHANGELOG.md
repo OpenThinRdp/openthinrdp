@@ -3,6 +3,19 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## Unreleased
+
+- **A connection can always be left**: *Cancel* on the connecting screen ends the attempt and goes back to the
+  sign-in; with no desktop after 150 seconds the attempt ends by itself and says so; a FreeRDP stopped by the
+  system for 10 seconds is ended too. FreeRDP runs without a console: missing a user it can no longer wait
+  forever for an answer nobody can give (a till stuck on *connecting* until switched off).
+- **Never a sign-in without a user**: an empty field is the default user as it is at that moment, and without one
+  the name is asked. The sign-in screen is drawn again when the settings change (a default user or the kiosk mode
+  that arrived a second after the screen).
+- **A device keeps its last settings when its file is not in the folder** (moved by hand, a group its version did
+  not know): before, its own settings went back to the defaults. *Remove all exceptions* in the manager now leaves an
+  empty file, which is what says *no exceptions*.
+
 ## 0.2.12 (2026-10-22)
 
 - **New versions in sight, with what they change**: an orange dot on Updates in the menu and on *Release from

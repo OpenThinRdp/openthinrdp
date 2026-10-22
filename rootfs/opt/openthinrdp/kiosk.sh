@@ -54,8 +54,10 @@ update_watch(){
   bsig=$(stat -c %Y "$OTR_LIB"/branding/*.png 2>/dev/null | tr '\n' ' ')
   python3 -c 'import gi; gi.require_version("Gtk", "3.0")' 2>/dev/null && UIOK=1
   while sleep 5; do
-    # a new logo or background picture of the management folder: draw the sign-in screen again (not in a session)
-    nsig=$(stat -c %Y "$OTR_LIB"/branding/*.png 2>/dev/null | tr '\n' ' ')
+    # a new logo or background picture of the management folder, or new settings (central-apply.sh writes them only
+    # when something changes: a default user that came after the form was drawn): the sign-in screen again (not in a
+    # session)
+    nsig=$(stat -c %Y "$OTR_LIB"/branding/*.png "$OTR_CONF" 2>/dev/null | tr '\n' ' ')
     if [ "$nsig" != "$bsig" ]; then bsig=$nsig; pgrep -x xfreerdp3 >/dev/null || pkill -f -- "--class=OtrLogin" 2>/dev/null; fi
     # not while the full screen power-off notice shows the same progress
     if updating && ! pgrep -x xfreerdp3 >/dev/null && [ ! -f /tmp/openthinrdp-poweroff-pending ]; then
@@ -295,8 +297,11 @@ connect(){
   # must not hold up the session's display. The progress loop releases them 15 s after the window is up.
   local held; held=$(echo "$usb" | sed -n 's/.*,id:\([^,]*\).*/\1/p' | tr '#' ' ')
   [ -n "$held" ] && sudo -n "$OTR/usb-hold.sh" hold $held >/dev/null 2>&1
-  xfreerdp3 "${o[@]}" /gdi:hw /bpp:32 /dynamic-resolution /f /smartcard /drive:hotplug,'*' \
-    "$snd" /clipboard "${extra[@]}" > /tmp/kiosk.log 2>&1
+  # setsid, input from /dev/null: no console for FreeRDP. Missing a user or a password it would ask for them on tty1,
+  # where nobody can answer: stopped by the kernel (SIGTTOU), the screen stuck on "connecting" until switched off.
+  # Without a console the question fails at once and the attempt ends with its error.
+  setsid -w xfreerdp3 "${o[@]}" /gdi:hw /bpp:32 /dynamic-resolution /f /smartcard /drive:hotplug,'*' \
+    "$snd" /clipboard "${extra[@]}" < /dev/null > /tmp/kiosk.log 2>&1
 }
 
 # --- settings dialog ----------------------------------------------------------------------------
@@ -698,8 +703,9 @@ vm_wait(){ local now m rc
 # 2 = desktop not available after the attempts, 3 = session DROPPED (the caller reconnects without asking),
 # 4 = session taken over from another device (warn, never reconnect: the two devices would fight)
 session(){
-  local U="$1" P="$2" att=0 max=8 txt="$L_P_CONNECTING" B BRHA st d ec thr xp wp udponly=0 noudp=0 vmfails=0 vmwait=0 vmlog=0
+  local U="$1" P="$2" att=0 max=8 txt="$L_P_CONNECTING" B BRHA st d ec thr xp wp udponly=0 noudp=0 vmfails=0 vmwait=0 vmlog=0 ctmo=150
   BRHA=$(cfg BROKER)
+  rm -f /tmp/kiosk.cancel /tmp/kiosk.stopped /tmp/kiosk.timeout
   [ "$3" = reconnect ] && { max=40; txt="$L_P_RECONNECTING"; }
   LAST_ERR=""; LAST_EC=""
   thr=$(cfg_num SESSION_THRESHOLD 10)
@@ -733,9 +739,11 @@ session(){
       # redirected to the virtual machine (a connection to another address), the desktop window on screen. With the
       # window the screen closes (100); a closed screen must not end this loop (watchdog): writes ignore SIGPIPE.
       trap '' PIPE
-      local s1=0 s2=0 s3=0 n=0 s1n=0 s1w="" seen=0 lost=0 tcponly=0 fp ips first="" q lastq=0 stuck=0
+      local s1=0 s2=0 s3=0 n=0 s1n=0 s1w="" seen=0 lost=0 tcponly=0 fp ips first="" q lastq=0 stuck=0 stopped=0
       while kill -0 $xp 2>/dev/null; do
         fp=$(pgrep -P $xp -x xfreerdp3 | head -1)
+        # Cancel pressed before FreeRDP was there: it goes as soon as it is
+        [ -f /tmp/kiosk.cancel ] && [ -n "$fp" ] && kill -9 "$fp" 2>/dev/null
         if [ -n "$fp" ] && [ $s3 -eq 0 ]; then
           ips=$(ss -tnpH state established 2>/dev/null | grep "pid=$fp," | awk '{print $4}' | sed 's/:[0-9]*$//' | sort -u)
           [ -z "$first" ] && first=$(echo "$ips" | head -1)
@@ -753,6 +761,14 @@ session(){
         # and the session is reopened like after any drop.
         [ $((n % 12)) -eq 0 ] || continue
         fp=$(pgrep -P $xp -x xfreerdp3 | head -1); [ -n "$fp" ] || continue
+        # Stopped by the kernel (state T: it tried the console, or anything else that stops it) for 10 s: it never
+        # goes on by itself. What it was doing kept, killed, the attempt ends with an error (not a drop to retry).
+        if [ "$(awk '/^State/{print $2}' /proc/"$fp"/status 2>/dev/null)" = T ]; then stopped=$((stopped + 5))
+          if [ $stopped -ge 10 ]; then hang_report "$fp"; ev "watchdog: FreeRDP stopped (state T) for 10 s, killed"; touch /tmp/kiosk.stopped; kill -9 "$fp"; continue; fi
+        else stopped=0; fi
+        # No desktop yet after CONNECT_TIMEOUT seconds (a VM that starts takes one or two minutes): this attempt
+        # ends, said on the screen. The Cancel button ends it earlier.
+        if [ $s3 -eq 0 ] && [ $(( $(date +%s) - st )) -ge "$ctmo" ]; then ev "connection of $U: no desktop after $ctmo s, stopped"; touch /tmp/kiosk.timeout; kill -9 "$fp"; continue; fi
         if ss -tnpH state established 2>/dev/null | grep -q "pid=$fp,"; then seen=1; lost=0
           # Watchdog 2: connected, but FreeRDP no longer reads. Data waits in its sockets and the queue never shrinks
           # for 60 s (a working FreeRDP empties it all the time, even under load). Seen during a call with
@@ -778,9 +794,11 @@ session(){
         fi
       done
       echo "100"; echo "# $L_P_READY"
-    } | if [ $GREETER = 1 ]; then ui message --progress --icon=busy --heading="$(plain "$L_P_TITLE")" --text="$(plain "$txt")"
-        else yad --progress --auto-close --no-buttons --undecorated --skip-taskbar --center --width=470 \
-          --title="$TITLE" --text="$L_P_TITLE" 2>/dev/null; fi
+    } | { if [ $GREETER = 1 ]; then ui message --progress --icon=busy --heading="$(plain "$L_P_TITLE")" --text="$(plain "$txt")" --button="$L_CANCEL:30"
+          else yad --progress --auto-close --undecorated --skip-taskbar --center --width=470 \
+            --title="$TITLE" --text="$L_P_TITLE" --button="$L_CANCEL:30" 2>/dev/null; fi
+        # Cancel while it connects: this attempt ends now, back to the sign-in screen (no retry, no error)
+        if [ $? -eq 30 ]; then touch /tmp/kiosk.cancel; kill -9 $(pgrep -P $xp -x xfreerdp3) 2>/dev/null; fi; }
     wait $xp 2>/dev/null
     kill $wp 2>/dev/null
     # ended before the USB devices came back: back now (a pending release must not hit the next connection)
@@ -789,6 +807,13 @@ session(){
     pointer_idle_hide
     d=$(( $(date +%s) - st )); ec=$(cat /tmp/kiosk.rc 2>/dev/null)
     SESS_SECS=$d
+    # Ended by the Cancel button (5: back to the sign-in, no message), or killed stuck or without a desktop in
+    # time (6: said on the screen, never retried by itself)
+    if [ -f /tmp/kiosk.cancel ]; then rm -f /tmp/kiosk.cancel /tmp/kiosk.stopped /tmp/kiosk.timeout; ev "connection of $U cancelled with the button after ${d}s"; return 5; fi
+    if [ -f /tmp/kiosk.stopped ] || [ -f /tmp/kiosk.timeout ]; then
+      if [ -f /tmp/kiosk.stopped ]; then STOP_MSG=$L_E_STOPPED; else STOP_MSG=$(printf "$L_E_TIMEOUT" "$ctmo"); fi
+      rm -f /tmp/kiosk.stopped /tmp/kiosk.timeout; return 6
+    fi
     # credentials: from the EXIT CODE and first, at any duration. Never retry a wrong password (the attempts
     # would lock the account). 134 = wrong password (measured), 132 authentication, 154 wrong password,
     # 135 locked, 148/149/152 expired or must change, 151 disabled, 155-159 access denied or restricted
@@ -1026,7 +1051,11 @@ while true; do
   fi
   { [ $rc -eq 10 ] || [ $rc -eq 0 ]; } || { sleep 1; continue; }
   U=$(echo "$OUT" | cut -d'|' -f1); P=$(echo "$OUT" | cut -d'|' -f2-); P=${P%|}
-  [ -z "$U" ] && U="$DEF"; [ -z "$P" ] && continue
+  # an empty field = the default user AS IT IS NOW (read again: the form may have been drawn before the central
+  # settings brought it); still nobody = the name is asked, never a connection without a user (FreeRDP would ask for
+  # it on the console nobody sees)
+  [ -z "$U" ] && U=$(cfg DEFAULT_USER); [ -z "$P" ] && continue
+  if [ -z "$U" ]; then ui message --icon=warn --text="$(plain "$L_E_NOUSER")" --timeout=8 --button="$L_OK:0" --primary=0 --default=0; continue; fi
   OTHER=$(session_elsewhere "$U")
   if [ -n "$OTHER" ]; then
     # dialog WITHOUT fields: Enter presses the FIRST button -> Cancel (nobody drops a colleague by mistake)
@@ -1048,6 +1077,13 @@ while true; do
     fi
     if [ $res -eq 2 ] && [ "$MODE" = reconnect ]; then show_err "$LAST_ERR" "$U" "$L_E_NOTRESTORED"; break; fi
     MODE=""; DROPS=0
+    # cancelled with the button: straight back to the sign-in; stuck or too slow: said, then back to the sign-in
+    [ $res -eq 5 ] && break
+    if [ $res -eq 6 ]; then
+      ui message --icon=error --text="$(plain "$STOP_MSG")" --small="$(hostname)  ·  IP $(ipv4)  ·  $(date '+%d/%m %H:%M')" \
+         --timeout=60 --button="$L_OK:0" --primary=0 --default=0
+      break
+    fi
     if [ $res -eq 4 ]; then
       # no reconnection; the user moved to the other device -> this one switches off after 30 s.
       # Dialog WITHOUT fields: Enter presses the FIRST button -> Back to login; Resume here only by click

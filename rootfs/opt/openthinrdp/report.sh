@@ -189,6 +189,12 @@ else
       if [ -n "$f" ] && [ -f "$f" ]; then
         # 600: they may contain the Wi-Fi key
         ( umask 077; cp "$f" "$OTR_LIB/central-$n.conf.new" ) && mv -f "$OTR_LIB/central-$n.conf.new" "$OTR_LIB/central-$n.conf"
+        [ $n = host ] && rm -f "$OTR_LIB/central-host.missing"
+      elif [ $n = host ] && [ -f "$OTR_LIB/central-host.conf" ]; then
+        # The file of this device was there and is not any more (moved by hand, a folder copied in part, a group
+        # this version did not know): its last settings stay, said once. No exceptions any more = an EMPTY file
+        # (the manager writes one): never a missing one, which lost a default user and a kiosk on 21/10.
+        [ -f "$OTR_LIB/central-host.missing" ] || { ev "central configuration: no file of this device in the folder ($H.conf), its last settings kept"; touch "$OTR_LIB/central-host.missing"; }
       else rm -f "$OTR_LIB/central-$n.conf"; fi
     done
     if [ -n "$GF" ] || [[ $HF == */groups/* ]]; then echo "$G" > "$OTR_LIB/central-group-name"; else rm -f "$OTR_LIB/central-group-name"; fi
