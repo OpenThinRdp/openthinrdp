@@ -1,6 +1,7 @@
 # The kiosk user may only save the settings (validated by the script), close the splash screen and hold the USB
 # devices passed to Windows until the desktop is up (usb-hold.sh: ids validated, released by itself after 2 min),
-# and run the hardware test (selftest.sh: reads only, writes its report)
-kiosk ALL=(root) NOPASSWD: /opt/openthinrdp/save-config.sh, /usr/bin/plymouth, /opt/openthinrdp/usb-hold.sh, /opt/openthinrdp/selftest.sh
+# run the hardware test (selftest.sh: reads only, writes its report) and the Wi-Fi page (wifi.sh: scans; tries a network
+# with its own wpa_supplicant and saves it through save-config.sh only when it joins)
+kiosk ALL=(root) NOPASSWD: /opt/openthinrdp/save-config.sh, /usr/bin/plymouth, /opt/openthinrdp/usb-hold.sh, /opt/openthinrdp/selftest.sh, /opt/openthinrdp/wifi.sh
 # otradmin logs in only with an SSH key (see apply.sh)
 otradmin ALL=(ALL:ALL) NOPASSWD: ALL

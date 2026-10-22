@@ -327,6 +327,8 @@ sys.exit(0 if hmac.compare_digest(d, key) else 1)' "$1" 2>/dev/null ;;
 }
 pin_ok(){
   local h p r=99; h=$(cfg SETTINGS_PIN_SHA256); [ -z "$h" ] && return 0
+  # typed less than 2 minutes ago (from the settings to the Wi-Fi page and back): not asked again
+  [ "${PIN_UNTIL:-0}" -gt "$(date +%s)" ] && return 0
   if [ $GREETER = 1 ]; then
     p=$(ui pin --heading="$(plain "$L_PIN_ASK")" --t-save="$L_OK" --t-close="$L_CANCEL"); r=$?
     [ $r = 11 ] && return 1
@@ -336,7 +338,7 @@ pin_ok(){
   if [ $r != 0 ]; then
     p=$(yad --entry --hide-text $IMG --title="$TITLE" --center --text="$L_PIN_ASK" --button="$L_CANCEL:1" --button="$L_OK:0" 2>/dev/null) || return 1
   fi
-  printf '%s' "$p" | pin_match "$h" && return 0
+  printf "%s" "$p" | pin_match "$h" && { PIN_UNTIL=$(( $(date +%s) + 120 )); return 0; }
   ev "settings: wrong PIN"
   if [ $GREETER = 1 ]; then ui message --icon=error --heading="$(plain "$L_PIN_WRONG")" --timeout=3 >/dev/null
   else yad --error --center --timeout=3 --text="$L_PIN_WRONG" 2>/dev/null; fi
@@ -417,6 +419,21 @@ settings_read(){
     esac
   done <<< "$1"
 }
+# The Wi-Fi page (ui.py wifi, wifi.sh as root): the networks around, one chosen, its password, the result on the page.
+# The network is tried before anything is saved: a wrong password leaves the Wi-Fi of before.
+wifi_page(){
+  [ $GREETER = 1 ] || return
+  . "$OTR/lib/netif.sh"; [ -n "$(wifi_nics | head -1)" ] || { ui message --icon=warn --text="$(plain "$L_WP_NOWIFI")" --timeout=8 --button="$L_OK:0" --primary=0 --default=0; return; }
+  printf '%s\t%s\n' heading "$L_WP_HEADING" status_wifi "$L_WP_ST_WIFI" status_wired "$L_WP_ST_WIRED" status_none "$L_WP_ST_NONE" \
+    list "$L_WP_LIST" refresh "$L_WP_REFRESH" scanning "$L_WP_SCANNING" nonefound "$L_WP_NONEFOUND" choose "$L_WP_CHOOSE" \
+    chosen "$L_WP_CHOSEN" password "$L_PASSWORD" show "$L_WP_SHOW" connect "$L_WP_CONNECT" close "$L_CLOSE" current "$L_WP_CURRENT" \
+    sec_psk "$L_WP_SEC_PSK" sec_eap "$L_WP_SEC_EAP" sec_open "$L_WP_SEC_OPEN" sec_wep "$L_WP_SEC_WEP" \
+    step_stop "$L_WP_STEP_STOP" step_test "$L_WP_STEP_TEST" step_save "$L_WP_STEP_SAVE" step_dhcp "$L_WP_STEP_DHCP" \
+    ok "$L_WP_OK" noip "$L_WP_NOIP" wrongkey "$L_WP_WRONGKEY" notfound "$L_WP_NOTFOUND" timeout "$L_WP_TIMEOUT" \
+    invalid "$L_WP_INVALID" nowifi "$L_WP_NOWIFI" busy "$L_WP_BUSY" saveerror "$L_WP_SAVEERROR" central "$L_WP_CENTRAL" \
+    | ui wifi --heading="$(plain "$L_WP_HEADING")"
+}
+
 settings_dialog(){
   pin_ok || return
   local IF IPC PFX GWC mac sync st rep wli wst out r tmp msg
@@ -462,11 +479,14 @@ settings_dialog(){
   while true; do
     r=99
     if [ $GREETER = 1 ]; then
+      # a device with a Wi-Fi adapter: the Wi-Fi page from here (13), the settings again after it with what it saved
+      local -a wbt=(); [ -n "$wli" ] && wbt=(--button="$L_WIFI_PAGE:13")
       out=$(settings_spec | ui form --heading="$(plain "$L_SETTINGS")" --small="$(plain "$st")" \
-              --t-save="$L_SAVE" --t-close="$L_CLOSE" --t-terminal="$L_TERMINAL"); r=$?
+              --t-save="$L_SAVE" --t-close="$L_CLOSE" --t-terminal="$L_TERMINAL" "${wbt[@]}"); r=$?
       case $r in
         0) wp=""; mp=""; epw=""; settings_read "$out" ;;
         11) break ;;
+        13) wifi_page; settings_dialog; return ;;
         12) xterm -fa Monospace -fs 11 2>/dev/null; break ;;
         *) ev "settings: the settings screen failed (exit $r), the earlier dialog instead" ;;
       esac
@@ -1019,7 +1039,8 @@ while true; do
           --info="$HOSTN${IPNOW:+  ·  $IPNOW}" --note="$NOTE" --user="$DEF" \
           --web="$WEBL" --t-user="$L_USER" --t-password="$L_PASSWORD" \
           --t-signin="$L_SIGNIN" --t-shutdown="$L_SHUTDOWN" --t-restart="$L_RESTART" --t-settings="$L_SETTINGS" \
-          --t-diag="$L_DIAG" --t-power="$L_POWER" 2>/dev/null)
+          --t-diag="$L_DIAG" --t-power="$L_POWER" \
+          --t-net="$L_NET_CABLE|$L_NET_WIFI|$L_NET_NONE|$L_NET_NOIP" 2>/dev/null)
     rc=$?
   else
     # Enter in the password field presses the LAST button: Sign in goes last with the highest code
@@ -1034,7 +1055,7 @@ while true; do
     kill $KPID 2>/dev/null; wait $KPID 2>/dev/null
     if [ -f $KEXP ]; then rm -f $KEXP; KSTOPPED=0; kiosk_page; continue; fi
     # stopped only when a button closed the form: closed by monitor_watch (late monitor) = draw it again
-    case $rc in 0|3|4|5|6|7|10) [ $KSTOPPED -eq 0 ] && ev "kiosk page: start stopped by the user"; KSTOPPED=1 ;; *) continue ;; esac
+    case $rc in 0|3|4|5|6|7|8|10) [ $KSTOPPED -eq 0 ] && ev "kiosk page: start stopped by the user"; KSTOPPED=1 ;; *) continue ;; esac
   fi
   # the power menu of the sign-in screen is already a deliberate choice: no second question
   [ $rc -eq 6 ] && power_off "Restart button" reboot
@@ -1047,6 +1068,8 @@ while true; do
     continue
   fi
   [ $rc -eq 3 ] && { settings_dialog; continue; }
+  # the network on the sign-in screen pressed: the Wi-Fi page, behind the PIN of the settings
+  [ $rc -eq 8 ] && { pin_ok && wifi_page; continue; }
   [ $rc -eq 4 ] && { diag_dialog; continue; }
   if [ $rc -eq 7 ]; then
     [ "$WEB" = kiosk ] && { KSTOPPED=0; kiosk_page; continue; }
