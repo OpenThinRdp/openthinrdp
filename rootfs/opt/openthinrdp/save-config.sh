@@ -176,6 +176,7 @@ V[UPDATE_GITHUB]=$(get UPDATE_GITHUB); [[ ${V[UPDATE_GITHUB]} =~ ^[A-Za-z0-9_.-]
 case "$(low "$(get UPDATE_KEY)")" in site|sito) V[UPDATE_KEY]=site ;; *) V[UPDATE_KEY]=any ;; esac
 V[UPDATE_TO]=$(low "$(get UPDATE_TO)")
 case "${V[UPDATE_TO]}" in ''|latest|ultima|ultimo) V[UPDATE_TO]=latest ;; *) [[ ${V[UPDATE_TO]} =~ ^[0-9a-z._-]+$ ]] || err "$V_UPDATE_TO" ;; esac
+V[UPDATE_MAJOR]=$(low "$(get UPDATE_MAJOR)"); [ -z "${V[UPDATE_MAJOR]}" ] || [[ ${V[UPDATE_MAJOR]} =~ ^[0-9a-z._-]+$ ]] || err "$V_UPDATE_TO"
 V[SSH]=$(onoff "$(get SSH)")
 V[REMOTE_SCREEN]=$(onoff "$(get REMOTE_SCREEN)")
 V[ANON_STATS]=$(onoff "$(get ANON_STATS)")

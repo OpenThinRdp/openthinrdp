@@ -294,10 +294,13 @@ gpg -q --batch --passphrase '' --quick-gen-key "stranger <x@example.invalid>" ed
 mkdir -p $OTR/keys; gpg -q --armor --export p@example.invalid > $OTR/keys/openthinrdp-release.asc
 gpg -q --armor --export s@example.invalid > /etc/openthinrdp/update-key.asc
 echo 0.1.0 > $OTR/VERSION
-# release VERSION signed by KEY into DIR
+# release VERSION signed by KEY into DIR [MAJOR: the newest major update, major= of LATEST.txt]
 release(){ local v=$1 k=$2 d=$3 s; s=$(mktemp -d); rm -rf "$d"; mkdir -p "$d"
-  printf '#!/bin/bash\nexit 0\n' > $s/install.sh; tar -czf "$d/openthinrdp-update-$v.tar.gz" -C $s .
+  printf '#!/bin/bash\nexit 0\n' > $s/install.sh
+  printf '# Changelog\n\n## %s (2026-01-01)\n\n- **New** in %s\n\n## 0.1.5 (2025-12-01)\n\n- between\n\n## 0.1.0 (2025-11-01)\n\n- the image\n' "$v" "$v" > $s/CHANGELOG.md
+  tar -czf "$d/openthinrdp-update-$v.tar.gz" -C $s .
   printf 'version=%s\nfile=openthinrdp-update-%s.tar.gz\nsha256=%s\n' "$v" "$v" "$(sha256sum < "$d/openthinrdp-update-$v.tar.gz" | cut -c1-64)" > "$d/LATEST.txt"
+  [ -n "${4:-}" ] && echo "major=$4" >> "$d/LATEST.txt"
   gpg -q --batch --yes --local-user "$k" --armor --detach-sign -o "$d/LATEST.txt.sig" "$d/LATEST.txt"; }
 U=$OTR_LIB/update; gh(){ rm -f $U/github-checked; $OTR/auto-update.sh check-github; }
 release 0.2.0 x@example.invalid /tmp/otr-release; gh
@@ -306,20 +309,26 @@ release 0.2.0 s@example.invalid /tmp/otr-release; gh
 ok "github: the site key is not enough" 'grep -q "^IGNORED: invalid signature" $U/status'
 release 0.0.9 p@example.invalid /tmp/otr-release; gh
 ok "github: older than the image (no update installed yet) is ignored" 'grep -q "older: ignored" $U/status'
+# no management folder (no central settings): every new version is asked on the device, with its changes
+[ -f $OTR_LIB/central-common.conf ] && mv $OTR_LIB/central-common.conf /tmp/cc.keep
 release 0.2.0 p@example.invalid /tmp/otr-release; gh
-# still on the version of the image (no update-version): prepared, then the choice on the device first
-ok "first start: a newer release is offered, not installed" 'grep -q "^found 0.2.0 (github): waiting for the choice" $U/status && [ "$(cat /run/openthinrdp-update-offer)" = "0.2.0 0.1.0" ] && [ -f $U/pkg-0.2.0/install.sh ] && [ ! -f $U/attempts-0.2.0 ] && [ -f /run/openthinrdp-update-checked ]'
+ok "no management folder: a newer release is offered on the device, not installed" 'grep -q "^found 0.2.0 (github): asked on the device at the sign-in$" $U/status && [ "$(cat /run/openthinrdp-update-offer)" = "0.2.0 0.1.0 " ] && [ -f $U/pkg-0.2.0/install.sh ] && [ ! -f $U/attempts-0.2.0 ] && [ -f /run/openthinrdp-update-checked ]'
+ok "no management folder: the changes since the installed version, as plain text" 'grep -qx -- "- New in 0.2.0" /run/openthinrdp-update-notes && grep -q between /run/openthinrdp-update-notes && ! grep -q "the image" /run/openthinrdp-update-notes && ! grep -q "\*\*" /run/openthinrdp-update-notes'
+touch -d "-11 min" /run/openthinrdp-update-offer; gh
+ok "no management folder: nobody answering on the device never installs it by itself" 'grep -q "asked on the device at the sign-in" $U/status && [ ! -f $U/attempts-0.2.0 ]'
 touch /tmp/openthinrdp-update-declined; $OTR/auto-update.sh check-github
-ok "first start: declined on the device, the image's version stays" 'grep -q "^kept 0.1.0 by choice" $U/status && [ ! -f $U/attempts-0.2.0 ]'
-rm -f /tmp/openthinrdp-update-declined; touch -d "-11 min" /run/openthinrdp-update-offer; $OTR/auto-update.sh check-github
-ok "first start: nobody answers in 10 minutes, installed" 'grep -q "^found 0.2.0 (github): install started" $U/status && [ ! -f /run/openthinrdp-update-offer ]'
-rm -f $U/attempts-0.2.0; touch /tmp/openthinrdp-update-accepted; gh
+ok "no management folder: not now on the device, kept until the next start" 'grep -q "^kept 0.1.0 by choice on the device" $U/status && [ ! -f $U/attempts-0.2.0 ] && [ ! -f /run/openthinrdp-update-offer ]'
+rm -f /tmp/openthinrdp-update-declined; echo 0.1.9 > /tmp/openthinrdp-update-accepted; gh
+ok "no management folder: a yes for another version is not one for this" 'grep -q "asked on the device" $U/status && [ ! -f $U/attempts-0.2.0 ]'
+rm -f $U/attempts-0.2.0; echo 0.2.0 > /tmp/openthinrdp-update-accepted; gh
 ok "github: a release signed by the project key is taken" 'grep -q "^found 0.2.0 (github): install started" $U/status && [ -f $U/pkg-0.2.0/install.sh ]'
 echo x > $U/status; $OTR/auto-update.sh check-github
 ok "github: asked again only after 3 hours" '[ "$(cat $U/status)" = x ]'
 rm -rf /tmp/otr-release; gh
 ok "github: not reachable is retried at the next run" 'grep -q "not reachable" $U/status && [ ! -f $U/github-checked ]'
-rm -rf $U/pkg-* $U/attempts-*
+rm -rf $U/pkg-* $U/attempts-* /tmp/openthinrdp-update-accepted /run/openthinrdp-update-offer
+# from here a managed device: central settings from the management folder, no question on the device
+printf '# the central settings of the folder\n' > $OTR_LIB/central-common.conf
 mkdir -p /tmp/share; release 0.3.0 s@example.invalid /tmp/share/updates; $OTR/auto-update.sh check /tmp/share
 ok "share: the site key is accepted" 'grep -q "^found 0.3.0 (share)" $U/status'
 rm -rf $U/pkg-* $U/attempts-*
@@ -381,6 +390,21 @@ darch 1.5 amd64 $U/pkg-0.3.1/debs/amd64/otr-dummy_1.5_amd64.deb; darch 1.0 arm64
 $OTR/auto-update.sh install 0.3.1 downgrade
 ok "going back: the .deb of this architecture in debs/<arch>/ is put back, the other one ignored" '[ "$(dpkg-query -W -f "\${Version}" otr-dummy)" = 1.5 ] && grep -q "^up to date: 0.3.1" $U/status'
 dpkg -r otr-dummy >/dev/null 2>&1; rm -f /tmp/otr-dummy-2.deb; to ""
+# major updates: LATEST.txt names the newest one (major=); crossing it needs UPDATE_MAJOR, written by the manager
+ok "UPDATE_MAJOR a version or empty" 'check x "UPDATE_MAJOR=0.4.1" && check x "UPDATE_MAJOR=" && ! check x "UPDATE_MAJOR=0.4 1!"'
+echo 0.4.0 > $OTR_LIB/update-version; release 0.4.2 p@example.invalid /tmp/share/updates 0.4.1; $OTR/auto-update.sh check /tmp/share
+ok "major update, managed: crossing it without UPDATE_MAJOR from the manager, not installed" 'grep -q "^found 0.4.2 (share): major update (0.4.1), installed once it is released from the manager" $U/status && [ ! -f $U/attempts-0.4.2 ] && [ ! -f /run/openthinrdp-update-offer ]'
+echo UPDATE_MAJOR=0.4.0 >> $OTR_CONF; $OTR/auto-update.sh check /tmp/share
+ok "major update, managed: an older UPDATE_MAJOR is not enough" 'grep -q "major update (0.4.1), installed once it is released" $U/status && [ ! -f $U/attempts-0.4.2 ]'
+sed -i '/^UPDATE_MAJOR=/d' $OTR_CONF; echo UPDATE_MAJOR=0.4.1 >> $OTR_CONF; $OTR/auto-update.sh check /tmp/share
+ok "major update, managed: released by the manager (UPDATE_MAJOR), installed" 'grep -q "^found 0.4.2 (share): install started" $U/status'
+sed -i '/^UPDATE_MAJOR=/d' $OTR_CONF; rm -rf $U/pkg-* $U/attempts-*; echo 0.4.1 > $OTR_LIB/update-version; $OTR/auto-update.sh check /tmp/share
+ok "major update already installed: the next ones install by themselves" 'grep -q "^found 0.4.2 (share): install started" $U/status'
+rm -rf $U/pkg-* $U/attempts-*; echo 0.4.0 > $OTR_LIB/update-version; mv $OTR_LIB/central-common.conf /tmp/cc2; $OTR/auto-update.sh check /tmp/share
+ok "major update, no management folder: offered on the device as a major one" 'grep -q "asked on the device at the sign-in, major update$" $U/status && [ "$(cat /run/openthinrdp-update-offer)" = "0.4.2 0.4.0 0.4.1" ]'
+mv /tmp/cc2 $OTR_LIB/central-common.conf; rm -rf $U/pkg-* $U/attempts-* /run/openthinrdp-update-offer /run/openthinrdp-update-notes /tmp/share/updates
+if [ -f /tmp/cc.keep ]; then mv /tmp/cc.keep $OTR_LIB/central-common.conf; else rm -f $OTR_LIB/central-common.conf; fi
+ok "kiosk: the update question only without central settings, at every sign-in round; the form redrawn for an offer" 'grep -q "^managed(){ \[ -s \"\$OTR_LIB/central-common.conf\" \]; }" $OTR/kiosk.sh && grep -q "^  managed || \[" $OTR/kiosk.sh && grep -A2 "^while true; do" $OTR/kiosk.sh | grep -q "^  update_question" && grep -q "OTR_CONF\" /run/openthinrdp-update-offer" $OTR/kiosk.sh && ! grep -q first_update $OTR/kiosk.sh'
 
 # --- packages by architecture (lib/common.sh): the package list and the .deb files of an update package
 PL=/src/image/lb/packages.list

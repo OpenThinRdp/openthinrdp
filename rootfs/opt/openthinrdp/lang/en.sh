@@ -39,9 +39,11 @@ L_REMOTE_SCREEN_ON="Remote assistance active: an administrator can see this scre
 L_UPD_CHECK_T="Checking for updates"
 L_UPD_CHECK="Looking for the latest version of OpenThinRDP…"
 L_UPD_OFFER_T="New version available"
-L_UPD_OFFER="This device runs version %s. Version %s is available: download it now or use the current one? Without a choice within 30 seconds the new one is downloaded."
+L_UPD_OFFER="This device runs version %s. Version %s is available, with the changes below. Without an answer within 30 seconds it is installed."
 L_UPD_GET="Download and use %s"
-L_UPD_KEEP="Use %s"
+L_UPD_NOTNOW="Not now"
+L_UPD_MAJOR_T="Major update: %s"
+L_UPD_MAJOR="This device runs version %s. Version %s changes how a session connects or runs: read the changes below. It is installed only if you choose it."
 L_UPD_INSTALL="Installing the new version: the screen starts again by itself when it is done."
 L_P_NONET="Check the network cable.\nNew attempt in 5 seconds (%s of %s)"
 

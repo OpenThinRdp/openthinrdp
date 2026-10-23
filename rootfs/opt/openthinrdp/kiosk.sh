@@ -54,10 +54,11 @@ update_watch(){
   bsig=$(stat -c %Y "$OTR_LIB"/branding/*.png 2>/dev/null | tr '\n' ' ')
   python3 -c 'import gi; gi.require_version("Gtk", "3.0")' 2>/dev/null && UIOK=1
   while sleep 5; do
-    # a new logo or background picture of the management folder, or new settings (central-apply.sh writes them only
-    # when something changes: a default user that came after the form was drawn): the sign-in screen again (not in a
+    # a new logo or background picture of the management folder, new settings (central-apply.sh writes them only
+    # when something changes: a default user that came after the form was drawn), or a new version offered to a
+    # device without a management folder (update_question asks before the form): the sign-in screen again (not in a
     # session)
-    nsig=$(stat -c %Y "$OTR_LIB"/branding/*.png "$OTR_CONF" 2>/dev/null | tr '\n' ' ')
+    nsig=$(stat -c %Y "$OTR_LIB"/branding/*.png "$OTR_CONF" /run/openthinrdp-update-offer 2>/dev/null | tr '\n' ' ')
     if [ "$nsig" != "$bsig" ]; then bsig=$nsig; pgrep -x xfreerdp3 >/dev/null || pkill -f -- "--class=OtrLogin" 2>/dev/null; fi
     # not while the full screen power-off notice shows the same progress
     if updating && ! pgrep -x xfreerdp3 >/dev/null && [ ! -f /tmp/openthinrdp-poweroff-pending ]; then
@@ -961,45 +962,54 @@ ui(){ local m=$1; shift; python3 "$OTR/ui.py" "$m" --title="$TITLE" --lang="$(cf
         --splash="$SPLASH" --logo="$LOGO" "$@" 2>/dev/null; }
 # plain text for ui.py: no Pango tags
 plain(){ printf '%s' "$1" | sed 's/<[^>]*>//g'; }
-
-# --- started from an image: the latest version first ---------------------------------------------
-# A device still on the version of the image it started from (live system, or installed and never updated) hears
-# from the update source before anything opens: with a newer version it asks whether to download it or to use the
-# image's (no answer in 30 s = the newer one, so unattended installs end up current). auto-update.sh, started by
-# report.sh at the "kiosk started" event, prepares the package and waits for the answer; the install restarts
-# this kiosk. The ISO does not need rebuilding for every release.
-first_update(){
-  local i o v cur rc
-  [ -f "$OTR_LIB/update-version" ] || [ "$(cfg UPDATE_FROM)" = off ] && return 0
-  [ -f /tmp/openthinrdp-update-declined ] || [ -f /tmp/openthinrdp-update-accepted ] && return 0
-  . "$OTR/lib/netif.sh"
-  # a network within 20 s, otherwise the usual update in the background later
-  for i in $(seq 1 40); do ip -4 -o addr show dev "$(main_nic)" 2>/dev/null | grep -q inet && break; sleep 0.5; done
-  ip -4 -o addr show dev "$(main_nic)" 2>/dev/null | grep -q inet || return 0
-  # the answer of the update source: 45 s at most
-  if [ ! -f /run/openthinrdp-update-offer ] && [ ! -f /run/openthinrdp-update-checked ]; then
-    { echo "15"; echo "# $L_UPD_CHECK"
-      for i in $(seq 1 90); do [ -f /run/openthinrdp-update-offer ] || [ -f /run/openthinrdp-update-checked ] && break; sleep 0.5; done
-      echo "100"; } | ui message --progress --icon=busy --heading="$(plain "$L_UPD_CHECK_T")" --text="$(plain "$L_UPD_CHECK")"
+# --- updates of a device without a management folder: asked on its screen ----------------------------------------
+# With central settings (a management folder, the manager) the site decides and nothing is asked here. Without them
+# (the live system from the USB stick, an image of its own with site.conf only) nobody else decides: auto-update.sh
+# offers every new version (/run/openthinrdp-update-offer: "<new> <current> [<major>]") with its changes, and this
+# asks at the sign-in screen. A normal update: Enter or 30 s without an answer installs it. A major update (a change
+# to how a session connects or runs): only with a yes. Not now: until the next start. The install restarts the kiosk.
+managed(){ [ -s "$OTR_LIB/central-common.conf" ]; }
+update_question(){
+  local i v cur maj rc
+  [ -f /run/openthinrdp-update-offer ] && [ ! -f /tmp/openthinrdp-update-declined ] || return 0
+  read -r v cur maj < /run/openthinrdp-update-offer; [ -n "$v" ] || return 0
+  [ "$(cat /tmp/openthinrdp-update-accepted 2>/dev/null)" = "$v" ] && return 0
+  if [ -n "$maj" ]; then
+    ui text --heading="$(plain "$(printf "$L_UPD_MAJOR_T" "$v")")" --text="$(plain "$(printf "$L_UPD_MAJOR" "$cur" "$v")")" \
+       --t-close="$L_UPD_NOTNOW" --button="$(printf "$L_UPD_GET" "$v"):1" < /run/openthinrdp-update-notes
+  else
+    ui text --heading="$(plain "$L_UPD_OFFER_T")" --text="$(plain "$(printf "$L_UPD_OFFER" "$cur" "$v")")" --timeout=30 \
+       --t-close="$L_UPD_NOTNOW" --button="$(printf "$L_UPD_GET" "$v"):1" --primary=1 < /run/openthinrdp-update-notes
   fi
-  o=$(cat /run/openthinrdp-update-offer 2>/dev/null); [ -n "$o" ] || return 0
-  v=${o%% *}; cur=${o#* }
-  # Enter = the newer version; 70 = 30 s without an answer, also the newer one
-  ui message --icon=update --heading="$(plain "$L_UPD_OFFER_T")" --text="$(plain "$(printf "$L_UPD_OFFER" "$cur" "$v")")" \
-     --timeout=30 --button="$(printf "$L_UPD_GET" "$v"):1" --button="$(printf "$L_UPD_KEEP" "$cur"):2" --primary=1 --default=1
   rc=$?
-  if [ $rc = 2 ]; then
-    : > /tmp/openthinrdp-update-declined; ev "software update $v declined on the device: running $cur, the image's"; return 0
+  # 1 = install; 70 = 30 s without an answer (a normal update only: the major question has no timeout)
+  if [ $rc != 1 ] && [ $rc != 70 ]; then
+    : > /tmp/openthinrdp-update-declined; ev "software update $v not now, on the device: staying on $cur until the next start"; return 0
   fi
   # the event starts report.sh, which installs it; the install restarts this kiosk with the new version
-  : > /tmp/openthinrdp-update-accepted; ev "software update $v chosen on the device"
+  echo "$v" > /tmp/openthinrdp-update-accepted; ev "software update $v chosen on the device$([ -n "$maj" ] && echo ' (major update)')"
   { echo "10"; echo "# $(printf "$L_UPD_GET" "$v")"
     for i in $(seq 1 120); do updating && break; sleep 0.5; done
     echo "100"; } | ui message --progress --icon=update --heading="$(plain "$L_UPDATE_RUNNING")" --text="$(plain "$(printf "$L_UPD_GET" "$v")")"
   ui message --update --icon=update --heading="$(plain "$L_UPDATE_RUNNING")" --text="$(plain "$L_UPD_INSTALL") (%p%)"
   wait_update
 }
-first_update
+# At the start of a device without a management folder: the answer of the update source first (45 s at most, with a
+# network within 20 s), so the question comes before anyone signs in. The image does not need rebuilding per release.
+start_update_check(){
+  local i
+  managed || [ "$(cfg UPDATE_FROM)" = off ] && return 0
+  . "$OTR/lib/netif.sh"
+  for i in $(seq 1 40); do ip -4 -o addr show dev "$(main_nic)" 2>/dev/null | grep -q inet && break; sleep 0.5; done
+  ip -4 -o addr show dev "$(main_nic)" 2>/dev/null | grep -q inet || return 0
+  if [ ! -f /run/openthinrdp-update-offer ] && [ ! -f /run/openthinrdp-update-checked ]; then
+    { echo "15"; echo "# $L_UPD_CHECK"
+      for i in $(seq 1 90); do [ -f /run/openthinrdp-update-offer ] || [ -f /run/openthinrdp-update-checked ] && break; sleep 0.5; done
+      echo "100"; } | ui message --progress --icon=busy --heading="$(plain "$L_UPD_CHECK_T")" --text="$(plain "$L_UPD_CHECK")"
+  fi
+  update_question
+}
+start_update_check
 # the live system (from the USB stick) tests the hardware at its first start: what anyone trying it wants to know
 otr_installed || [ -f /tmp/openthinrdp-selftest-shown ] || { : > /tmp/openthinrdp-selftest-shown; selftest_dialog; }
 
@@ -1017,6 +1027,8 @@ if [ -z "$(cfg BROKER)" ]; then
 fi
 KSTOPPED=0   # 1 = somebody used the form: no countdown until we go back to the page
 while true; do
+  # a new version offered to a device without a management folder: asked before the sign-in screen (update_question)
+  update_question
   look
   HOSTN=$(hostname 2>/dev/null)
   WEB=$(cfg WEB_BUTTON); WEBBTN=()

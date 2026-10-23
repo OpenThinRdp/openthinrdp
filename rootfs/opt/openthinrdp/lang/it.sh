@@ -37,9 +37,11 @@ L_REMOTE_SCREEN_ON="Assistenza remota attiva: un amministratore vede questo sche
 L_UPD_CHECK_T="Controllo aggiornamenti"
 L_UPD_CHECK="Ricerca della versione più recente di OpenThinRDP…"
 L_UPD_OFFER_T="Nuova versione disponibile"
-L_UPD_OFFER="Questa postazione ha la versione %s. È disponibile la versione %s: scaricarla adesso oppure usare quella attuale? Senza una scelta entro 30 secondi viene scaricata la nuova."
+L_UPD_OFFER="Questa postazione ha la versione %s. È disponibile la versione %s, con le novità qui sotto. Senza una risposta entro 30 secondi viene installata."
 L_UPD_GET="Scarica e usa la %s"
-L_UPD_KEEP="Usa la %s"
+L_UPD_NOTNOW="Non ora"
+L_UPD_MAJOR_T="Aggiornamento importante: %s"
+L_UPD_MAJOR="Questa postazione ha la versione %s. La versione %s cambia come si apre o funziona una sessione: leggete le novità qui sotto. Viene installata solo se la scegliete."
 L_UPD_INSTALL="Installazione della nuova versione: la schermata riparte da sola appena finito."
 L_P_NONET="Controllare il cavo di rete.\nNuovo tentativo tra 5 secondi (%s di %s)"
 

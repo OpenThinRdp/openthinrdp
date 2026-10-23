@@ -1,0 +1,3 @@
+# The newest major update: a release with a change to how a session connects or runs. make-update.sh writes it
+# into the signed LATEST.txt of every release (major=). Set it to the version of the release in the release pull
+# request of a major update, and mark its entry in CHANGELOG.md with **Major update**. Empty: none yet.

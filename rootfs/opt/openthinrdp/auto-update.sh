@@ -23,7 +23,7 @@ PROJECT_KEY=$OTR/keys/openthinrdp-release.asc
 SITE_KEY=$OTR_ETC/update-key.asc
 W=$OTR_LIB/update
 ST=$W/status
-# a device still on the version of its image asks before installing (kiosk.sh first_update): "<new> <current>"
+# a device without a management folder asks before installing (kiosk.sh update_question): "<new> <current> [<major>]"
 OFFER=/run/openthinrdp-update-offer
 mkdir -p $W; chmod 700 $W
 
@@ -101,6 +101,17 @@ verify(){
   elif command -v gpgv >/dev/null; then gpgv "${a[@]}" "$1" "$2" >/dev/null 2>&1; else return 1; fi
 }
 
+# vle A B: version A is not newer than B (sort -V)
+vle(){ [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -1)" = "$1" ]; }
+# notes FROM TO: the changes of the versions after FROM up to TO, from the CHANGELOG.md of the package, as plain text
+# (the update question shows them)
+notes(){
+  local l v keep=0
+  while IFS= read -r l; do
+    if [[ $l == "## "* ]]; then v=${l#\#\# }; v=${v%% *}; keep=0; ! vle "$v" "$1" && vle "$v" "$2" && keep=1; fi
+    [ $keep = 1 ] && printf '%s\n' "$l"
+  done < "$W/pkg-$V/CHANGELOG.md" | sed 's/\*\*//g; s/`//g; s/^## //'
+}
 # UPDATE_TO: latest, or the one version to have. Going back below the first version that knows this setting would
 # bring back an updater that ignores it and goes straight up again: refused.
 MIN_TO=0.2.0
@@ -125,7 +136,7 @@ case "$1" in
     else BASE=$(printf "${OTR_UPDATE_TAG_URL:-https://github.com/$REPO/releases/download/v%s}" "$TO"); fi
     # at most every 3 hours once GitHub answered (report.sh runs every 5 minutes: without network, e.g. right
     # after boot, it simply tries again at the next run); a changed UPDATE_TO is asked at once
-    # (an open offer is not held back: the answer from the device, or the 10 minutes, are waited for)
+    # (an open offer is not held back: the answer from the device is waited for)
     [ -f $W/github-checked ] && [ "$(cat $W/github-checked)" = "$TO" ] && [ ! -f $OFFER ] && [ $(( $(date +%s) - $(stat -c %Y $W/github-checked) )) -lt 10800 ] && exit 0 ;;
   *) echo "usage: $0 check <mounted folder> | check-github | install <version> [downgrade]"; exit 2 ;;
 esac
@@ -174,14 +185,29 @@ if [ ! -f "$W/$F" ] || [ "$(sha256sum < "$W/$F" | cut -c1-64)" != "$H" ]; then
 fi
 rm -rf "$W/pkg-$V"; mkdir -p "$W/pkg-$V"
 tar -xzf "$W/$F" -C "$W/pkg-$V" || { echo "ERROR $V: package cannot be extracted" > $ST; exit 0; }
-# A device still on the version of its image (live system, or installed and never updated) asks first: the kiosk
-# shows "download this version or use the image's" before the sign-in (kiosk.sh first_update). The answer lasts
-# until the next start; nobody answering (no screen, unattended install) = installed after 10 minutes.
-if [ ! -f "$OTR_LIB/update-version" ] && [ ! -f /tmp/openthinrdp-update-accepted ]; then
-  [ -f /tmp/openthinrdp-update-declined ] && { echo "kept $CUR by choice on the device ($V available, $SRC)" > $ST; exit 0; }
-  [ -f $OFFER ] || { printf '%s %s\n' "$V" "$CUR" > $OFFER; chmod 644 $OFFER; }
-  if [ $(( $(date +%s) - $(stat -c %Y $OFFER) )) -lt 600 ]; then
-    echo "found $V ($SRC): waiting for the choice on the device" > $ST; exit 0; fi
+# Major updates (a change to how a session connects or runs): LATEST.txt, signed, names the newest one in major=.
+# Going from below it to it or past it crosses it. Never by itself: through the manager, or asked on the device.
+MAJ=$(sed -n 's/^major=//p' $W/LATEST.txt | tr -d '\r' | head -1); [[ $MAJ =~ ^[0-9A-Za-z._-]+$ ]] || MAJ=""
+CROSS=""; [ -n "$MAJ" ] && [ -z "$DOWN" ] && ! vle "$MAJ" "$CUR" && vle "$MAJ" "$V" && CROSS=$MAJ
+if [ -s "$OTR_LIB/central-common.conf" ]; then
+  # Managed (central settings from a management folder): updates as the site says, no question on the device. A
+  # major one only once the manager released it to this device: UPDATE_MAJOR (written by the manager after its
+  # second confirmation, in common.conf or in the file of a group) at that major version or later.
+  if [ -n "$CROSS" ] && ! { [ -n "$(cfg UPDATE_MAJOR)" ] && vle "$CROSS" "$(cfg UPDATE_MAJOR)"; }; then
+    rm -f $OFFER; echo "found $V ($SRC): major update ($CROSS), installed once it is released from the manager" > $ST; exit 0
+  fi
+else
+  # No management folder (the live system from the USB stick, an image of its own with site.conf only): nobody
+  # else decides, so every new version is asked on the device, at the sign-in screen, with its changes
+  # (kiosk.sh update_question). A normal update installs after 30 s without an answer, a major one only with a yes;
+  # "not now" lasts until the next start.
+  if [ "$(cat /tmp/openthinrdp-update-accepted 2>/dev/null)" != "$V" ]; then
+    [ -f /tmp/openthinrdp-update-declined ] && { rm -f $OFFER; echo "kept $CUR by choice on the device ($V available, $SRC), asked again at the next start" > $ST; exit 0; }
+    notes "$CUR" "$V" > /run/openthinrdp-update-notes 2>/dev/null; chmod 644 /run/openthinrdp-update-notes
+    printf '%s %s %s\n' "$V" "$CUR" "$CROSS" > $OFFER.new; chmod 644 $OFFER.new
+    cmp -s $OFFER.new $OFFER && rm -f $OFFER.new || mv -f $OFFER.new $OFFER
+    echo "found $V ($SRC): asked on the device at the sign-in$([ -n "$CROSS" ] && echo ", major update")" > $ST; exit 0
+  fi
 fi
 rm -f $OFFER
 echo $((N + 1)) > "$W/attempts-$V"
