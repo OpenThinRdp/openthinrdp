@@ -745,14 +745,26 @@ ok "ui.py: compiles, with the Wi-Fi page and the network on the sign-in screen" 
 
 # --- anonymous counts: on by default, what is sent, nothing when off (curl replaced: no test talks to GoatCounter)
 ok "anonymous counts: on by default, the setting kept by save-config" '[ "$(cfg ANON_STATS)" = on ] && printf "ANON_STATS=No\n" > "$T" && $OTR/save-config.sh "$T" --print 2>/dev/null | grep -qx "ANON_STATS=off"'
+cp $OTR_EVENTS /tmp/events.keep; : > $OTR_EVENTS
 SP=$($OTR/stats.sh --print)
-ok "anonymous counts: only the listed counts, no name of the device, no address" '[ $(printf "%s\n" "$SP" | grep -c .) -eq 11 ] && ! printf "%s\n" "$SP" | grep -v "^otr/\(version\|model\|cpu\|ram\|freerdp\|transport\|language\|mode\|wifi\|tpm\|managed\)/" | grep -q . && ! printf "%s\n" "$SP" | grep -qiF "$(hostname)" && ! printf "%s\n" "$SP" | grep -qE "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+|([0-9a-f]{2}:){5}"'
+ok "anonymous counts: only the listed counts, no name of the device, no address; a week with no problem says none" '[ $(printf "%s\n" "$SP" | grep -c .) -eq 12 ] && ! printf "%s\n" "$SP" | grep -v "^otr/\(version\|model\|cpu\|ram\|freerdp\|transport\|language\|mode\|wifi\|tpm\|managed\)/" | grep -qvx "otr/error/none" && ! printf "%s\n" "$SP" | grep -qiF "$(hostname)" && ! printf "%s\n" "$SP" | grep -qE "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+|([0-9a-f]{2}:){5}"'
+# problems: counted by kind, with the exit code; older than the last send left out; users and servers never leave
+n=$(date '+%Y-%m-%d %H:%M:%S')
+{ echo "2000-01-01 00:00:00 software update 0.0.1 FAILED (code 1): old"
+  echo "$n watchdog: FreeRDP connected but no longer reading for 60 s (5 bytes waiting), killed (session-hang.log)"
+  echo "$n session of mario.rossi DROPPED after 2 min (error 145, code 145): reconnecting - [x]: srv-secret.example"
+  echo "$n session of mario.rossi DROPPED after 5 min (network lost, code 147): reconnecting"
+  echo "$n attempt 1 for mario.rossi on srv-secret.example failed after 3s (code 131, ERRCONNECT_X): refused"
+  echo "$n connection of mario.rossi: no desktop after 150 s, stopped"; } > $OTR_EVENTS
+SP=$($OTR/stats.sh --print | grep "^otr/error")
+ok "anonymous counts: problems by kind, code, version and model; nothing of the messages" 'printf "%s\n" "$SP" | grep -qx "otr/error/session-frozen/1" && printf "%s\n" "$SP" | grep -qx "otr/error/session-dropped/2-5" && printf "%s\n" "$SP" | grep -qx "otr/error-detail/session-dropped/145" && printf "%s\n" "$SP" | grep -qx "otr/error-detail/session-dropped/147" && printf "%s\n" "$SP" | grep -qx "otr/error-detail/connect-failed/131" && printf "%s\n" "$SP" | grep -qx "otr/error/connect-timeout/1" && printf "%s\n" "$SP" | grep -qx "otr/error-version/session-frozen/$(cat $OTR/VERSION)" && printf "%s\n" "$SP" | grep -q "^otr/error-model/session-frozen/" && ! printf "%s\n" "$SP" | grep -q "update-failed\|otr/error/none" && ! printf "%s\n" "$SP" | grep -qi "mario\|srv-secret\|ERRCONNECT\|refused"'
+: > $OTR_EVENTS
 SB=$(mktemp -d); printf '#!/bin/bash\necho "$*" >> %s/sent\n' "$SB" > "$SB/curl"; chmod +x "$SB/curl"; rm -f /var/lib/openthinrdp/stats-sent
 printf 'ANON_STATS=off\n' > /etc/openthinrdp/openthinrdp.conf; PATH="$SB:$PATH" $OTR/stats.sh
 ok "anonymous counts: off = nothing sent" '[ ! -e "$SB/sent" ] && [ ! -e /var/lib/openthinrdp/stats-sent ]'
 : > /etc/openthinrdp/openthinrdp.conf; PATH="$SB:$PATH" $OTR/stats.sh; n1=$(grep -c . "$SB/sent" 2>/dev/null); PATH="$SB:$PATH" $OTR/stats.sh
-ok "anonymous counts: on = sent at once the first time, then not again within the week" '[ "$n1" = 11 ] && [ $(grep -c . "$SB/sent") -eq 11 ] && [ -e /var/lib/openthinrdp/stats-sent ]'
-rm -rf "$SB" /var/lib/openthinrdp/stats-sent
+ok "anonymous counts: on = sent at once the first time, then not again within the week" '[ "$n1" = 12 ] && [ $(grep -c . "$SB/sent") -eq 12 ] && [ -e /var/lib/openthinrdp/stats-sent ]'
+rm -rf "$SB" /var/lib/openthinrdp/stats-sent; mv /tmp/events.keep $OTR_EVENTS
 
 echo "passed $PASS, failed $FAIL"
 [ $FAIL = 0 ]
