@@ -258,6 +258,7 @@ try {
   $script:HandoffFile = $keepHf; [void](Open-Vault 'correct-horse-1')
   $srcA = [IO.File]::ReadAllText((Join-Path $mw 'OpenThinRDP-Manager.ps1'))
   ok 'the manager updates itself: after the check, not while something is edited or a window is open, the vault handed over; the gate uses it' { $srcA -match "Status -eq 'Available'\) \{ Start-ManagerAutoUpdate \}" -and $srcA -match 'OpenForms\)\.Count -gt 1' -and $srcA -match 'try \{ Save-VaultHandoff \}' -and $srcA -match 'if \(-not \$gateAnswers\) \{ Use-VaultHandoff \}' }
+  ok 'diagnostics: asked with diag\<name>.request (at once over SSH when it can), the newest shown in Explorer, a GitHub issue only if wanted' { $srcA -match '"\$\(\$d\.Name\)\.request"' -and $srcA -match "'diag', 'diagopen', 'command'" -and $srcA -match "Get-Text 'DiagReport' \`$df\.Name" -and $srcA -match "Get-Text 'DevDiag'" }
   ok 'lazy pages: the window first, the other pages built once, at the first visit or after Shown' { $srcA -match 'function Initialize-LazyPages' -and $srcA -match 'if \(\$i -ne 0\) \{ Initialize-LazyPages \}' -and $srcA -match '\$form\.Refresh\(\); Initialize-LazyPages' }
   Close-Vault
   ok 'after 3 wrong codes each try waits longer: 2, 4, 8, 16, then 30 s' { (@(1..8 | ForEach-Object { Get-GateDelay $_ }) -join ',') -eq '0,0,2,4,8,16,30,30' }

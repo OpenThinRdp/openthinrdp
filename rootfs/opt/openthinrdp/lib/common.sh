@@ -127,6 +127,9 @@ hang_report(){ local f=$OTR_LOG/session-hang.log t
     echo "--- end of the FreeRDP log"; tail -80 /tmp/kiosk.log 2>/dev/null
   } >> "$f" 2>/dev/null
   if [ "$(stat -c %s "$f" 2>/dev/null || echo 0)" -gt 1000000 ]; then tail -c 500000 "$f" > "$f.tmp" 2>/dev/null && cat "$f.tmp" > "$f"; rm -f "$f.tmp"; fi
+  # and the whole diagnostics for the administrator, a few seconds later (FreeRDP gone, its log complete); not at
+  # shutdown (keep-session-log.sh collects them itself, OTR_NO_DIAG)
+  [ -n "${OTR_NO_DIAG:-}" ] || { ( sleep 5; sudo -n "$OTR/diag-bundle.sh" watchdog ) >/dev/null 2>&1 < /dev/null & }
 }
 # UDP datagrams this device received and sent so far ("in out"), all sockets: on a thin client nearly all are the
 # UDP transport of FreeRDP; the rest (DNS, time) is a few datagrams now and then

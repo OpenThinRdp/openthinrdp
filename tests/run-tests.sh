@@ -818,5 +818,15 @@ kill $XF 2>/dev/null; rm -f /tmp/xfreerdp3 /tmp/kiosk.log /tmp/kiosk.log.prev; :
 ok "at shutdown with no session since the start: the last kept log stays, nothing said" 'grep -q "session log line" /var/log/openthinrdp/last-session.log && ! grep -q "power off" $OTR_EVENTS && grep -q "openthinrdp-keep-log.service" /src/management/publish/install.sh'
 rm -f /var/log/openthinrdp/last-session.log; mv /tmp/events.keep $OTR_EVENTS
 
+
+# --- diagnostics (diag-bundle.sh): one file for the administrator, without the secrets; asked by the manager
+printf 'WIFI_PSK=supersecretpsk\nEAP_PASSWORD=hunter2pw\nSETTINGS_PIN_SHA256=abcabc\nDEFAULT_USER=mario\n' >> $OTR_CONF; echo "$(date '+%F %T') an event" >> $OTR_EVENTS
+rm -rf $OTR_LIB/diag /tmp/db; DB=$($OTR/diag-bundle.sh requested); mkdir -p /tmp/db; tar -xzf "$DB" -C /tmp/db 2>/dev/null
+ok "diagnostics: one file with summary, events, journal and settings; passwords, keys and PIN removed, names kept" '[ -f /tmp/db/summary.txt ] && grep -q "an event" /tmp/db/events.log && [ -f /tmp/db/journal-this-start.txt ] && grep -qx "WIFI_PSK=(removed)" /tmp/db/settings.txt && grep -qx "EAP_PASSWORD=(removed)" /tmp/db/settings.txt && grep -qx "SETTINGS_PIN_SHA256=(removed)" /tmp/db/settings.txt && ! grep -rqE "supersecretpsk|hunter2pw|abcabc" /tmp/db && grep -qx "DEFAULT_USER=mario" /tmp/db/settings.txt && [ "$(stat -c %a "$DB")" = 600 ]'
+$OTR/diag-bundle.sh watchdog >/dev/null; $OTR/diag-bundle.sh watchdog >/dev/null
+ok "diagnostics: an automatic one (a frozen session) at most once an hour" '[ $(ls $OTR_LIB/diag/*-watchdog.tar.gz | wc -l) -eq 1 ] && grep -q "diagnostics collected (watchdog)" $OTR_EVENTS'
+ok "diagnostics: asked by the manager (diag\<hostname>.request), sent to diag\ of the folder; automatic after a watchdog and at a power off in a session" 'grep -q "MNT/diag/\$H.request\" -nt \"\$OTR_LIB/diag-request-done\"" $OTR/report.sh && grep -q "cp \"\$f\" \"\$MNT/diag/\"" $OTR/report.sh && grep -q "diag-bundle.sh\" watchdog" $OTR/lib/common.sh && grep -q "diag-bundle.sh\" power-off" $OTR/keep-session-log.sh && grep -q "/opt/openthinrdp/diag-bundle.sh" /etc/sudoers.d/openthinrdp'
+sed -i '/^WIFI_PSK=supersecretpsk/d; /^EAP_PASSWORD=hunter2pw/d; /^SETTINGS_PIN_SHA256=abcabc/d; /^DEFAULT_USER=mario/d' $OTR_CONF; rm -rf $OTR_LIB/diag /tmp/db
+
 echo "passed $PASS, failed $FAIL"
 [ $FAIL = 0 ]

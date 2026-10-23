@@ -5,6 +5,14 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.2.22 (2026-10-23)
+
+- **Diagnostics of a device in one file**: the events, the log of the last session and of the frozen ones, the
+  journal, the kernel, the update logs, the network, the hardware and the settings without their secrets. From the
+  manager (*Collect its diagnostics*, then *Open its diagnostics*, with a GitHub issue only if you want), from the
+  diagnostics screen of the device (*Send to the administrator*), or by itself after a frozen session or a power off
+  in a session. It lands in `diag\` of the management folder; nothing goes to the project unless you send it.
+
 ## 0.2.21 (2026-10-23)
 
 - **Major updates go through the manager**: we mark in the release the ones that change how a session connects or

@@ -7,7 +7,7 @@
 . /opt/openthinrdp/lib/common.sh
 fp=$(pgrep -x xfreerdp3 | head -1)
 if [ -n "$fp" ]; then
-  hang_report "$fp"
+  OTR_NO_DIAG=1 hang_report "$fp"
   ev "power off with a session still open (FreeRDP $fp): its threads in session-hang.log, its log in last-session.log"
 fi
 {
@@ -17,4 +17,6 @@ fi
 # nothing to keep (no session since the start): the one of before stays
 if [ -s "$OTR_LOG/last-session.log.new" ]; then mv -f "$OTR_LOG/last-session.log.new" "$OTR_LOG/last-session.log"
 else rm -f "$OTR_LOG/last-session.log.new"; fi
+# a session still open at power off: the whole diagnostics, sent to the management folder at the next start
+[ -n "$fp" ] && "$OTR/diag-bundle.sh" power-off >/dev/null 2>&1
 exit 0

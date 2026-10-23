@@ -560,12 +560,22 @@ diag_port(){ timeout 3 bash -c "</dev/tcp/$1/$2" 2>/dev/null && echo "$L_DIAG_OK
 diag_dialog(){
   local r=99
   if [ $GREETER = 1 ]; then
-    diag_text | ui text --heading="$(plain "$L_DIAG")" --text="$(plain "$L_DIAG_TEXT")" --t-close="$L_CLOSE" --button="$L_TEST:20"; r=${PIPESTATUS[1]}
+    diag_text | ui text --heading="$(plain "$L_DIAG")" --text="$(plain "$L_DIAG_TEXT")" --t-close="$L_CLOSE" --button="$L_TEST:20" --button="$L_DIAG_SEND:22"; r=${PIPESTATUS[1]}
     [ "$r" = 20 ] && { selftest_dialog; return; }
+    [ "$r" = 22 ] && { diag_send; return; }
   fi
   # the earlier yad window when the screen of ui.py cannot open
   [ "$r" = 0 ] || diag_text | yad --text-info --wrap $IMG --title="$L_DIAG" --width=780 --height=540 --center --fontname="Monospace 10" \
           --text="$L_DIAG_TEXT" --button="$L_CLOSE:0" 2>/dev/null
+}
+# The whole diagnostics (diag-bundle.sh) for the administrator: in diag\ of the management folder at once (its event
+# starts report.sh), or kept on the device when it has none
+diag_send(){
+  { echo 30; echo "# $L_DIAG_COLLECT"; sudo -n "$OTR/diag-bundle.sh" device >/dev/null 2>&1; echo 100; } \
+    | ui message --progress --icon=busy --heading="$(plain "$L_DIAG")" --text="$(plain "$L_DIAG_COLLECT")"
+  if [ -n "$(cfg MGMT_SHARE)" ] || [ -s "$OTR_LIB/share-from-domain" ]; then
+    ui message --icon=info --heading="$(plain "$L_DIAG")" --text="$(plain "$L_DIAG_SENT")" --button="$L_CLOSE:0" --primary=0 >/dev/null
+  else ui message --icon=info --heading="$(plain "$L_DIAG")" --text="$(plain "$L_DIAG_LOCAL")" --button="$L_CLOSE:0" --primary=0 >/dev/null; fi
 }
 # Hardware test (selftest.sh, as root): the report, and on request a hardware report on GitHub, filled in and
 # opened in the browser; the person sends it with their own GitHub account, nothing leaves the device by itself.
