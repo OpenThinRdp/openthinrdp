@@ -230,7 +230,7 @@
   ErrUser                = 'Default user not valid'
   ErrNotValid            = '{0} not valid'
   ErrListValue           = "{0}: value not valid '{1}'"
-  ErrCollection          = 'RDS collection not valid (e.g. tsv://VMResource.1.MY_COLLECTION)'
+  ErrCollection          = 'RDS collection not valid (e.g. tsv://VMResource.1.MY_COLLECTION or tsv://MS Terminal Services Plugin.1.MY_COLLECTION)'
   ErrRepo                = 'GitHub repository not valid: owner/repository'
   ErrChoice              = '{0}: choose one of {1}'
   ErrGfx                 = '{0}: letters, digits, : and , only'

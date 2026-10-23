@@ -222,7 +222,7 @@
   ErrUser                = 'Utente predefinito non valido'
   ErrNotValid            = '{0}: valore non valido'
   ErrListValue           = "{0}: valore non valido '{1}'"
-  ErrCollection          = 'Raccolta RDS non valida (es. tsv://VMResource.1.MIA_RACCOLTA)'
+  ErrCollection          = 'Raccolta RDS non valida (es. tsv://VMResource.1.MIA_RACCOLTA o tsv://MS Terminal Services Plugin.1.MIA_RACCOLTA)'
   ErrRepo                = 'Repository GitHub non valido: proprietario/repository'
   ErrChoice              = '{0}: scegliere fra {1}'
   ErrGfx                 = '{0}: solo lettere, cifre, : e ,'

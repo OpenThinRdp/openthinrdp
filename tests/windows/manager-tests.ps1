@@ -56,6 +56,11 @@ try {
   . (Join-Path $mw 'OpenThinRDP-Manager.ps1') -Folder $tmp -FunctionsOnly -Language en
   $script:SettingsFile = Join-Path $tmp 'manager.json'
   ok 'OtrVdi.ps1 loads with the manager' { $script:VdiLoaded }
+  # the manager refused what the device accepts (#76): a session collection has spaces
+  ok 'RDS collection: a session collection with spaces accepted, as on the device; the rule the same as save-config.sh' {
+    $lbi = [regex]::Match((Get-Content (Join-Path $root 'rootfs\opt\openthinrdp\save-config.sh') -Raw), "RE_LBI='([^']*)'").Groups[1].Value
+    -not (Test-SettingValue 'LOAD_BALANCE_INFO' 'tsv://MS Terminal Services Plugin.1.rds_collection') -and -not (Test-SettingValue 'LOAD_BALANCE_INFO' 'tsv://VMResource.1.VDI') -and
+      (Test-SettingValue 'LOAD_BALANCE_INFO' 'tsv://x;rm') -and $lbi -and $lbi -ceq $script:Rx.Collection }
   ok 'remote Restart script: no Restart-Service/Stop-Service, time limits, ends a hanging process' {
     $a = [System.Management.Automation.Language.Parser]::ParseInput($script:VdiRemote.Restart.ToString(), [ref]$null, [ref]$null)
     -not @(Get-Commands $a | Where-Object { $_ -in 'Restart-Service', 'Stop-Service', 'Start-Service' }).Count -and $script:VdiRemote.Restart.ToString() -match 'WaitForStatus' -and $script:VdiRemote.Restart.ToString() -match 'Stop-Process' }
