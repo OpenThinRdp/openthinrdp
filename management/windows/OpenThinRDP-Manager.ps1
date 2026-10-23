@@ -1314,6 +1314,18 @@ function Remove-HostKey([string]$name) {
   $ErrorActionPreference = 'Continue'
   & ssh-keygen.exe -R "otr-$($name.ToLower())" -f $script:KnownHosts 2>&1 | Out-Null
 }
+# A command to one device on the administrator's request: a new host key for its name is asked about where it shows
+# (only the administrator knows whether the device was reinstalled), and confirmed the command goes again with it.
+# Declined, .Declined is set and nothing more is sent.
+function Invoke-DeviceSshAsk([string]$ip, [string]$command, [string]$key, [string]$name, [string]$title) {
+  $r = Invoke-DeviceSsh $ip $command $key $name
+  if (-not (Test-HostKeyChanged $r.Text)) { return $r }
+  $form.Cursor = 'Default'
+  if (-not (Confirm-Action $title (Get-Text 'RemoteHostKeyChanged' $name $ip) 'Button2')) { return [pscustomobject]@{ Code = 255; Text = $r.Text; Declined = $true } }
+  Remove-HostKey $name
+  $form.Cursor = 'WaitCursor'
+  Invoke-DeviceSsh $ip $command $key $name
+}
 # the public half of a private key file, from ssh-keygen -y: fails on a key protected by a passphrase (ssh.exe could
 # not use it without asking) and on anything that is not a private key
 function Get-SshPublicOf([string]$keyFile) {
@@ -5660,7 +5672,8 @@ function Invoke-DeviceAction($d, [string]$kind) {
   $key = Get-VaultKeyFile
   if (-not $key) { Show-Message $title (Get-Text 'ErrRemoteNoVaultKey'); Select-Page 4; return }
   $form.Cursor = 'WaitCursor'
-  try { $r = Invoke-DeviceSsh $ip $cmd $key $name } finally { $form.Cursor = 'Default' }
+  try { $r = Invoke-DeviceSshAsk $ip $cmd $key $name $title } finally { $form.Cursor = 'Default' }
+  if ($r.Declined) { return }
   Add-ChangeLog "${name}: $kind ($cmd) -> exit $($r.Code)"
   if ($kind -in 'reboot', 'poweroff', 'update', 'disconnect' -and $r.Code -eq 0) { $barText.Text = Get-Text "Pwr${kind}Done" $name; return }
   if ($kind -eq 'disconnect' -and $r.Code -eq 3) { Show-Message $title (Get-Text 'PwrNoSession' $name); return }
@@ -5680,13 +5693,8 @@ function Start-RemoteScreen($d) {
   if (-not $key) { Show-Message (Get-Text 'RemoteTitle' $name) (Get-Text 'ErrRemoteNoVaultKey'); Select-Page 4; return }
   $form.Cursor = 'WaitCursor'; $barText.Text = Get-Text 'RemoteStarting' $name; [System.Windows.Forms.Application]::DoEvents()
   try {
-    $r = Invoke-DeviceSsh $ip 'sudo /opt/openthinrdp/remote-screen.sh start' $key $name
-    # a new host key for this name: only the administrator can tell whether the device was reinstalled
-    if (Test-HostKeyChanged $r.Text) {
-      if (-not (Confirm-Action (Get-Text 'RemoteTitle' $name) (Get-Text 'RemoteHostKeyChanged' $name $ip) 'Button2')) { return }
-      Remove-HostKey $name
-      $r = Invoke-DeviceSsh $ip 'sudo /opt/openthinrdp/remote-screen.sh start' $key $name
-    }
+    $r = Invoke-DeviceSshAsk $ip 'sudo /opt/openthinrdp/remote-screen.sh start' $key $name (Get-Text 'RemoteTitle' $name)
+    if ($r.Declined) { return }
     $pw = if ($r.Text -match '(?m)^PASSWORD=(\S+)') { $Matches[1] } else { '' }
     if (-not $pw) {
       $why = if ($r.Text -match '(?m)^ERROR=(.+)$') { $Matches[1] } else { $r.Text.Trim() }
