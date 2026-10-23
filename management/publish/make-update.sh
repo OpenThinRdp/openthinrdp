@@ -52,6 +52,8 @@ OUT="$ROOT/out/update-$V"; STAGE=$(mktemp -d); trap 'rm -rf "$STAGE"' EXIT
 rm -rf "$OUT"; mkdir -p "$OUT"
 cp -a "$ROOT/rootfs" "$STAGE/rootfs"
 cp "$HERE/install.sh" "$STAGE/"; echo "$V" > "$STAGE/VERSION"
+# the changes, for the update question of a device without a management folder (auto-update.sh notes)
+cp "$ROOT/CHANGELOG.md" "$STAGE/"
 cp "$ROOT/image/lb/packages.list" "$STAGE/packages.list"
 # the project's pictures: install.sh puts them only where a device still shows an older project picture
 mkdir -p "$STAGE/project-branding"; cp "$ROOT"/image/branding/logo.png "$ROOT"/image/branding/splash.png "$STAGE/project-branding/"
@@ -90,6 +92,14 @@ with zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED) as z:
 PY
 MH=$(sha256sum "$OUT/$MZ" | cut -c1-64)
 printf 'version=%s\nfile=%s\nsha256=%s\nmanager=%s\nmanager_sha256=%s\n' "$V" "$F" "$H" "$MZ" "$MH" > "$OUT/LATEST.txt"
+# The newest major update (a change to how a session connects or runs), from the file MAJOR of the repository: a
+# managed device crosses it only once the manager released it (UPDATE_MAJOR), one without a management folder only
+# with a yes on its screen. Under the signature, so it cannot be taken away.
+MJ=$(grep -v '^#' "$ROOT/MAJOR" 2>/dev/null | tr -d ' \r\n' || true)
+if [ -n "$MJ" ]; then
+  [[ $MJ =~ ^[0-9A-Za-z._-]+$ ]] || { echo "MAJOR: not a version: $MJ"; exit 2; }
+  echo "major=$MJ" >> "$OUT/LATEST.txt"
+fi
 if [ -z "$KEY" ]; then
   echo "package ready in $OUT, NOT signed yet: OpenThinRDP-Manager.cmd -Sign <this folder>\\LATEST.txt (key in the vault)"
   exit 0

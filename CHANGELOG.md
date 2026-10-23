@@ -1,8 +1,8 @@
 # Changelog
 
-Every release, newest first. **Security** marks what every device should get at once. *Test first*, in bold at the
-start of an entry, marks a major update: a change to how a session connects or runs, to try on pilot devices before
-the whole fleet (the manager asks once more before it goes to all devices).
+Every release, newest first. **Security** marks what every device should get at once. A *Major update* (in bold at
+the start of an entry, and in the file MAJOR of the repository) changes how a session connects or runs: a device
+with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
 ## 0.2.20 (2026-10-23)

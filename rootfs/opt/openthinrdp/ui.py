@@ -21,7 +21,8 @@
 #   ui.py form ...       the settings of the device: sections on the left, every field with its hint (spec on stdin,
 #                        see below). Exit: 0 = save (KEY=value lines on stdout), 11 = close, 12 = terminal.
 #   ui.py pin ...        the settings PIN: 0 = OK (the PIN on stdout), 11 = cancel.
-#   ui.py text ...       a text read from stdin as it arrives (diagnostics), with Close.
+#   ui.py text ...       a text read from stdin as it arrives (diagnostics, the changes of an update), with Close (--t-close,
+#                        code 0), more buttons (--button LABEL:CODE, --primary CODE has the focus) and --timeout N (70).
 #   ui.py wifi ...       the Wi-Fi: networks around, one chosen, its password, connect and the result here (wifi.sh).
 #                        Texts on stdin ("key<TAB>text"). Exit: 0 = a network joined, 11 = closed.
 import argparse, locale, math, os, subprocess, sys, time
@@ -624,15 +625,29 @@ if MODE == 'text':
         if not data: return False
         buf.insert(buf.get_end_iter(), data.decode('utf-8', 'replace')); return True
     GLib.io_add_watch(sys.stdin, GLib.PRIORITY_DEFAULT, GLib.IO_IN | GLib.IO_HUP, on_text)
-    row = Gtk.Box(spacing=10); bc = button(A.t_close or 'Close', 'primary', lambda *_: leave(0)); row.pack_end(bc, False, False, 0)
-    # more buttons (--button LABEL:CODE), left of Close: the code they end with
+    # --timeout N: ends with 70 after N seconds, a bar shows the time left (the update question)
+    if A.timeout:
+        bar = Gtk.ProgressBar(); card.pack_start(bar, False, False, 0)
+        T = max(1, int(A.timeout)); t0 = time.time()
+        def tick():
+            left = T - (time.time() - t0)
+            if left <= 0:
+                leave(70); return False
+            bar.set_fraction(left / T); return True
+        tick(); GLib.timeout_add(100, tick)
+    row = Gtk.Box(spacing=10); bc = button(A.t_close or 'Close', 'secondary' if A.primary else 'primary', lambda *_: leave(0)); row.pack_end(bc, False, False, 0)
+    # more buttons (--button LABEL:CODE), left of Close: the code they end with; --primary CODE is the main one, with
+    # the focus (Enter presses it)
+    focus = bc
     for b in A.button:
         lbl, _, c = b.rpartition(':')
-        if lbl and c.isdigit(): row.pack_start(button(lbl, 'secondary', lambda *_, c=int(c): leave(c)), False, False, 0)
+        if lbl and c.isdigit():
+            bb = button(lbl, 'primary' if c == A.primary else 'secondary', lambda *_, c=int(c): leave(c)); row.pack_start(bb, False, False, 0)
+            if c == A.primary: focus = bb
     card.pack_start(row, False, False, 0)
     win.connect('key-press-event', lambda _w, e: e.keyval == Gdk.KEY_Escape and leave(0))
     code = 0
-    win.show_all(); bc.grab_focus()
+    win.show_all(); focus.grab_focus()
     Gtk.main(); sys.exit(code)
 
 # --- sign-in screen --------------------------------------------------------------------------------------------

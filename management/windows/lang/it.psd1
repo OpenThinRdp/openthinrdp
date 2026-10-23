@@ -655,7 +655,9 @@
 
   # ---- versioni delle postazioni: postazioni pilota, tornare indietro (UPDATE_TO) ----
   Label_UPDATE_TO        = 'Versione da installare'
-  Help_UPDATE_TO         = 'latest = la versione più nuova pubblicata (updates\LATEST.txt della cartella di gestione, o l''ultima release di GitHub); una versione, es. 0.2.0 = proprio quella, installata anche se più vecchia di quella installata (per tornare indietro) e tenuta finché questa non cambia. Postazioni pilota: latest come eccezione mentre tutte le postazioni restano su una versione (pagina Aggiornamenti). Una postazione con una versione che non conosce questa impostazione installa la più nuova.'
+  Help_UPDATE_TO         = 'latest = la versione più nuova pubblicata (updates\LATEST.txt della cartella di gestione, o l''ultima release di GitHub); una versione, es. 0.2.0 = proprio quella, installata anche se più vecchia di quella installata (per tornare indietro) e tenuta finché questa non cambia. Le postazioni pilota sono un gruppo: latest per il gruppo mentre tutte le postazioni restano su una versione (Release da GitHub, alcuni gruppi). Una postazione con una versione che non conosce questa impostazione installa la più nuova.'
+  Label_UPDATE_MAJOR     = 'Aggiornamento importante rilasciato'
+  Help_UPDATE_MAJOR      = 'Lo scrive Release da GitHub dopo la seconda conferma: le postazioni installano gli aggiornamenti importanti fino a questa versione. Vuoto = nessuno.'
   ErrUpdateTo            = 'Versione da installare: latest, o una versione come 0.2.0 (lettere, cifre, punto, trattino, trattino basso; senza la v del tag di GitHub)'
   NoteUpdateToMissing    = 'Versione da installare {0}: updates\versions\{0}.txt (con firma e pacchetto) non è nella cartella di gestione. Le postazioni che si aggiornano dalla cartella restano su quella che hanno finché non c''è (pagina Aggiornamenti, Versione da GitHub...).'
   NavUpdates             = 'Aggiornamenti'
@@ -667,8 +669,9 @@
   BadgeDevices           = 'OpenThinRDP {0} su GitHub (alle postazioni: {1}): Aggiornamenti, Release da GitHub.'
   BadgeManager           = 'Gestore {0} disponibile: Aggiornamenti, Aggiorna il gestore.'
   RelNotesIntro          = "La release {0} di OpenThinRDP, al posto della {1} pubblicata ora. Qui sotto cosa cambia; con Avanti si sceglie a quali postazioni va."
-  MajorIntro             = "Aggiornamento importante: la {0} cambia come si apre o funziona una sessione (Test first nelle note). Provatela prima sulle postazioni pilota."
-  MajorConfirmAll        = "La {0} è un aggiornamento importante: la {1} cambia come si apre o funziona una sessione (segnata Test first nelle note).`r`n`r`nLa strada sicura è prima le postazioni pilota, poi tutte quando lì funziona.`r`n`r`nMandarla ADESSO a TUTTE le postazioni lo stesso?"
+  MajorIntro             = "È un aggiornamento importante ({0}): cambia come si apre o funziona una sessione. Le postazioni lo installano solo quando lo rilasciate da qui, con una seconda conferma."
+  MajorConfirm           = "La {0} contiene un aggiornamento importante ({1}): cambia come si apre o funziona una sessione.`r`n`r`nLe postazioni lo installano solo ora che viene rilasciato a loro: {2}. Provatelo prima su un gruppo di postazioni pilota.`r`n`r`nRilasciare l'aggiornamento importante a {2}?"
+  MajorAllDevices        = 'TUTTE le postazioni'
   NotesHeading           = 'COSA CAMBIA'
   NotesVersion           = '— {0} —'
   NotesNone              = 'GitHub non ha risposto: le novità non sono disponibili ora. Si trovano anche su https://github.com/OpenThinRdp/openthinrdp/releases'
@@ -676,7 +679,8 @@
   UpdNoteFleetLatest     = 'Tutte le postazioni: la più nuova (UPDATE_TO = latest).'
   UpdNoteFleetPinned     = 'Tutte le postazioni: {0} (UPDATE_TO in common.conf), fino a Rilascia a tutte.'
   UpdNotePilots          = 'Postazioni pilota ({0}), sempre sulla più nuova: {1}'
-  UpdNoPilots            = 'Postazioni pilota: nessuna (Versione software... nell''intestazione di una postazione).'
+  UpdGroupsAhead         = 'Gruppi che ricevono per primi la più nuova: {0}.'
+  UpdNoGroupsAhead       = 'Gruppi che ricevono per primi la più nuova: nessuno (Release da GitHub..., alcuni gruppi).'
   UpdNoteOwn             = 'Postazioni con una versione propria: {0}'
   UpdNoteVersions        = 'Versioni che si possono scegliere (updates\versions\): {0}'
   UpdNoVersions          = 'updates\versions\ è vuota: si riempie con la prossima release copiata da questo gestore.'
@@ -690,15 +694,12 @@
   BtnPublish             = 'Pubblica'
   BtnApply               = 'Applica'
   RelScopeAll            = 'Tutte le postazioni: installano la {0}'
-  RelScopePilot          = 'Solo le postazioni pilota ({0}: {2}); tutte le altre restano sulla {1}'
-  RelScopePilotNo        = 'Solo le postazioni pilota: non si può, in updates\ non c''è ancora niente di firmato su cui far restare le altre'
-  RelNoPilots            = 'nessuna ancora'
+  RelScopePilotNo        = 'Solo alcuni gruppi: non si può, in updates\ non c''è ancora niente di firmato su cui far restare le altre'
   RelScopeGroups         = 'Solo i gruppi spuntati qui sotto (e le postazioni pilota); tutte le altre restano sulla {0}'
   RelScopeGroupsNone     = 'Solo alcuni gruppi: non ci sono ancora gruppi (pagina Postazioni, Nuovo gruppo)'
   RelGroupItem           = '{0} ({1} postazioni)'
   RelGroupsNoneTicked    = 'Nessun gruppo spuntato: non è stato pubblicato niente. Spuntate i gruppi che ricevono la nuova versione.'
   RelDoneGroups          = 'Release {0} pubblicata in updates\. La installano le postazioni di {1} (e le pilota); tutte le altre restano sulla {2} fino a Rilascia a tutte (pagina Aggiornamenti).'
-  RelDonePilot           = 'Release {0} pubblicata in updates\. La installano le postazioni pilota; tutte le altre restano sulla {1} fino a Rilascia a tutte (pagina Aggiornamenti).'
   RelPilotNoIndex        = 'Manca updates\LATEST.txt o la sua firma: le altre postazioni non avrebbero una versione su cui restare. Non è stato copiato niente.'
   RelPilotOldDevices     = '{0} postazioni non sono pilota ma hanno una versione precedente alla 0.2.0, che non conosce UPDATE_TO: {1}. Installerebbero comunque la {2}, appena arriva nella cartella. Pubblicare lo stesso solo per le postazioni pilota?'
   RelWrongVersion        = 'La release con tag v{0} dice versione {1} nel suo LATEST.txt: non è stato copiato niente.'
@@ -723,7 +724,6 @@
   DevVerTitle            = 'Versione software - {0}'
   DevVerText             = "{0} ha OpenThinRDP {1} (aggiornamento installato: {2}).`r`nOra installa: {3}."
   DevOptFleet            = 'Come tutte le postazioni ({0})'
-  DevOptPilot            = 'Postazione pilota: sempre la più nuova pubblicata ({0}), anche mentre tutte le altre restano su una versione'
   DevOptVersion          = 'Una versione propria (anche più vecchia: ci torna):'
   DevVerConfirm          = '{0}: {1} -> {2}?'
   DevPilot               = 'postazione pilota'
@@ -771,6 +771,8 @@
   MgrDone                = 'Gestore {0} installato in {1} (i file sostituiti sono in previous\).'
   MgrLauncherChanged     = 'L''avviatore è cambiato (Launcher.cs): ricostruite il .exe con {0}, con gli stessi -Name, -Folder, -Language (e -Install su ogni PC che ne ha una copia locale). Quello vecchio funziona fino ad allora.'
   MgrRestart             = 'Il gestore ora si riavvia.'
+  MgrAutoCheck           = 'Aggiorna il gestore da solo (si riavvia con la cassaforte aperta)'
+  MgrAutoFailed          = 'Il gestore non è riuscito ad aggiornarsi alla {0}: {1}'
 
   # ---- Desktop: il lato Windows della VDI (broker, host Hyper-V, desktop, sessioni) ----
   NavDesktops            = 'Desktop'

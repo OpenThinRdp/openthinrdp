@@ -248,6 +248,17 @@ try {
   ok 'a vault and Cancel: the manager does not go on' { $script:GateFailures = 0; (Invoke-StartGate @('cancel')) -eq 'cancel' -and -not (Test-VaultOpen) }
   ok 'a wrong code, then the right one: open, one failure counted' { $script:GateFailures = 0; (Invoke-StartGate @('wrong-code-1', 'correct-horse-1')) -eq 'open' -and (Test-VaultOpen) -and $script:GateFailures -eq 1 }
   ok 'open already: no second question' { (Invoke-StartGate @('cancel')) -eq 'open' }
+  # the manager restarting after it updated itself: the vault handed over (DPAPI, read once, 60 s), never in clear
+  $keepHf = $script:HandoffFile; $script:HandoffFile = Join-Path $tmp 'vault-handoff'
+  Save-VaultHandoff; Close-Vault
+  ok 'restart after an update: the vault opens without the code, the handover read once and gone, not in clear' { -not ([IO.File]::ReadAllText($script:HandoffFile)).Contains('correct-horse-1') -and $(Use-VaultHandoff; Test-VaultOpen) -and -not (Test-Path $script:HandoffFile) }
+  Save-VaultHandoff; Close-Vault; (Get-Item $script:HandoffFile).LastWriteTime = (Get-Date).AddMinutes(-5)
+  [IO.File]::WriteAllBytes($script:HandoffFile, [Security.Cryptography.ProtectedData]::Protect([Text.Encoding]::UTF8.GetBytes("$([DateTime]::UtcNow.AddSeconds(-90).Ticks)`ncorrect-horse-1"), $null, 'CurrentUser'))
+  ok 'restart after an update: a handover older than 60 s opens nothing' { $(Use-VaultHandoff; -not (Test-VaultOpen)) -and -not (Test-Path $script:HandoffFile) }
+  $script:HandoffFile = $keepHf; [void](Open-Vault 'correct-horse-1')
+  $srcA = [IO.File]::ReadAllText((Join-Path $mw 'OpenThinRDP-Manager.ps1'))
+  ok 'the manager updates itself: after the check, not while something is edited or a window is open, the vault handed over; the gate uses it' { $srcA -match "Status -eq 'Available'\) \{ Start-ManagerAutoUpdate \}" -and $srcA -match 'OpenForms\)\.Count -gt 1' -and $srcA -match 'try \{ Save-VaultHandoff \}' -and $srcA -match 'if \(-not \$gateAnswers\) \{ Use-VaultHandoff \}' }
+  ok 'lazy pages: the window first, the other pages built once, at the first visit or after Shown' { $srcA -match 'function Initialize-LazyPages' -and $srcA -match 'if \(\$i -ne 0\) \{ Initialize-LazyPages \}' -and $srcA -match '\$form\.Refresh\(\); Initialize-LazyPages' }
   Close-Vault
   ok 'after 3 wrong codes each try waits longer: 2, 4, 8, 16, then 30 s' { (@(1..8 | ForEach-Object { Get-GateDelay $_ }) -join ',') -eq '0,0,2,4,8,16,30,30' }
   # the whole manager: Cancel at the access code ends it before the folder and the window (exit code 3)
@@ -369,13 +380,14 @@ try {
   ok 'release notes: the versions after the installed one up to the new one, newest first, no pre-release' { $nt -match '0\.2\.11' -and $nt -match '0\.2\.10' -and $nt -notmatch 'groups' -and $nt -notmatch 'pre' -and $nt.IndexOf('0.2.11') -lt $nt.IndexOf('0.2.10') }
   ok 'release notes: plain text (no ** nor * nor links, no runs of empty lines), bullets' { $nt -match ([char]0x2022 + ' A frozen session reconnects') -and $nt -notmatch '\*' -and $nt -match 'see the PR, \+ Add' -and $nt -notmatch 'https://x' -and $nt -notmatch '(\r\n){3}' }
   ok 'release notes: nothing published yet, every release up to the new one' { (Get-ReleaseNotes '' '0.2.10' $rels) -match 'groups' }
-  # major updates: a release whose notes mark a change Test first (or Major update) asks once more before all devices
-  $relsM = @([pscustomobject]@{ tag_name = 'v0.2.12'; draft = $false; prerelease = $false; body = "- **Test first. A stalled UDP transport** reconnects" },
-    [pscustomobject]@{ tag_name = 'v0.2.11'; draft = $false; prerelease = $false; body = '- **Major update**: a new kiosk' },
-    [pscustomobject]@{ tag_name = 'v0.2.10'; draft = $false; prerelease = $false; body = '- the clock; see test first below, not marked' })
-  ok 'major updates: the marked releases between the two, newest first; nothing past them' { (@(Get-MajorVersions '0.2.9' '0.2.12' $relsM) -join ',') -eq '0.2.12,0.2.11' -and @(Get-MajorVersions '0.2.11' '0.2.12' $relsM).Count -eq 1 -and @(Get-MajorVersions '0.2.12' '0.2.13' $relsM).Count -eq 0 -and @(Get-MajorVersions '0.2.9' '0.2.10' $relsM).Count -eq 0 }
+  # major updates: major= of the signed LATEST.txt (we mark them); the manager releases them, with a second confirmation
+  $lt = Join-Path $tmp 'LATEST-major.txt'
+  [IO.File]::WriteAllText($lt, "version=0.2.21`nfile=openthinrdp-update-0.2.21.tar.gz`nsha256=$('a' * 64)`nmajor=0.2.21`n")
+  [IO.File]::WriteAllText("$lt.plain", "version=0.2.20`nfile=openthinrdp-update-0.2.20.tar.gz`nsha256=$('a' * 64)`n")
+  ok 'major updates: major= of LATEST.txt read, none without it' { (Read-LatestFile $lt).Major -eq '0.2.21' -and (Read-LatestFile $lt).Ok -and -not (Read-LatestFile "$lt.plain").Major }
   $srcM = [IO.File]::ReadAllText((Join-Path $mw 'OpenThinRDP-Manager.ps1'))
-  ok 'major updates: Release from GitHub offers the pilots first and asks once more for all; Release to all and the fleet version ask too' { $srcM -match "if \(\`$pick\.Option -eq 0 -and \`$major\.Count -and -not \(Confirm-Action" -and $srcM -match '\$st\.Pilots\.Count -or \$major\.Count' -and $srcM -match "Confirm-MajorToAll \(Get-Text 'AllTitle'\)" -and $srcM -match "Confirm-MajorToAll \(Get-Text 'FleetTitle'\)" }
+  ok 'major updates: a second confirmation wherever it goes, UPDATE_MAJOR for all or for the ticked groups; Release to all and Version for all ask too' { $srcM -match "Get-Text 'MajorConfirm' \`$rel\.Version \`$maj" -and $srcM -match "Set-CommonValue 'UPDATE_MAJOR' \`$maj \`$g" -and $srcM -match "if \(\`$pick\.Option -eq 0 -and \`$maj\) \{ \[void\]\(Set-CommonValue 'UPDATE_MAJOR' \`$maj\) \}" -and $srcM -match "Confirm-MajorToAll \(Get-Text 'AllTitle'\) \`$st\.Latest" -and $srcM -match "Confirm-MajorToAll \(Get-Text 'FleetTitle'\)" -and $srcM -notmatch 'Get-MajorVersions' }
+  ok 'pilot devices are a group: no pilot choice in the release or in the version of a device' { $srcM -notmatch "'RelScopePilot'" -and $srcM -notmatch "'DevOptPilot'" }
   # #80: a device in another time zone (the ISO is built with Etc/UTC) is not hours old because of it
   $nowUtc = [datetime]::UtcNow
   $st = @{ UPDATED = $nowUtc.AddHours(-7).ToString('yyyy-MM-dd HH:mm:ss'); UPDATED_UTC = $nowUtc.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'") }
