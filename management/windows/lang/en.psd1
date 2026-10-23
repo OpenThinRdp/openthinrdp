@@ -663,7 +663,9 @@
 
   # ---- versions of the devices: pilot devices, going back (UPDATE_TO) ----
   Label_UPDATE_TO        = 'Version to install'
-  Help_UPDATE_TO         = 'latest = the newest published version (updates\LATEST.txt of the management folder, or the latest GitHub release); a version, e.g. 0.2.0 = exactly that one, installed also when it is older than the installed one (to go back) and kept until this changes. Pilot devices: latest of their own while all devices stay on a version (Updates page). A device with a version that does not know this setting installs the newest.'
+  Help_UPDATE_TO         = 'latest = the newest published version (updates\LATEST.txt of the management folder, or the latest GitHub release); a version, e.g. 0.2.0 = exactly that one, installed also when it is older than the installed one (to go back) and kept until this changes. Pilot devices are a group: latest for the group while all devices stay on a version (Release from GitHub, some groups). A device with a version that does not know this setting installs the newest.'
+  Label_UPDATE_MAJOR     = 'Major update released'
+  Help_UPDATE_MAJOR      = 'Written by Release from GitHub after its second confirmation: the devices install major updates up to this version. Empty = none.'
   ErrUpdateTo            = 'Version to install: latest, or a version such as 0.2.0 (letters, digits, dot, dash, underscore; without the v of the GitHub tag)'
   NoteUpdateToMissing    = 'Version to install {0}: updates\versions\{0}.txt (with its signature and package) is not in the management folder. The devices that update from the folder stay on what they have until it is there (Updates page, Version from GitHub...).'
   NavUpdates             = 'Updates'
@@ -675,8 +677,9 @@
   BadgeDevices           = 'OpenThinRDP {0} on GitHub (on the devices: {1}): Updates, Release from GitHub.'
   BadgeManager           = 'Manager {0} available: Updates, Update the manager.'
   RelNotesIntro          = 'Release {0} of OpenThinRDP, in place of {1} published now. Below what changes; Next chooses which devices it goes to.'
-  MajorIntro             = 'Major update: {0} changes how a session connects or runs (Test first in the notes). Try it on pilot devices first.'
-  MajorConfirmAll        = "{0} is a major update: {1} changes how a session connects or runs (marked Test first in the notes).`r`n`r`nThe safe way is the pilot devices first, then all of them once it works there.`r`n`r`nSend it to ALL devices now anyway?"
+  MajorIntro             = 'It is a major update ({0}): it changes how a session connects or runs. The devices install it only once you release it to them here, with a second confirmation.'
+  MajorConfirm           = "{0} contains a major update ({1}): it changes how a session connects or runs.`r`n`r`nThe devices install it only now that it is released to them: {2}. Try it first on a group of pilot devices.`r`n`r`nRelease the major update to {2}?"
+  MajorAllDevices        = 'ALL devices'
   NotesHeading           = 'WHAT CHANGES'
   NotesVersion           = '--- {0} ---'
   NotesNone              = 'GitHub did not answer: the changes are not available now. They are also on https://github.com/OpenThinRdp/openthinrdp/releases'
@@ -698,15 +701,12 @@
   BtnPublish             = 'Publish'
   BtnApply               = 'Apply'
   RelScopeAll            = 'All devices: they install {0}'
-  RelScopePilot          = 'Pilot devices only ({0}: {2}); all the others stay on {1}'
-  RelScopePilotNo        = 'Pilot devices only: not possible, nothing signed is published in updates\ yet for the other devices to stay on'
-  RelNoPilots            = 'none marked yet'
+  RelScopePilotNo        = 'Only some groups: not possible, nothing signed is published in updates\ yet for the other devices to stay on'
   RelScopeGroups         = 'Only the groups ticked below (and the pilot devices); all the others stay on {0}'
   RelScopeGroupsNone     = 'Only some groups: there are no groups yet (Devices page, New group)'
   RelGroupItem           = '{0} ({1} devices)'
   RelGroupsNoneTicked    = 'No group ticked: nothing published. Tick the groups that get the new version.'
   RelDoneGroups          = 'Release {0} published in updates\. The devices of {1} (and the pilot devices) install it; all the others stay on {2} until Release to all devices (Updates page).'
-  RelDonePilot           = 'Release {0} published in updates\. The pilot devices install it; all the others stay on {1} until Release to all devices (Updates page).'
   RelPilotNoIndex        = 'updates\LATEST.txt or its signature is missing: the other devices would have no version to stay on. Nothing copied.'
   RelPilotOldDevices     = '{0} devices are not pilots but run a version before 0.2.0, which does not know UPDATE_TO: {1}. They would install {2} anyway, as soon as it is in the folder. Publish to the pilot devices only all the same?'
   RelWrongVersion        = 'The release with tag v{0} says version {1} in its LATEST.txt: nothing copied.'
@@ -731,7 +731,6 @@
   DevVerTitle            = 'Software version - {0}'
   DevVerText             = "{0} has OpenThinRDP {1} (update installed: {2}).`r`nNow it installs: {3}."
   DevOptFleet            = 'Like all devices ({0})'
-  DevOptPilot            = 'Pilot device: always the newest published ({0}), also while all devices stay on a version'
   DevOptVersion          = 'A version of its own (also an older one: it goes back to it):'
   DevVerConfirm          = '{0}: {1} -> {2}?'
   DevPilot               = 'pilot device'

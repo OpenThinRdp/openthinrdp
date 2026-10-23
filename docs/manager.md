@@ -95,7 +95,7 @@ Everything here is one setting, `UPDATE_TO`, written for you in the right file:
 |---|---|---|
 | `latest` | `common.conf` | every device takes each new version as soon as it is in the folder (the default) |
 | a version, e.g. `0.2.0` | `common.conf` | every device stays on that version, or **goes back** to it |
-| `latest` | `<hostname>.conf` | a **pilot device**: it takes the newest version even while the others stay |
+| `latest` | `groups\<group>\_group.conf` | a **pilot group**: its devices take the newest version even while the others stay |
 | a version | `<hostname>.conf` | that device stays on, or goes back to, its own version |
 
 A device installs a version also when it is **older** than its own, FreeRDP included, and installs nothing newer
@@ -104,29 +104,28 @@ applied when the session is over.
 
 ### Try a new version on a few devices
 
-1. **Choose the pilots.** In the header of a device, **Software version...** > *pilot device*. Pick devices that
-   look like the rest of the fleet (the same model, the same kind of user), and users who will tell you when
-   something is odd. The list marks them *(pilot)*.
-2. **Bring the new version in for the pilots only.** **Release from GitHub...** (top bar or Updates page) downloads
-   the latest release, checks its project signature and hash, and asks: *all devices* or ***pilot devices only***.
-   With pilot only, all the other devices are first kept on the version they have (`UPDATE_TO=<that version>` in
-   `common.conf`), and only then the new version goes into the folder.
+1. **Make a group of pilot devices.** On the **Devices** page, **New group** (e.g. *Pilot*), and move into it
+   devices that look like the rest of the fleet (the same model, the same kind of user), with users who will tell
+   you when something is odd.
+2. **Bring the new version in for that group only.** **Release from GitHub...** (top bar or Updates page)
+   downloads the latest release, checks its project signature and hash, and asks: *all devices* or ***only the
+   groups ticked*** (one or more). With some groups, all the other devices are first kept on the version they have
+   (`UPDATE_TO=<that version>` in `common.conf`), the ticked groups get `UPDATE_TO=latest` in their `_group.conf`,
+   and only then the new version goes into the folder. A device follows its own file first, then its group, then
+   `common.conf`; a group left on the newest by an earlier release follows `common.conf` again.
 3. **Watch the pilots** for a few days: their **Summary** and **Events**, and the **History** page.
 
-**Some groups only.** **Release from GitHub...** can also send the new version to the groups you tick (one or more,
-with their pilot devices); every other device stays on the version it has. The ticked groups get `UPDATE_TO=latest`
-in their `_group.conf`, so a device follows its own file first, then its group, then `common.conf`. A group left on the
-newest by an earlier release follows `common.conf` again, so it does not take the new one unasked. **Release to all
-devices** brings everyone along.
-
-**Major updates.** A release with a change to how a session connects or runs is marked **Test first** in its notes
-(and in the [CHANGELOG](../CHANGELOG.md)). The manager says so above the notes, proposes *pilot devices only*, and
-before a major update goes to all devices (from **Release from GitHub...**, **Release to all devices** or **Version
-for all devices...**) it asks once more, with *No* as the default answer.
+**Major updates.** We mark in the release the ones that change how a session connects or runs (**Major update** in
+the [CHANGELOG](../CHANGELOG.md), `major=` in the signed `LATEST.txt`). A device with a management folder never
+installs one by itself, also when it updates straight from GitHub: only once the manager released it to that
+device. **Release from GitHub...** says so above the notes and asks a second time, *No* by default, before it goes
+to all devices or to the groups ticked; then it writes `UPDATE_MAJOR` in `common.conf` or in their `_group.conf`.
+**Release to all devices** and **Version for all devices...** ask the same before the rest of the fleet gets it.
+A device without a management folder asks on its own screen instead ([management.md](management.md#signed-updates)).
 
 ### Release it to the whole fleet
 
-When the pilots are fine: **Updates > Release to all devices**. `common.conf` goes back to `UPDATE_TO=latest`
+When the pilot group is fine: **Updates > Release to all devices**. `common.conf` goes back to `UPDATE_TO=latest`
 and every device takes the new version within 5 minutes, each one when its session is over.
 
 ### Something broke: go back

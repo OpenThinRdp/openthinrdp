@@ -377,6 +377,7 @@ $script:Settings = @(
   (New-Setting 'UPDATE_GITHUB'       'repo'       'OpenThinRdp/openthinrdp')
   (New-Setting 'UPDATE_KEY'          'choice'     'any' @('any', 'site'))
   (New-Setting 'UPDATE_TO'           'updateto'   'latest')
+  (New-Setting 'UPDATE_MAJOR'        'major'      '')
   (New-Setting 'SSH'                 'choice'     'off' @('off', 'on'))
   (New-Setting 'REMOTE_SCREEN'       'choice'     'on' @('on', 'off'))
   (Set-Section 'SectionWeb')
@@ -477,6 +478,7 @@ function Test-SettingValue([string]$key, [string]$v) {
     'repo'       { if ($v -cnotmatch '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$') { return (Get-Text 'ErrRepo') } }
     # latest, or a version as the index files name it: v0.2.0 is the GitHub tag, and updates\versions\v0.2.0.txt never exists
     'updateto'   { if ($v -ne '' -and ($v -cnotmatch $script:Rx.Version -or $v -cmatch '^[vV][0-9]')) { return (Get-Text 'ErrUpdateTo') } }
+    'major'      { if ($v -ne '' -and ($v -cnotmatch $script:Rx.Version -or $v -cmatch '^[vV][0-9]')) { return (Get-Text 'ErrUpdateTo') } }
     'choice'     { if ($s.Choices -notcontains $v) { return (Get-Text 'ErrChoice' $L ($s.Choices -join ', ')) } }
     'gfx'        { if ($v -cnotmatch $script:Rx.Gfx) { return (Get-Text 'ErrGfx' $L) } }
     'rdpkbd'     { if ($v -cnotmatch $script:Rx.RdpKbd) { return (Get-Text 'ErrRdpKbd' $L) } }
@@ -698,18 +700,18 @@ function Get-ReleasesBetween([string]$from, [string]$to, $json = $null) {
 function Get-ReleaseNotes([string]$from, [string]$to, $json = $null) {
   try { (@(Get-ReleasesBetween $from $to $json) | ForEach-Object { "$(Get-Text 'NotesVersion' $_.Version)`r`n`r`n$(ConvertFrom-ReleaseMarkdown $_.Body)" }) -join "`r`n`r`n" } catch { '' }
 }
-# Major updates: the releases between the two whose notes mark a change **Test first** (or **Major update**), a change
-# to how a session connects or runs, to try on pilot devices before the whole fleet. Before it goes to all devices
-# the manager asks once more. The versions, newest first; none when GitHub does not answer.
-function Get-MajorVersions([string]$from, [string]$to, $json = $null) {
-  try { @(Get-ReleasesBetween $from $to $json | Where-Object { $_.Body -match '\*\*(Test first|Major update)' } | ForEach-Object Version) } catch { @() }
-}
-# The fleet is about to get $to (from $from): $true to go on. A major update asks once more, No by default.
-function Confirm-MajorToAll([string]$title, [string]$from, [string]$to) {
-  if (-not $to -or ($from -match '^\d' -and (Compare-Version $to $from) -le 0)) { return $true }
-  $form.Cursor = 'WaitCursor'; $major = @(Get-MajorVersions $from $to); $form.Cursor = 'Default'
-  if (-not $major.Count) { return $true }
-  Confirm-Action $title (Get-Text 'MajorConfirmAll' $to ($major -join ', ')) 'Button2'
+# Major updates: we mark them in the release (MAJOR of the repository -> major= of the signed LATEST.txt, the newest
+# one). A managed device never installs one by itself, also when it updates straight from GitHub: only once
+# UPDATE_MAJOR (common.conf or the file of a group) is at that version, written here after a second confirmation.
+# Every device to $to ($null: none) from Release to all devices or Version for all devices: $true = go on.
+function Confirm-MajorToAll([string]$title, [string]$to) {
+  $l = Join-Path (Get-UpdatesDir) 'LATEST.txt'; if (-not $to -or -not (Test-Path -LiteralPath $l)) { return $true }
+  $maj = (Read-LatestFile $l).Major
+  if (-not $maj -or (Compare-Version $to $maj) -lt 0) { return $true }
+  $ack = [string](Read-ConfFile $script:CommonFile)['UPDATE_MAJOR']
+  if ($ack -and (Compare-Version $ack $maj) -ge 0) { return $true }
+  if (-not (Confirm-Action $title (Get-Text 'MajorConfirm' $to $maj (Get-Text 'MajorAllDevices')) 'Button2')) { return $false }
+  Set-CommonValue 'UPDATE_MAJOR' $maj; $true
 }
 # The notes in a window before an update: what it is (the question), what changes (scrolling), go on or not
 function Show-NotesDialog([string]$title, [string]$intro, [string]$notes, [string]$okKey) {
@@ -755,8 +757,10 @@ function Read-LatestFile([string]$file) {
   $l = Read-Lines $file
   $field = { param($k) ([string]($l | Where-Object { $_ -match "^$k=" } | Select-Object -First 1) -replace "^$k=", '').Trim() }
   $v = & $field 'version'; $f = & $field 'file'; $h = & $field 'sha256'; $m = & $field 'manager'; $mh = & $field 'manager_sha256'
+  # major= the newest major update (MAJOR of the repository): see Confirm-MajorToAll
+  $mj = & $field 'major'; if ($mj -cnotmatch '^[0-9A-Za-z._-]+$') { $mj = '' }
   $ok = ($v -cmatch '^[0-9A-Za-z._-]+$' -and $f -cmatch $script:ReleaseFileRx -and $h -cmatch '^[0-9a-f]{64}$')
-  [pscustomobject]@{ Version = $v; File = $f; Hash = $h; Ok = $ok; Manager = $m; ManagerHash = $mh
+  [pscustomobject]@{ Version = $v; File = $f; Hash = $h; Ok = $ok; Manager = $m; ManagerHash = $mh; Major = $mj
     ManagerOk = ($ok -and $m -ceq "openthinrdp-manager-$v.zip" -and $mh -cmatch '^[0-9a-f]{64}$') }
 }
 # Downloads and checks the release into a temporary folder. Ok = $false with Message, or the release:
@@ -962,11 +966,21 @@ function Set-UpdateTo($value, $dev = $null) {
 }
 # UPDATE_TO of a group, in its _group.conf ($value $null = its line off: the group follows common.conf), with the
 # checks of common.conf as every setting of a group
-function Set-GroupUpdateTo($value, [string]$group) {
+function Set-GroupUpdateTo($value, [string]$group) { Set-CommonValue 'UPDATE_TO' $value $group }
+# one setting of common.conf, or of the _group.conf of $group ($value $null = its line off), with the checks of
+# common.conf as every setting of a group
+function Set-CommonValue([string]$key, $value, [string]$group = '') {
   $keep = $script:CommonFile, $script:CommonHeader
-  $script:CommonFile = Join-Path (Join-Path (Get-GroupsDir) $group) '_group.conf'
-  $script:CommonHeader = @("# Settings for the devices of the group $group (written by the OpenThinRDP manager).", '')
-  try { Set-UpdateTo $value } finally { $script:CommonFile, $script:CommonHeader = $keep }
+  if ($group) {
+    $script:CommonFile = Join-Path (Join-Path (Get-GroupsDir) $group) '_group.conf'
+    $script:CommonHeader = @("# Settings for the devices of the group $group (written by the OpenThinRDP manager).", '')
+  }
+  try {
+    $plan = Get-CommonSavePlan ([ordered]@{ $key = $value }) $script:Devices
+    if ($plan.Errors.Count) { throw ($plan.Errors -join "`r`n") }
+    if ($plan.Changes.Count) { [void](Write-ConfFile $plan.File $plan.Values $script:CommonHeader) }
+    $plan
+  } finally { $script:CommonFile, $script:CommonHeader = $keep }
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -4386,48 +4400,51 @@ function Start-ReleaseImport {
     if ($sg.Error) { Show-Message (Get-Text 'RelTitle') $sg.Error 'Error'; return }
     $st = Get-RolloutState
     # first what changes from the version published now to this one; then where it goes
-    $form.Cursor = 'WaitCursor'; $notes = Get-ReleaseNotes ([string]$st.Latest) $rel.Version; $major = @(Get-MajorVersions ([string]$st.Latest) $rel.Version); $form.Cursor = 'Default'
+    $form.Cursor = 'WaitCursor'; $notes = Get-ReleaseNotes ([string]$st.Latest) $rel.Version; $form.Cursor = 'Default'
+    # a major update not released here yet: said above the notes, asked once more, UPDATE_MAJOR where it goes
+    $maj = (Read-LatestFile (Join-Path $rel.Dir 'LATEST.txt')).Major
+    if ($maj -and ((Compare-Version $rel.Version $maj) -lt 0 -or ($st.Latest -and (Compare-Version $st.Latest $maj) -ge 0))) { $maj = '' }
     $intro = Get-Text 'RelNotesIntro' $rel.Version $(if ($st.Latest) { $st.Latest } else { Get-Text 'UpdNone' })
-    if ($major.Count) { $intro += ' ' + (Get-Text 'MajorIntro' ($major -join ', ')) }
+    if ($maj) { $intro += ' ' + (Get-Text 'MajorIntro' $maj) }
     if (-not (Show-NotesDialog (Get-Text 'RelTitle') $intro $notes 'BtnNext')) { return }
     # the others stay on the version published now: there must be one, signed, to keep them on
     $l = Join-Path (Get-UpdatesDir) 'LATEST.txt'
     $stay = if ($st.Pinned) { $st.Fleet } elseif ($st.Latest -and (Test-Path -LiteralPath "$l.sig")) { $st.Latest } else { $null }
-    $pilots = if ($st.Pilots.Count) { $st.Pilots -join ', ' } else { Get-Text 'RelNoPilots' }
-    # the groups, each with its devices: ticked, the new version goes to them (and the pilots), the others stay
+    # the groups, each with its devices (the pilot devices are a group too): ticked, the new version goes to them, the
+    # others stay
     $grpList = @(Get-Groups | ForEach-Object { $n = $_; [pscustomobject]@{ Name = $n; Text = (Get-Text 'RelGroupItem' $n @($script:Devices | Where-Object { $_.Group -eq $n }).Count) } })
     $opts = @((Get-Text 'RelScopeAll' $rel.Version))
-    $opts += , $(if ($stay) { @((Get-Text 'RelScopePilot' $st.Pilots.Count $stay $pilots), $true) } else { @((Get-Text 'RelScopePilotNo'), $false) })
     $opts += , $(if (-not $grpList.Count) { @((Get-Text 'RelScopeGroupsNone'), $false) } elseif ($stay) { @((Get-Text 'RelScopeGroups' $stay), $true) } else { @((Get-Text 'RelScopePilotNo'), $false) })
-    # a major update offers the pilot devices first, and to all devices it asks once more
-    $sel = if ($stay -and ($st.Pinned -or $st.Pilots.Count -or $major.Count)) { 1 } else { 0 }
+    $sel = if ($stay -and $grpList.Count -and ($st.Pinned -or $maj)) { 1 } else { 0 }
     $pick = Show-PickDialog (Get-Text 'RelTitle') (Get-Text 'RelConfirm' $rel.Version (Get-PublishedUpdate) $sg.Text) $opts $sel -okKey 'BtnPublish' -groups $grpList
     if (-not $pick) { return }
-    if ($pick.Option -eq 2 -and -not @($pick.Groups).Count) { Show-Message (Get-Text 'RelTitle') (Get-Text 'RelGroupsNoneTicked') 'Information'; return }
-    if ($pick.Option -eq 0 -and $major.Count -and -not (Confirm-Action (Get-Text 'RelTitle') (Get-Text 'MajorConfirmAll' $rel.Version ($major -join ', ')) 'Button2')) { return }
+    if ($pick.Option -eq 1 -and -not @($pick.Groups).Count) { Show-Message (Get-Text 'RelTitle') (Get-Text 'RelGroupsNoneTicked') 'Information'; return }
+    # a major update: the second confirmation, wherever it goes
+    if ($maj -and -not (Confirm-Action (Get-Text 'RelTitle') (Get-Text 'MajorConfirm' $rel.Version $maj $(if ($pick.Option -eq 1) { @($pick.Groups) -join ', ' } else { Get-Text 'MajorAllDevices' })) 'Button2')) { return }
     # Devices before 0.2.0 do not know UPDATE_TO (their report has no UPDATE_TO line): on the folder they take the new
-    # LATEST.txt whatever common.conf says, so pilots or groups only would not hold them back. Said before anything is written.
-    if ($pick.Option -ge 1) {
-      $old = @($script:Devices | Where-Object { -not $_.S.ContainsKey('UPDATE_TO') -and $st.Pilots -notcontains $_.Name -and @($pick.Groups) -notcontains $_.Group } | ForEach-Object Name | Sort-Object)
+    # LATEST.txt whatever common.conf says, so some groups only would not hold them back. Said before anything is written.
+    if ($pick.Option -eq 1) {
+      $old = @($script:Devices | Where-Object { -not $_.S.ContainsKey('UPDATE_TO') -and @($pick.Groups) -notcontains $_.Group } | ForEach-Object Name | Sort-Object)
       if ($old.Count -and -not (Confirm-Action (Get-Text 'RelTitle') (Get-Text 'RelPilotOldDevices' $old.Count ($old -join ', ') $rel.Version) 'Button2')) { return }
     }
     try {
-      if ($pick.Option -ge 1 -and -not $st.Pinned) {
+      if ($pick.Option -eq 1 -and -not $st.Pinned) {
         $v = Initialize-VersionIndex
         if (-not $v) { throw (Get-Text 'RelPilotNoIndex') }
         [void](Set-UpdateTo $v)
       }
-      # pilots or groups: the ticked groups follow the newest; a group left on the newest by an earlier release to some
-      # groups goes back to following common.conf (it would take this one too)
-      if ($pick.Option -ge 1) {
+      # some groups: the ticked ones follow the newest (and may cross the major update); a group left on the newest by
+      # an earlier release goes back to following common.conf (it would take this one too)
+      if ($pick.Option -eq 1) {
         foreach ($g in @(Get-Groups)) {
-          if (@($pick.Groups) -contains $g) { [void](Set-GroupUpdateTo 'latest' $g) }
+          if (@($pick.Groups) -contains $g) { [void](Set-GroupUpdateTo 'latest' $g); if ($maj) { [void](Set-CommonValue 'UPDATE_MAJOR' $maj $g) } }
           elseif ($st.Pins.Groups.Contains($g) -and $st.Pins.Groups[$g] -eq 'latest') { [void](Set-GroupUpdateTo $null $g) }
         }
       }
+      if ($pick.Option -eq 0 -and $maj) { [void](Set-CommonValue 'UPDATE_MAJOR' $maj) }
       [void](Publish-Release $rel $sg.Site)
       if ($pick.Option -eq 0 -and $st.Pinned) { [void](Set-UpdateTo 'latest') }
-      Show-Message (Get-Text 'RelTitle') $(switch ($pick.Option) { 1 { Get-Text 'RelDonePilot' $rel.Version $stay } 2 { Get-Text 'RelDoneGroups' $rel.Version (@($pick.Groups) -join ', ') $stay } default { Get-Text 'RelDone' $rel.Version } }) 'Information'
+      Show-Message (Get-Text 'RelTitle') $(if ($pick.Option -eq 1) { Get-Text 'RelDoneGroups' $rel.Version (@($pick.Groups) -join ', ') $stay } else { Get-Text 'RelDone' $rel.Version }) 'Information'
     } catch { Show-Message (Get-Text 'RelTitle') (Get-Text 'RelCopyFailed' $_.Exception.Message) 'Error' }
     Sync-UpdateToRows
   } finally { Remove-Item -LiteralPath $rel.Dir -Recurse -Force -ErrorAction SilentlyContinue }
@@ -4466,7 +4483,7 @@ function Start-ReleaseToAll {
   if (-not $st.Pinned) { Show-Message (Get-Text 'AllTitle') (Get-Text 'AllNothing') 'Information'; return }
   if (-not $st.Latest) { Show-Message (Get-Text 'AllTitle') (Get-Text 'UpdNone') 'Information'; return }
   if (-not (Confirm-Action (Get-Text 'AllTitle') (Get-Text 'AllConfirm' $st.Fleet $st.Latest))) { return }
-  if (-not (Confirm-MajorToAll (Get-Text 'AllTitle') $st.Fleet $st.Latest)) { return }
+  if (-not (Confirm-MajorToAll (Get-Text 'AllTitle') $st.Latest)) { return }
   try { [void](Set-UpdateTo 'latest') } catch { Show-Message (Get-Text 'MsgErrorTitle') (Get-Text 'MsgSaveFailed' $_.Exception.Message) 'Error'; return }
   $barText.Text = Get-Text 'AllDone' $st.Latest
   Sync-UpdateToRows
@@ -4483,29 +4500,28 @@ function Start-FleetVersion {
   if ($v -eq $st.Fleet) { Show-Message (Get-Text 'MsgNoChangesTitle') (Get-Text 'MsgNoChanges') 'Information'; return }
   $back = Get-BackText $v $st
   if (-not (Confirm-Action (Get-Text 'FleetTitle') (Get-Text 'FleetConfirm' (Format-Target $st.Fleet $st) (Format-Target $v $st) $back) $(if ($back) { 'Button2' } else { 'Button1' }))) { return }
-  $from = if ($st.Pinned) { $st.Fleet } else { $st.Latest }
-  if (-not (Confirm-MajorToAll (Get-Text 'FleetTitle') $from $(if ($v -eq 'latest') { $st.Latest } else { $v }))) { return }
+  if (-not (Confirm-MajorToAll (Get-Text 'FleetTitle') $(if ($v -eq 'latest') { $st.Latest } else { $v }))) { return }
   try { [void](Set-UpdateTo $v) } catch { Show-Message (Get-Text 'MsgErrorTitle') (Get-Text 'MsgSaveFailed' $_.Exception.Message) 'Error'; return }
   $barText.Text = Get-Text 'SavedCommon' $script:CommonFile (Get-Text 'ColSource')
   Sync-UpdateToRows
 }
-# Software version of one device: like all devices (no UPDATE_TO of its own), pilot (UPDATE_TO=latest), or a version of
-# its own (also older: going back)
+# Software version of one device: like all devices (no UPDATE_TO of its own), or a version of its own (also older:
+# going back). Pilot devices are a group (Release from GitHub, some groups).
 function Show-DeviceVersionDialog($d) {
   $st = Get-RolloutState; $t = Get-DeviceTrack $d.Name $st
-  $opts = @((Get-Text 'DevOptFleet' (Format-Target $st.Fleet $st)), (Get-Text 'DevOptPilot' $(if ($st.Latest) { $st.Latest } else { Get-Text 'UpdNone' })), (Get-Text 'DevOptVersion'))
-  $sel = switch ($t.Kind) { 'pilot' { 1 } 'own' { 2 } default { 0 } }
+  $opts = @((Get-Text 'DevOptFleet' (Format-Target $st.Fleet $st)), (Get-Text 'DevOptVersion'))
+  $sel = if ($t.Kind -eq 'own') { 1 } else { 0 }
   $installed = if ($d.S['UPDATE_VERSION']) { $d.S['UPDATE_VERSION'] } else { [string][char]0x2014 }
   $text = Get-Text 'DevVerText' $d.Name (Get-Version $d.S) $installed (Get-TrackText $d)
   $pick = Show-PickDialog (Get-Text 'DevVerTitle' $d.Name) $text $opts $sel (Get-ChoosableVersions) $(if ($t.Kind -eq 'own') { $t.Target } else { '' }) { Invoke-FetchVersion }
   if (-not $pick) { return }
-  $v = switch ($pick.Option) { 0 { $null } 1 { 'latest' } default { $pick.Version } }
-  if ($pick.Option -eq 2 -and -not $v) { return }
+  $v = if ($pick.Option -eq 0) { $null } else { $pick.Version }
+  if ($pick.Option -eq 1 -and -not $v) { return }
   $now = switch ($t.Kind) { 'fleet' { $null } default { $t.Target } }
   if ($v -ceq $now) { Show-Message (Get-Text 'MsgNoChangesTitle') (Get-Text 'MsgNoChanges') 'Information'; return }
   $back = if ($v -and $v -ne 'latest') { Get-BackText $v $st } else { '' }
-  $label = { param($k, $x) switch ($k) { 0 { Get-Text 'TrackFleet' (Format-Target $st.Fleet $st) } 1 { Get-Text 'TrackPilot' (Format-Target 'latest' $st) } default { Get-Text 'TrackOwn' $x } } }
-  if (-not (Confirm-Action (Get-Text 'DevVerTitle' $d.Name) ((Get-Text 'DevVerConfirm' $d.Name (& $label $sel $t.Target) (& $label $pick.Option $v)) + $back) $(if ($back) { 'Button2' } else { 'Button1' }))) { return }
+  $to = if ($pick.Option -eq 0) { Get-Text 'TrackFleet' (Format-Target $st.Fleet $st) } else { Get-Text 'TrackOwn' $v }
+  if (-not (Confirm-Action (Get-Text 'DevVerTitle' $d.Name) ((Get-Text 'DevVerConfirm' $d.Name (Get-TrackText $d) $to) + $back) $(if ($back) { 'Button2' } else { 'Button1' }))) { return }
   try { $plan = Set-UpdateTo $v $d } catch { Show-Message (Get-Text 'MsgErrorTitle') (Get-Text 'MsgSaveFailed' $_.Exception.Message) 'Error'; return }
   $barText.Text = Get-Text 'SavedDevice' $plan.File (Get-Text 'ColSource')
   Sync-UpdateToRows
