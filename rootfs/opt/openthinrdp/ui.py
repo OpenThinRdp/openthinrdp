@@ -3,9 +3,11 @@
 # picture above a white card). Started by kiosk.sh (and schedule.sh, browser.sh), which handle what follows.
 #
 #   ui.py login ...      sign-in screen: card with user, password, Sign in; clock and date top left, information and
-#                        settings top right, power (restart, shut down) bottom right, web button and device bottom left.
-#                        Exit: 10 = sign in ("user|password|" on stdout), 3 = settings, 4 = diagnostics, 5 = shut
-#                        down, 6 = restart, 7 = web button. "--class=OtrLogin" stays on the command line: kiosk.sh
+#                        settings top right (with the network, --t-net), power (restart, shut down) bottom right, web
+#                        button and device bottom left.
+#                        Exit: 10 = sign in ("user|password|" on stdout), 3 = settings, 4 = diagnostics, 8 = the network
+#                        (Wi-Fi page), 5 = shut down, 6 = restart, 7 = web button. "--class=OtrLogin" stays on the
+#                        command line: kiosk.sh
 #                        closes it with pkill -f -- '--class=OtrLogin'.
 #   ui.py message ...    a message: icon, heading, text, buttons (--button LABEL:CODE, in this order; --primary CODE
 #                        is drawn as the main one, --default CODE has the focus, so Enter presses it).
@@ -20,6 +22,8 @@
 #                        see below). Exit: 0 = save (KEY=value lines on stdout), 11 = close, 12 = terminal.
 #   ui.py pin ...        the settings PIN: 0 = OK (the PIN on stdout), 11 = cancel.
 #   ui.py text ...       a text read from stdin as it arrives (diagnostics), with Close.
+#   ui.py wifi ...       the Wi-Fi: networks around, one chosen, its password, connect and the result here (wifi.sh).
+#                        Texts on stdin ("key<TAB>text"). Exit: 0 = a network joined, 11 = closed.
 import argparse, locale, math, os, subprocess, sys, time
 import gi
 gi.require_version('Gtk', '3.0')
@@ -31,7 +35,7 @@ ap = argparse.ArgumentParser()
 for a in ('class', 'title', 'heading', 'text', 'small', 'info', 'note', 'user', 'logo', 'splash', 'top', 'bottom',
           'web', 'icon', 'timeout', 'primary', 'default', 'lang',
           't-user', 't-password', 't-signin', 't-shutdown', 't-restart', 't-settings', 't-diag', 't-power',
-          't-save', 't-close', 't-terminal',
+          't-save', 't-close', 't-terminal', 't-net',
           'open-power'):     # open-power: tests only, the power menu open (for a screenshot)
     ap.add_argument('--' + a, default='')
 ap.add_argument('--button', action='append', default=[])
@@ -94,6 +98,16 @@ stacksidebar row { padding: 11px 16px; border-radius: 8px; margin: 0 10px 2px 0;
 stacksidebar row:selected { background: #dbeafe; color: #1d4ed8; }
 stacksidebar row:hover:not(:selected) { background: #f1f5f9; }
 .mono { font-family: Monospace; font-size: 13px; color: #111827; }
+.netpill { background: rgba(255,255,255,0.10); color: #ffffff; border-radius: 22px; border: none; box-shadow: none;
+           background-image: none; min-height: 44px; padding: 0 16px; font-size: 14px; text-shadow: none; }
+.netpill:hover { background: rgba(255,255,255,0.22); }
+.netpill.down { background: rgba(220,38,38,0.85); }
+.wifirow { padding: 10px 12px; border-radius: 8px; }
+.wifiname { color: #111827; font-size: 15px; }
+.wifimeta { color: #64748b; font-size: 12px; }
+.result-ok { color: #15803d; font-size: 14px; font-weight: bold; }
+.result-err { color: #b91c1c; font-size: 14px; font-weight: bold; }
+.result-busy { color: #1d4ed8; font-size: 14px; }
 """
 
 # icons drawn here: the image has no icon theme. White on the background, coloured in a card.
@@ -135,6 +149,72 @@ def icon(kind, size=22, color=(1, 1, 1), alpha=0.92):
         def spin():
             state['a'] = (state['a'] + 0.25) % (2 * math.pi); d.queue_draw(); return True
         GLib.timeout_add(50, spin)
+    return d
+
+# The network the device is on, read as the kiosk user (no root): the cable first (a carrier), else the Wi-Fi it
+# is joined to. ('wired'|'wifi'|'none', name of the Wi-Fi, bars 0-4, address or '')
+def net_state():
+    def addr(i):
+        try:
+            out = subprocess.run(['ip', '-4', '-o', 'addr', 'show', 'dev', i, 'scope', 'global'], capture_output=True, text=True, timeout=3).stdout
+            return out.split()[3].split('/')[0] if out.split() else ''
+        except Exception:
+            return ''
+    try:
+        nics = sorted(os.listdir('/sys/class/net'))
+    except OSError:
+        nics = []
+    for i in nics:
+        if i.startswith(('en', 'eth')):
+            try:
+                if open('/sys/class/net/%s/carrier' % i).read().strip() == '1':
+                    return ('wired', '', 4, addr(i))
+            except OSError:
+                pass
+    for i in nics:
+        if i.startswith('wl'):
+            try:
+                out = subprocess.run(['/usr/sbin/iw', 'dev', i, 'link'], capture_output=True, text=True, timeout=3).stdout
+            except Exception:
+                out = ''
+            if 'Connected' in out:
+                ssid, dbm = '', -90
+                for l in out.splitlines():
+                    l = l.strip()
+                    if l.startswith('SSID:'): ssid = l[5:].strip()
+                    elif l.startswith('signal:'):
+                        try: dbm = int(float(l.split()[1]))
+                        except (IndexError, ValueError): pass
+                return ('wifi', ssid, bars(dbm), addr(i))
+    return ('none', '', 0, '')
+
+def bars(dbm):
+    return 4 if dbm >= -55 else 3 if dbm >= -65 else 2 if dbm >= -75 else 1
+
+# the icon of a network, its kind and bars changed later (st['kind'], st['bars']): wifi (arcs, the empty ones faint),
+# wired (a plug), none (a Wi-Fi crossed out)
+def net_icon(kind='none', level=0, size=20, color=(1, 1, 1)):
+    d = Gtk.DrawingArea(valign=Gtk.Align.CENTER); d.set_size_request(size, size)
+    st = {'kind': kind, 'bars': level, 'color': color}
+    def draw(w, cr):
+        s = size; r, g, b = st['color']; cr.set_line_width(max(2.0, s / 10)); cr.set_line_cap(1)
+        if st['kind'] == 'wired':
+            cr.set_source_rgba(r, g, b, 0.95)
+            cr.rectangle(s * 0.28, s * 0.22, s * 0.44, s * 0.34); cr.stroke()
+            cr.move_to(s * 0.40, s * 0.22); cr.line_to(s * 0.40, s * 0.08); cr.stroke()
+            cr.move_to(s * 0.60, s * 0.22); cr.line_to(s * 0.60, s * 0.08); cr.stroke()
+            cr.move_to(s * 0.50, s * 0.56); cr.line_to(s * 0.50, s * 0.92); cr.stroke()
+            return
+        cx, cy = s / 2, s * 0.86
+        for k in range(1, 4):
+            on = st['kind'] == 'wifi' and st['bars'] >= k + 1
+            cr.set_source_rgba(r, g, b, 0.95 if on else 0.30)
+            cr.arc(cx, cy, s * 0.22 * k, -math.pi * 0.78, -math.pi * 0.22); cr.stroke()
+        cr.set_source_rgba(r, g, b, 0.95 if st['kind'] == 'wifi' else 0.30); cr.arc(cx, cy, s * 0.07, 0, 2 * math.pi); cr.fill()
+        if st['kind'] == 'none':
+            # the slash red in a card, white on the red pill of the sign-in screen
+            cr.set_source_rgba(*((1, 1, 1, 1.0) if st['color'] == (1, 1, 1) else (0.94, 0.27, 0.27, 1.0))); cr.move_to(s * 0.15, s * 0.15); cr.line_to(s * 0.85, s * 0.85); cr.stroke()
+    d.connect('draw', draw); d.st = st
     return d
 
 def picture(path, maxw, maxh):
@@ -369,6 +449,10 @@ if MODE == 'form':
         leave(0, '\n'.join(out))
     bar = Gtk.Box(spacing=10); bar.set_margin_top(4)
     if A.t_terminal: bar.pack_start(button(A.t_terminal, 'secondary', lambda *_: leave(12)), False, False, 0)
+    # more buttons (--button LABEL:CODE), after Terminal: the code they end with (the Wi-Fi page: 13)
+    for b in A.button:
+        lbl, _, c = b.rpartition(':')
+        if lbl and c.isdigit(): bar.pack_start(button(lbl, 'secondary', lambda *_, c=int(c): leave(c)), False, False, 0)
     bs = button(A.t_save or 'Save', 'primary', save); bc = button(A.t_close or 'Close', 'secondary', lambda *_: leave(11))
     bar.pack_end(bs, False, False, 0); bar.pack_end(bc, False, False, 0)
     card.pack_start(bar, False, False, 0)
@@ -396,6 +480,134 @@ if MODE == 'pin':
     win.connect('key-press-event', lambda _w, e: e.keyval == Gdk.KEY_Escape and leave(11))
     code = 11
     win.show_all(); ep.grab_focus()
+    Gtk.main(); sys.exit(code)
+
+# --- Wi-Fi: the networks around, one chosen, its password, connect and see the result here ------------------------
+# The texts on stdin, "key<TAB>text" per line (kiosk.sh, in the language of the device). wifi.sh (root, through
+# sudo) scans and connects: the network is tried first and saved only when it joins; a wrong password leaves the
+# Wi-Fi of before. Exit: 0 = a network joined here, 11 = closed without.
+if MODE == 'wifi':
+    import threading
+    T = {}
+    for line in sys.stdin.read().split('\n'):
+        k, _, v = line.partition('\t')
+        if k: T[k] = v.replace('\\n', '\n')
+    t = lambda k, *a: (T.get(k, k) % a) if a else T.get(k, k)
+    WIFI = ['sudo', '-n', '/opt/openthinrdp/wifi.sh']
+    card.set_size_request(min(760, SW - 40), min(660, SH - 40)); card.set_spacing(12)
+    if sp: mid.remove(sp)
+    card.pack_start(left_label(t('heading'), 'heading'), False, False, 0)
+    # where the device is now
+    srow = Gtk.Box(spacing=10); sico = net_icon('none', 0, 20, (0.15, 0.39, 0.92)); slab = left_label('', 'text', 80)
+    srow.pack_start(sico, False, False, 0); srow.pack_start(slab, True, True, 0); card.pack_start(srow, False, False, 0)
+    def show_state():
+        k, ssid, lv, ip = net_state()
+        sico.st['kind'], sico.st['bars'] = k, lv; sico.queue_draw()
+        slab.set_text(t('status_wifi', ssid, ip or '-') if k == 'wifi' else t('status_wired', ip or '-') if k == 'wired' else t('status_none'))
+        return True
+    show_state(); GLib.timeout_add_seconds(4, show_state)
+    # the networks around
+    hrow = Gtk.Box(spacing=10); hrow.pack_start(left_label(t('list'), 'field'), True, True, 0)
+    brf = button(t('refresh'), 'secondary', lambda *_: scan()); hrow.pack_end(brf, False, False, 0)
+    card.pack_start(hrow, False, False, 0)
+    lb = Gtk.ListBox(); lb.set_selection_mode(Gtk.SelectionMode.SINGLE)
+    sc = Gtk.ScrolledWindow(); sc.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC); sc.add(lb)
+    sc.set_min_content_height(200); card.pack_start(sc, True, True, 0)
+    # the one chosen, its password
+    sel = left_label(t('choose'), 'text', 80); card.pack_start(sel, False, False, 0)
+    prow = Gtk.Box(spacing=10)
+    ep = Gtk.Entry(placeholder_text=t('password'), visibility=False); ep.set_input_purpose(Gtk.InputPurpose.PASSWORD)
+    cshow = Gtk.CheckButton(label=t('show')); cshow.connect('toggled', lambda c: ep.set_visibility(c.get_active()))
+    prow.pack_start(ep, True, True, 0); prow.pack_start(cshow, False, False, 0); card.pack_start(prow, False, False, 0)
+    res = left_label('', 'text', 90); card.pack_start(res, False, False, 0)
+    bar = Gtk.Box(spacing=10)
+    bcn = button(t('connect'), 'primary', lambda *_: connect()); bcl = button(t('close'), 'secondary', lambda *_: leave(code))
+    bar.pack_end(bcn, False, False, 0); bar.pack_end(bcl, False, False, 0); card.pack_start(bar, False, False, 0)
+    state = {'busy': False, 'net': None}
+    def say(text, cls):
+        res.set_text(text)
+        for c in ('result-ok', 'result-err', 'result-busy', 'text'): res.get_style_context().remove_class(c)
+        res.get_style_context().add_class(cls)
+    def busy(on):
+        state['busy'] = on
+        for w in (brf, bcn, bcl, lb, ep, cshow): w.set_sensitive(not on)
+    def pick(_lb, row):
+        if row is None: return
+        n = row.net; state['net'] = n
+        if n['sec'] == 'psk':
+            sel.set_text(t('chosen', n['ssid'])); prow.set_sensitive(True); bcn.set_sensitive(not state['busy']); ep.grab_focus()
+        else:
+            sel.set_text(t('chosen', n['ssid']) + '  —  ' + t('sec_' + n['sec'])); prow.set_sensitive(False); bcn.set_sensitive(False)
+    lb.connect('row-selected', pick)
+    def fill(nets):
+        for r in lb.get_children(): lb.remove(r)
+        cur = net_state()[1]
+        for n in nets:
+            row = Gtk.ListBoxRow(); row.net = n; box = Gtk.Box(spacing=12); box.get_style_context().add_class('wifirow')
+            box.pack_start(net_icon('wifi', bars(n['dbm']), 20, (0.15, 0.39, 0.92)), False, False, 0)
+            col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            nm = Gtk.Label(label=n['ssid'], xalign=0); nm.get_style_context().add_class('wifiname'); col.pack_start(nm, False, False, 0)
+            meta = t('sec_' + n['sec']) + ('  ·  ' + t('current') if n['ssid'] == cur else '')
+            mt = Gtk.Label(label=meta, xalign=0); mt.get_style_context().add_class('wifimeta'); col.pack_start(mt, False, False, 0)
+            box.pack_start(col, True, True, 0); row.add(box); lb.add(row)
+            if n['ssid'] == cur: lb.select_row(row)
+        lb.show_all()
+        if not nets: say(t('nonefound'), 'result-err')
+        elif res.get_text() == t('scanning'): say('', 'text')
+        busy(False)
+        if state['net'] is None or state['net']['sec'] != 'psk': bcn.set_sensitive(False)
+    def scan():
+        busy(True); say(t('scanning'), 'result-busy')
+        def run():
+            nets = []
+            try:
+                p = subprocess.run(WIFI + ['scan'], capture_output=True, text=True, timeout=40)
+                if p.returncode == 2: GLib.idle_add(lambda: (say(t('nowifi'), 'result-err'), busy(False)) and False); return
+                for l in p.stdout.splitlines():
+                    f = l.split('\t', 2)
+                    if len(f) == 3: nets.append({'dbm': int(f[0]), 'sec': f[1], 'ssid': f[2]})
+            except Exception:
+                pass
+            GLib.idle_add(lambda: fill(nets) and False)
+        threading.Thread(target=run, daemon=True).start()
+    def connect():
+        n = state['net']
+        if not n or n['sec'] != 'psk': say(t('choose'), 'result-err'); return
+        pw = ep.get_text()
+        if not 8 <= len(pw) <= 63: say(t('invalid'), 'result-err'); ep.grab_focus(); return
+        busy(True); say(t('step_stop', n['ssid']), 'result-busy')
+        def run():
+            out = 'result timeout'
+            try:
+                p = subprocess.Popen(WIFI + ['connect'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+                p.stdin.write(n['ssid'] + '\n' + pw + '\n'); p.stdin.close()
+                for l in p.stdout:
+                    l = l.strip()
+                    if l.startswith('step '): GLib.idle_add(lambda s=l[5:]: say(t('step_' + s, n['ssid']), 'result-busy') and False)
+                    elif l.startswith('result '): out = l
+                p.wait(timeout=120)
+            except Exception:
+                pass
+            GLib.idle_add(lambda: done(out) and False)
+        threading.Thread(target=run, daemon=True).start()
+    def done(out):
+        global code
+        f = out.split()[1:] or ['timeout']; r = f[0]
+        if r == 'ok':
+            say(t('ok', state['net']['ssid'], f[1] if len(f) > 1 else '-') + ('\n' + t('central') if 'central' in f else ''), 'result-ok'); code = 0
+        elif r == 'noip':
+            say(t('noip', state['net']['ssid']) + ('\n' + t('central') if 'central' in f else ''), 'result-err'); code = 0
+        elif r == 'saveerror':
+            say(t('saveerror', ' '.join(f[1:])), 'result-err')
+        else:
+            say(t(r, state['net']['ssid']) if '%s' in T.get(r, '') else t(r), 'result-err')
+        busy(False); show_state()
+        if r in ('wrongkey', 'invalid'): ep.select_region(0, -1); ep.grab_focus()
+    ep.connect('activate', lambda *_: connect())
+    win.connect('key-press-event', lambda _w, e: e.keyval == Gdk.KEY_Escape and not state['busy'] and leave(code))
+    code = 11
+    win.show_all(); prow.set_sensitive(False); bcn.set_sensitive(False)
+    scan()
     Gtk.main(); sys.exit(code)
 
 # --- a text read from stdin as it comes (diagnostics) ----------------------------------------------------------
@@ -472,6 +684,23 @@ def tick():
     clk.set_text(time.strftime('%H:%M')); dt.set_text(today()); return True
 tick(); GLib.timeout_add_seconds(10, tick)
 tr = Gtk.Box(spacing=10, halign=Gtk.Align.END, valign=Gtk.Align.START, margin=22)
+# the network, left of them, kept current: cable, Wi-Fi with its name and bars, or none (red). Pressed: the Wi-Fi
+# page (exit 8; kiosk.sh asks the PIN of the settings first). --t-net = "cable|Wi-Fi|no network|no address"
+if A.t_net:
+    tn = (A.t_net.split('|') + ['', '', '', ''])[:4]
+    nb = Gtk.Button(); nb.get_style_context().add_class('netpill'); nb.set_can_focus(False)
+    nbx = Gtk.Box(spacing=8); nic = net_icon('none', 0, 20); nlb = Gtk.Label(); nbx.pack_start(nic, False, False, 0); nbx.pack_start(nlb, False, False, 0)
+    nb.add(nbx); nb.connect('clicked', lambda *_: leave(8))
+    def net_tick():
+        k, ssid, lv, ip = net_state()
+        nic.st['kind'], nic.st['bars'] = k, lv; nic.queue_draw()
+        txt = tn[0] if k == 'wired' else ('%s · %s' % (tn[1], ssid) if ssid else tn[1]) if k == 'wifi' else tn[2]
+        if k != 'none' and not ip: txt += ' · ' + tn[3]
+        nlb.set_text(txt); nb.set_tooltip_text(ip or txt)
+        ctx = nb.get_style_context(); (ctx.add_class if k == 'none' or not ip else ctx.remove_class)('down')
+        return True
+    net_tick(); GLib.timeout_add_seconds(5, net_tick)
+    tr.pack_start(nb, False, False, 0)
 tr.pack_start(corner_button('info', A.t_diag or 'Diagnostics', lambda *_: leave(4)), False, False, 0)
 tr.pack_start(corner_button('gear', A.t_settings or 'Settings', lambda *_: leave(3)), False, False, 0)
 ov.add_overlay(tr)
