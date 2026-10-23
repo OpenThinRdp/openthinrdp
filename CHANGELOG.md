@@ -3,8 +3,17 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
-## Unreleased
+## 0.2.16 (2026-10-23)
 
+- **The network on the sign-in screen, and a Wi-Fi page**: a small sign at the top right shows Wi-Fi with its signal,
+  cable or no network, and the address. With the PIN of the settings it opens a page that lists the Wi-Fi networks in
+  range: pick one, type the password, and the page says whether it joined, with its address and whether the
+  management folder answers. A wrong password changes nothing: it is tried apart first, and the Wi-Fi of before comes
+  back by itself. Also from the settings (*Wi-Fi networks…*).
+- **Anonymous counts for the project**, on by default: the model of the computer, its processor and memory, the
+  versions and a few yes/no, at the first start and then once a week; the manager its version, Windows and how many
+  devices, in ranges. Never names, addresses or users. Off with `ANON_STATS=off` (the last setting of a device, or
+  centrally) and in *Settings > Manager*. Everything sent is listed in [docs/privacy.md](docs/privacy.md).
 - **Room for a failure counted on the memory a VM needs to restart**: a VM with dynamic memory restarts on another
   node with its startup memory, not with what it grew to during the day. 123 GB of memory in use were 114 GB to
   restart, and a node with 121 GB free was reported as too small.
