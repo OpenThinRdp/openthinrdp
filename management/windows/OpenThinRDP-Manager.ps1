@@ -880,17 +880,23 @@ function Initialize-VersionIndex {
   $i.Version
 }
 # UPDATE_TO of the .conf files: Common = what every device installs ('latest' when common.conf has none), Hosts = the
-# devices with one of their own (name -> value)
+# devices with one of their own (name -> value), in config\ or in the folder of a group, Groups = the groups with one
+# in their _group.conf (group -> value). A device follows its own line, else its group's, else common.conf.
 function Get-UpdatePins {
   $c = Read-ConfFile $script:CommonFile
   $common = if ($c.Contains('UPDATE_TO')) { ConvertTo-Canonical 'UPDATE_TO' $c['UPDATE_TO'] } else { 'latest' }
-  $hosts = [ordered]@{}
+  $hosts = [ordered]@{}; $groups = [ordered]@{}
   if (Test-Path -LiteralPath $script:ConfigDir) {
-    foreach ($f in @(Get-ChildItem -LiteralPath $script:ConfigDir -Filter '*.conf' -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -eq '.conf' -and $_.BaseName -ne 'common' })) {
-      $h = Read-ConfFile $f.FullName; if ($h.Contains('UPDATE_TO')) { $hosts[$f.BaseName] = ConvertTo-Canonical 'UPDATE_TO' $h['UPDATE_TO'] }
+    $files = @(Get-ChildItem -LiteralPath $script:ConfigDir -Filter '*.conf' -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -eq '.conf' -and $_.BaseName -ne 'common' } | ForEach-Object FullName) +
+      @((Get-GroupFiles).Values | ForEach-Object File)
+    foreach ($f in $files) {
+      $h = Read-ConfFile $f; if ($h.Contains('UPDATE_TO')) { $hosts[[IO.Path]::GetFileNameWithoutExtension($f)] = ConvertTo-Canonical 'UPDATE_TO' $h['UPDATE_TO'] }
+    }
+    foreach ($g in @(Get-Groups)) {
+      $gc = Read-ConfFile (Join-Path (Join-Path (Get-GroupsDir) $g) '_group.conf'); if ($gc.Contains('UPDATE_TO')) { $groups[$g] = ConvertTo-Canonical 'UPDATE_TO' $gc['UPDATE_TO'] }
     }
   }
-  [pscustomobject]@{ Common = $common; Hosts = $hosts }
+  [pscustomobject]@{ Common = $common; Hosts = $hosts; Groups = $groups }
 }
 # where the fleet stands: Latest (updates\LATEST.txt), Fleet (UPDATE_TO of common.conf), Pinned (the fleet kept on a
 # version), Behind (kept on an older version than the newest), Pilots (devices with UPDATE_TO=latest of their own), Own
@@ -909,6 +915,9 @@ function Get-DeviceTrack([string]$name, $state) {
   $h = $state.Pins.Hosts
   $k = @($h.Keys | Where-Object { $_ -eq $name }) | Select-Object -First 1
   if ($k) { if ($h[$k] -eq 'latest') { return [pscustomobject]@{ Kind = 'pilot'; Target = 'latest' } }; return [pscustomobject]@{ Kind = 'own'; Target = $h[$k] } }
+  # in a group with a version of its own (a release to some groups only): like its group
+  $gf = $script:GroupFiles[$name.ToLower()]
+  if ($gf -and $state.Pins.Groups -and $state.Pins.Groups.Contains($gf.Group)) { return [pscustomobject]@{ Kind = 'group'; Target = $state.Pins.Groups[$gf.Group]; Group = $gf.Group } }
   [pscustomobject]@{ Kind = 'fleet'; Target = $state.Fleet }
 }
 # The packages in updates\: the newest 3 stay, and whatever a device may still need: the package of LATEST.txt and of
@@ -923,7 +932,7 @@ function Remove-OldPackages([string[]]$keep = @()) {
   $need = @($keep)
   $l = Join-Path $u 'LATEST.txt'; if (Test-Path -LiteralPath $l) { $need += (Read-LatestFile $l).File }
   $pins = Get-UpdatePins
-  foreach ($v in @(@($pins.Common) + @($pins.Hosts.Values) | Where-Object { $_ -and $_ -ne 'latest' })) {
+  foreach ($v in @(@($pins.Common) + @($pins.Hosts.Values) + @($pins.Groups.Values) | Where-Object { $_ -and $_ -ne 'latest' })) {
     $need += "openthinrdp-update-$v.tar.gz"
     $x = Join-Path $vd "$v.txt"; if ($index.ContainsKey($x)) { $need += $index[$x] }
   }
@@ -950,6 +959,14 @@ function Set-UpdateTo($value, $dev = $null) {
   if ($plan.Errors.Count) { throw ($plan.Errors -join "`r`n") }
   if ($plan.Changes.Count) { [void](Write-ConfFile $plan.File $plan.Values $(if ($dev) { $script:HostHeader } else { $script:CommonHeader })) }
   $plan
+}
+# UPDATE_TO of a group, in its _group.conf ($value $null = its line off: the group follows common.conf), with the
+# checks of common.conf as every setting of a group
+function Set-GroupUpdateTo($value, [string]$group) {
+  $keep = $script:CommonFile, $script:CommonHeader
+  $script:CommonFile = Join-Path (Join-Path (Get-GroupsDir) $group) '_group.conf'
+  $script:CommonHeader = @("# Settings for the devices of the group $group (written by the OpenThinRDP manager).", '')
+  try { Set-UpdateTo $value } finally { $script:CommonFile, $script:CommonHeader = $keep }
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -2228,8 +2245,9 @@ function Confirm-Action($title, $text, $default = 'Button1') {
 # A choice in a small dialog: $text on top, one radio button per option (a text, or @(text, $false) when it cannot be
 # chosen now). With $versions (a list, also empty) the last option chooses one of them in a list under it, and $fetch
 # (a script block returning a version, or $null) adds From GitHub... next to the list, which fills it again from
-# updates\versions\. Returns @{ Option = index; Version = the chosen version } or $null (Cancel).
-function Show-PickDialog([string]$title, [string]$text, $options, [int]$selected = 0, $versions = $null, [string]$version = '', $fetch = $null, [string]$okKey = 'BtnApply') {
+# updates\versions\. With $groups (Name, Text) instead the last option ticks groups in a list under it.
+# Returns @{ Option = index; Version = the chosen version; Groups = the ticked groups } or $null (Cancel).
+function Show-PickDialog([string]$title, [string]$text, $options, [int]$selected = 0, $versions = $null, [string]$version = '', $fetch = $null, [string]$okKey = 'BtnApply', $groups = $null) {
   $W = 620
   $dlg = New-Object System.Windows.Forms.Form; Set-WindowIcon $dlg
   $dlg.Text = $title; $dlg.Font = $fontBase; $dlg.FormBorderStyle = 'FixedDialog'; $dlg.MaximizeBox = $false; $dlg.MinimizeBox = $false; $dlg.StartPosition = 'CenterParent'
@@ -2258,6 +2276,15 @@ function Show-PickDialog([string]$title, [string]$text, $options, [int]$selected
     }
     $y += 40
   }
+  $clb = $null
+  if ($null -ne $groups -and @($groups).Count) {
+    $clb = New-Object System.Windows.Forms.CheckedListBox; $clb.Font = $fontBase; $clb.CheckOnClick = $true; $clb.IntegralHeight = $false
+    foreach ($g in @($groups)) { [void]$clb.Items.Add($g.Text) }
+    $clb.SetBounds(40, $y, ($W - 80), [Math]::Min(160, 24 * @($groups).Count + 6))
+    $clb.Enabled = $radios[-1].Enabled
+    $clb.add_ItemCheck({ $radios[-1].Checked = $true })
+    $dlg.Controls.Add($clb); $y = $clb.Bottom + 10
+  }
   if ($selected -ge 0 -and $selected -lt $radios.Count -and $radios[$selected].Enabled) { $radios[$selected].Checked = $true }
   else { $first = @($radios | Where-Object Enabled) | Select-Object -First 1; if ($first) { $first.Checked = $true } }
   $y += 6
@@ -2269,7 +2296,8 @@ function Show-PickDialog([string]$title, [string]$text, $options, [int]$selected
     if ($dlg.ShowDialog($form) -ne 'OK') { return $null }
     $k = -1; for ($i = 0; $i -lt $radios.Count; $i++) { if ($radios[$i].Checked) { $k = $i } }
     if ($k -lt 0) { return $null }
-    @{ Option = $k; Version = $(if ($cmb -and $cmb.SelectedItem) { [string]$cmb.SelectedItem } else { '' }) }
+    $picked = @(); if ($clb) { foreach ($i in $clb.CheckedIndices) { $picked += @($groups)[$i].Name } }
+    @{ Option = $k; Version = $(if ($cmb -and $cmb.SelectedItem) { [string]$cmb.SelectedItem } else { '' }); Groups = $picked }
   } finally { $dlg.Dispose() }
 }
 
@@ -3770,7 +3798,8 @@ function Update-DeviceHeader($d) {
   $parts += if ($u -and $u -eq (Get-Text 'UserKiosk') -and $s['SESSION'] -in $null, '', 'none') { Get-Text 'DevKioskPage' } elseif ($u) { Get-Text 'DevSessionOf' $u } else { Get-Text 'DevNoSession' }
   # a pilot device, or one on a version of its own (like all devices: nothing to say)
   if ($script:Rollout) { $t = Get-DeviceTrack $d.Name $script:Rollout
-    if ($t.Kind -eq 'pilot') { $parts += Get-Text 'DevPilot' } elseif ($t.Kind -eq 'own') { $parts += Get-Text 'DevOwnVersion' $t.Target } }
+    if ($t.Kind -eq 'pilot') { $parts += Get-Text 'DevPilot' } elseif ($t.Kind -eq 'own') { $parts += Get-Text 'DevOwnVersion' $t.Target }
+    elseif ($t.Kind -eq 'group' -and $t.Target -ne $script:Rollout.Fleet) { $parts += Get-Text 'DevGroupVersion' $t.Group $(if ($t.Target -eq 'latest') { Get-Text 'TrackNewest' $script:Rollout.Latest } else { $t.Target }) } }
   $lblDevInfo.Text = $parts -join $dot
   $btnRemoteDev.Enabled = $true; $btnPowerDev.Enabled = $true; $btnGroupDev.Enabled = $true; $btnBrandDev.Enabled = $true; $btnTrackDev.Enabled = $true; $btnVpnDev.Visible = ($s['CFG_VPN'] -eq 'openvpn')
   $btnDot1xDev.Visible = ($s['CFG_DOT1X'] -in 'peap', 'tls') -or ($s['CFG_WIFI'] -eq 'on' -and $s['CFG_WIFI_SECURITY'] -in 'peap', 'tls')
@@ -3784,6 +3813,7 @@ function Get-TrackText($d) {
   switch ($t.Kind) {
     'pilot' { Get-Text 'TrackPilot' $newest }
     'own' { Get-Text 'TrackOwn' $t.Target }
+    'group' { Get-Text 'TrackGroup' $t.Group $(if ($t.Target -eq 'latest') { Get-Text 'TrackNewest' $newest } else { $t.Target }) }
     default { Get-Text 'TrackFleet' $(if ($t.Target -eq 'latest') { Get-Text 'TrackNewest' $newest } else { $t.Target }) }
   }
 }
@@ -4364,28 +4394,40 @@ function Start-ReleaseImport {
     $l = Join-Path (Get-UpdatesDir) 'LATEST.txt'
     $stay = if ($st.Pinned) { $st.Fleet } elseif ($st.Latest -and (Test-Path -LiteralPath "$l.sig")) { $st.Latest } else { $null }
     $pilots = if ($st.Pilots.Count) { $st.Pilots -join ', ' } else { Get-Text 'RelNoPilots' }
-    $opts = @((Get-Text 'RelScopeAll' $rel.Version),
-      $(if ($stay) { , @((Get-Text 'RelScopePilot' $st.Pilots.Count $stay $pilots), $true) } else { , @((Get-Text 'RelScopePilotNo'), $false) }))
+    # the groups, each with its devices: ticked, the new version goes to them (and the pilots), the others stay
+    $grpList = @(Get-Groups | ForEach-Object { $n = $_; [pscustomobject]@{ Name = $n; Text = (Get-Text 'RelGroupItem' $n @($script:Devices | Where-Object { $_.Group -eq $n }).Count) } })
+    $opts = @((Get-Text 'RelScopeAll' $rel.Version))
+    $opts += , $(if ($stay) { @((Get-Text 'RelScopePilot' $st.Pilots.Count $stay $pilots), $true) } else { @((Get-Text 'RelScopePilotNo'), $false) })
+    $opts += , $(if (-not $grpList.Count) { @((Get-Text 'RelScopeGroupsNone'), $false) } elseif ($stay) { @((Get-Text 'RelScopeGroups' $stay), $true) } else { @((Get-Text 'RelScopePilotNo'), $false) })
     # a major update offers the pilot devices first, and to all devices it asks once more
     $sel = if ($stay -and ($st.Pinned -or $st.Pilots.Count -or $major.Count)) { 1 } else { 0 }
-    $pick = Show-PickDialog (Get-Text 'RelTitle') (Get-Text 'RelConfirm' $rel.Version (Get-PublishedUpdate) $sg.Text) $opts $sel -okKey 'BtnPublish'
+    $pick = Show-PickDialog (Get-Text 'RelTitle') (Get-Text 'RelConfirm' $rel.Version (Get-PublishedUpdate) $sg.Text) $opts $sel -okKey 'BtnPublish' -groups $grpList
     if (-not $pick) { return }
+    if ($pick.Option -eq 2 -and -not @($pick.Groups).Count) { Show-Message (Get-Text 'RelTitle') (Get-Text 'RelGroupsNoneTicked') 'Information'; return }
     if ($pick.Option -eq 0 -and $major.Count -and -not (Confirm-Action (Get-Text 'RelTitle') (Get-Text 'MajorConfirmAll' $rel.Version ($major -join ', ')) 'Button2')) { return }
     # Devices before 0.2.0 do not know UPDATE_TO (their report has no UPDATE_TO line): on the folder they take the new
-    # LATEST.txt whatever common.conf says, so pilot only would not hold them back. Said before anything is written.
-    if ($pick.Option -eq 1) {
-      $old = @($script:Devices | Where-Object { -not $_.S.ContainsKey('UPDATE_TO') -and $st.Pilots -notcontains $_.Name } | ForEach-Object Name | Sort-Object)
+    # LATEST.txt whatever common.conf says, so pilots or groups only would not hold them back. Said before anything is written.
+    if ($pick.Option -ge 1) {
+      $old = @($script:Devices | Where-Object { -not $_.S.ContainsKey('UPDATE_TO') -and $st.Pilots -notcontains $_.Name -and @($pick.Groups) -notcontains $_.Group } | ForEach-Object Name | Sort-Object)
       if ($old.Count -and -not (Confirm-Action (Get-Text 'RelTitle') (Get-Text 'RelPilotOldDevices' $old.Count ($old -join ', ') $rel.Version) 'Button2')) { return }
     }
     try {
-      if ($pick.Option -eq 1 -and -not $st.Pinned) {
+      if ($pick.Option -ge 1 -and -not $st.Pinned) {
         $v = Initialize-VersionIndex
         if (-not $v) { throw (Get-Text 'RelPilotNoIndex') }
         [void](Set-UpdateTo $v)
       }
+      # pilots or groups: the ticked groups follow the newest; a group left on the newest by an earlier release to some
+      # groups goes back to following common.conf (it would take this one too)
+      if ($pick.Option -ge 1) {
+        foreach ($g in @(Get-Groups)) {
+          if (@($pick.Groups) -contains $g) { [void](Set-GroupUpdateTo 'latest' $g) }
+          elseif ($st.Pins.Groups.Contains($g) -and $st.Pins.Groups[$g] -eq 'latest') { [void](Set-GroupUpdateTo $null $g) }
+        }
+      }
       [void](Publish-Release $rel $sg.Site)
       if ($pick.Option -eq 0 -and $st.Pinned) { [void](Set-UpdateTo 'latest') }
-      Show-Message (Get-Text 'RelTitle') $(if ($pick.Option -eq 1) { Get-Text 'RelDonePilot' $rel.Version $stay } else { Get-Text 'RelDone' $rel.Version }) 'Information'
+      Show-Message (Get-Text 'RelTitle') $(switch ($pick.Option) { 1 { Get-Text 'RelDonePilot' $rel.Version $stay } 2 { Get-Text 'RelDoneGroups' $rel.Version (@($pick.Groups) -join ', ') $stay } default { Get-Text 'RelDone' $rel.Version } }) 'Information'
     } catch { Show-Message (Get-Text 'RelTitle') (Get-Text 'RelCopyFailed' $_.Exception.Message) 'Error' }
     Sync-UpdateToRows
   } finally { Remove-Item -LiteralPath $rel.Dir -Recurse -Force -ErrorAction SilentlyContinue }

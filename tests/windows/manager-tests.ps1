@@ -311,6 +311,18 @@ try {
   Move-DeviceToGroup 'tc-g2' 'shop'
   ok 'group: a device without a file gets one in the folder' { Test-Path (Join-Path (Get-GroupsDir) 'shop\tc-g2.conf') }
   ok 'group: not deleted while it has devices' { try { Remove-DeviceGroup 'shop'; $false } catch { $true } }
+  # ---- a release to some groups only: UPDATE_TO in the _group.conf, the devices of the group follow it
+  $cb = (Read-ConfFile $script:CommonFile)['UPDATE_TO']
+  [IO.File]::WriteAllText((Get-HostFile 'tc-g1'), "USB_MODE=disks`r`nUPDATE_TO=latest`r`n")
+  [void](Set-GroupUpdateTo 'latest' 'shop')
+  $rs = Get-RolloutState
+  ok 'groups: UPDATE_TO written in _group.conf, common.conf untouched; read back, and a pilot inside a group seen' { (Read-ConfFile (Join-Path (Get-GroupsDir) 'shop\_group.conf'))['UPDATE_TO'] -eq 'latest' -and (Read-ConfFile $script:CommonFile)['UPDATE_TO'] -eq $cb -and $rs.Pins.Groups['shop'] -eq 'latest' -and $rs.Pilots -contains 'tc-g1' }
+  ok 'groups: a device of the group follows it, its own line wins, a device in no group follows common.conf' { (Get-DeviceTrack 'tc-g2' $rs).Kind -eq 'group' -and (Get-DeviceTrack 'tc-g2' $rs).Group -eq 'shop' -and (Get-DeviceTrack 'tc-g1' $rs).Kind -eq 'pilot' -and (Get-DeviceTrack 'tc-nogroup' $rs).Kind -eq 'fleet' }
+  [void](Set-GroupUpdateTo $null 'shop')
+  ok 'groups: the line off again, the group follows common.conf' { -not (Read-ConfFile (Join-Path (Get-GroupsDir) 'shop\_group.conf')).Contains('UPDATE_TO') -and -not (Get-RolloutState).Pins.Groups.Contains('shop') }
+  [IO.File]::WriteAllText((Get-HostFile 'tc-g1'), "USB_MODE=disks`r`n")
+  $srcG = [IO.File]::ReadAllText((Join-Path $mw 'OpenThinRDP-Manager.ps1'))
+  ok 'groups: Release from GitHub ticks groups; the ticked ones to the newest, a group left on the newest by an earlier release follows common.conf again' { $srcG -match "-groups \`$grpList" -and $srcG -match "Set-GroupUpdateTo 'latest' \`$g" -and $srcG -match "Set-GroupUpdateTo \`$null \`$g" -and $srcG -match '\$pins\.Groups\.Values' }
   # a device before 0.2.9 does not look into groups: moving it there would lose its settings (Finco, 21/10)
   $keepDevices = $script:Devices
   $script:Devices = @([pscustomobject]@{ Name = 'tc-old'; S = @{ SOFTWARE = 'OpenThinRDP 0.2.7' } }, [pscustomobject]@{ Name = 'tc-new'; S = @{ SOFTWARE = 'OpenThinRDP 0.2.10' } })
