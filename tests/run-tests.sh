@@ -4,7 +4,7 @@
 #   docker run --rm -v "$PWD":/src:ro debian:trixie bash /src/tests/run-tests.sh
 set -u
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq >/dev/null && apt-get install -y -qq wpasupplicant iproute2 procps systemd python3 gnupg sqv openssl >/dev/null 2>&1
+apt-get update -qq >/dev/null && apt-get install -y -qq wpasupplicant iproute2 procps systemd python3 gnupg sqv openssl tzdata >/dev/null 2>&1
 # software updates are fetched from local files: no test ever talks to GitHub
 export OTR_UPDATE_BASE_URL=file:///tmp/otr-release
 # and no test sends anonymous counts (report.sh starts stats.sh): to a closed local port
@@ -94,6 +94,12 @@ ok "messages in Italian" '$OTR/save-config.sh "$T" --print 2>&1 | grep -q "Nome 
 printf 'USB_MODE=Dischi\nUSB_REDIRECT=1EAF:0009,346d:5678\nNTP=a.example.com;b.example.com\nSECURITY_UPDATES=Yes\nPOWER_ON_DAYS=5,1,3\nSHUTDOWN_SECS=030\n' > "$T"
 P=$($OTR/save-config.sh "$T" --print 2>&1)
 ok "aliases and separators normalized" 'echo "$P" | grep -qx "USB_MODE=disks" && echo "$P" | grep -qx "USB_REDIRECT=1eaf:0009 346d:5678" && echo "$P" | grep -qx "NTP=a.example.com b.example.com" && echo "$P" | grep -qx "SECURITY_UPDATES=on" && echo "$P" | grep -qx "POWER_ON_DAYS=135" && echo "$P" | grep -qx "SHUTDOWN_SECS=30"'
+# time zone: a zone the image has, nothing else; apply.sh sets it (its block run here: apply.sh is a no-op in the tests)
+ok "time zone: Europe/Amsterdam and UTC accepted, a made-up zone or a path refused" 'check x "TIMEZONE=Europe/Amsterdam" && check x "TIMEZONE=UTC" && check x "TIMEZONE=" && ! check x "TIMEZONE=Mars/Base" && ! check x "TIMEZONE=../../etc/passwd" && ! check x "TIMEZONE=Europe/../../etc/passwd"'
+printf 'TIMEZONE=Europe/Amsterdam\n' > /etc/openthinrdp/openthinrdp.conf; : > $OTR_EVENTS
+( set +u; eval "$(sed -n '/^# --- time zone/,/^fi$/p' /src/rootfs/opt/openthinrdp/apply.sh)" )
+ok "time zone: applied to the clock, said once in the events" '[ "$(readlink /etc/localtime)" = /usr/share/zoneinfo/Europe/Amsterdam ] && [ "$(cat /etc/timezone)" = Europe/Amsterdam ] && grep -q "time zone: Europe/Amsterdam" $OTR_EVENTS'
+: > /etc/openthinrdp/openthinrdp.conf; : > $OTR_EVENTS
 um_of(){ printf 'USB_MODE=%s\n' "$1" > "$T"; $OTR/save-config.sh "$T" --print 2>&1 | sed -n 's/^USB_MODE=//p'; }
 ok "USB_MODE auto, all and disks kept, anything else is all" '[ "$(um_of Auto)" = auto ] && [ "$(um_of disks)" = disks ] && [ "$(um_of all)" = all ] && [ "$(um_of garbage)" = all ]'
 
@@ -600,7 +606,7 @@ ok "802.1X off: the supplicants stopped, the status says off" '! pgrep -f "dot1x
   NETV=(dhcp static) NETL=(a b) USBV=(all) USBL=(a) ONV=(on off) ONL=(a b) TRV=(auto) TRL=(a) WEBV=(none) WEBL=(a) LNV=(en) LNL=(a)
   WSECV=(psk peap tls) WSECL=(a b c) D1XV=(off peap tls) D1XL=("$L_OFF" "$L_D1X_PEAP" "$L_D1X_TLS")
   h= u= br= brf= dom= lbi= tr=auto thr= off= nm=dhcp ip= mask= gw= d1= d2= ntp= wf=on ws= wp= um=all ur= wb=none wu= ku= kr=
-  pon= poff= pdays= share= mu= mp= su=on an=on ln=en ean= epw=
+  pon= poff= pdays= share= mu= mp= su=on an=on tz= ln=en ean= epw=
   wsec=peap d1x=tls d1xs="eth0: authenticated (EAP-TLS)" eid='EXAMPLE\thin' eca=system esn=nps.example.test
   settings_spec > /tmp/spec
   settings_read "$(printf 'DOT1X=peap\nEAP_PASSWORD=p w=x\nEAP_IDENTITY=EX\\u\nWIFI_SECURITY=tls\nEAP_SERVER_NAME=a.example b.example\n')"

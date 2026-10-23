@@ -91,6 +91,9 @@ fi
 [ -z "${V[DNS2]}" ] || ipok "${V[DNS2]}" || err "$V_DNS2"
 V[NTP]=$(get NTP | tr -s ' ,;' ' ' | sed 's/^ //; s/ $//')
 for t in ${V[NTP]}; do ipok "$t" || nameok "$t" || err "$V_NTP $t"; done
+# a time zone the image has: Europe/Amsterdam (empty = the one of the image)
+V[TIMEZONE]=$(get TIMEZONE | tr -d " ")
+[ -z "${V[TIMEZONE]}" ] || { [[ ${V[TIMEZONE]} =~ ^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$ ]] && [ -f "/usr/share/zoneinfo/${V[TIMEZONE]}" ]; } || err "$V_TZ ${V[TIMEZONE]}"
 
 # --- VPN (vpn.sh). WireGuard needs the server, its key and the address of the device; OpenVPN its profile, which the
 # manager sends over SSH (it is not a setting). Missing WireGuard settings are no error: VPN_ADDRESS is set per

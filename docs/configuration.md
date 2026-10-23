@@ -96,6 +96,7 @@ own input is used. A device listed in `USB_REDIRECT` is still passed whole.
 | `IPADDR`, `NETMASK`, `GATEWAY` | | static address (static mode only) |
 | `DNS1`, `DNS2` | | DNS servers; empty = from DHCP. Required with a static address |
 | `NTP` | | time servers; empty = Debian pool |
+| `TIMEZONE` | | time zone of the device, as Linux names it (`Europe/Amsterdam`, `Europe/Rome`, `UTC`): the clock, the logs, the power schedule and the time zone of the session. Empty = the one of the image (`Etc/UTC` in the published ISO, so set it) |
 | `HOSTNAME` | `thinclient-` + the last 6 digits of the MAC address | name of the device (the system host name, not stored in the settings file) |
 | `WIFI` | `off` | `on` = use Wi-Fi when no cable is connected |
 | `WIFI_SSID`, `WIFI_COUNTRY` | | network name, regulatory country (two letters) |

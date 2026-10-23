@@ -351,6 +351,7 @@ $script:Settings = @(
   (New-Setting 'DNS1'                'ip'         '')
   (New-Setting 'DNS2'                'ip'         '')
   (New-Setting 'NTP'                 'names'      '')
+  (New-Setting 'TIMEZONE'            'tz'         '')
   (New-Setting 'VPN'                 'choice'     'off' @('off', 'wireguard', 'openvpn'))
   (New-Setting 'VPN_SERVER'          'hostport'   '')
   (New-Setting 'VPN_SERVER_KEY'      'wgkey'      '')
@@ -419,6 +420,8 @@ $script:Rx = @{
   RdpKbd     = '^(0x[0-9a-fA-F]{8})?$'
   Usb        = '^([0-9a-f]{4}:[0-9a-f]{4}( [0-9a-f]{4}:[0-9a-f]{4})*)?$'
   Kbd        = '^[a-z][a-z0-9_-]{1,15}$'
+  # a time zone as Linux names it (IANA): Europe/Amsterdam, America/Argentina/Buenos_Aires, UTC
+  Tz         = '^([A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2})?$'
   Logo       = '^(/[A-Za-z0-9._/-]+\.png)?$'
   Color      = '^#[0-9a-fA-F]{6}$'
   Hex64      = '^[0-9a-fA-F]{64}$'
@@ -494,6 +497,7 @@ function Test-SettingValue([string]$key, [string]$v) {
     'days'       { if ($v -cnotmatch '^[1-7 ,;]*$') { return (Get-Text 'ErrDays') } }
     'lang'       { if ($v.ToLower() -cnotmatch '^[a-z]{2}$') { return (Get-Text 'ErrLanguage') } }
     'kbd'        { if ($v -cnotmatch $script:Rx.Kbd) { return (Get-Text 'ErrKeyboard') } }
+    'tz'         { if ($v -cnotmatch $script:Rx.Tz) { return (Get-Text 'ErrTimezone') } }
     'logo'       { if ($v -cnotmatch $script:Rx.Logo) { return (Get-Text 'ErrLogo') } }
     'color'      { if ($v -cnotmatch $script:Rx.Color) { return (Get-Text 'ErrColor' $L) } }
     'pin'        { if ($v.Length -gt 64) { return (Get-Text 'ErrPin') } }

@@ -244,6 +244,7 @@
   ErrDays                = 'Giorni di accensione: cifre da 1 (lunedì) a 7 (domenica), es. 12345'
   ErrLanguage            = 'Lingua: due lettere (es. it)'
   ErrKeyboard            = 'Tastiera non valida (es. it, us, de)'
+  ErrTimezone            = 'Fuso orario non valido: un nome come Europe/Rome, Europe/Amsterdam o UTC'
   ErrLogo                = 'Logo: percorso completo di un file .png'
   ErrColor               = '{0}: colore non valido (#rrggbb)'
   ErrPin                 = 'PIN della configurazione: al massimo 64 caratteri'
@@ -330,6 +331,8 @@
   Help_DNS2                 = 'Facoltativo.'
   Label_NTP                 = 'Server ora (NTP)'
   Help_NTP                  = 'Separati da spazio. Vuoto = il pool Debian.'
+  Label_TIMEZONE            = 'Fuso orario'
+  Help_TIMEZONE             = "Es. Europe/Rome, Europe/Amsterdam. Orologio, orari di accensione e fuso della sessione. Vuoto = quello dell'immagine (UTC nella ISO pubblicata)."
   Label_WIFI                = 'Wi-Fi'
   Help_WIFI                 = 'on = usa il Wi-Fi quando nessun cavo è collegato. Una postazione senza scheda Wi-Fi RIFIUTA una configurazione con Wi-Fi on.'
   Label_WIFI_SSID           = 'Rete Wi-Fi (SSID)'
