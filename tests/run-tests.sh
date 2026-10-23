@@ -7,6 +7,8 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq >/dev/null && apt-get install -y -qq wpasupplicant iproute2 procps systemd python3 gnupg sqv openssl >/dev/null 2>&1
 # software updates are fetched from local files: no test ever talks to GitHub
 export OTR_UPDATE_BASE_URL=file:///tmp/otr-release
+# and no test sends anonymous counts (report.sh starts stats.sh): to a closed local port
+export OTR_STATS_URL=http://127.0.0.1:9/count
 cp -a /src/rootfs/. /
 OTR=/opt/openthinrdp
 chmod 755 $OTR/*.sh
@@ -588,7 +590,7 @@ ok "802.1X off: the supplicants stopped, the status says off" '! pgrep -f "dot1x
   NETV=(dhcp static) NETL=(a b) USBV=(all) USBL=(a) ONV=(on off) ONL=(a b) TRV=(auto) TRL=(a) WEBV=(none) WEBL=(a) LNV=(en) LNL=(a)
   WSECV=(psk peap tls) WSECL=(a b c) D1XV=(off peap tls) D1XL=("$L_OFF" "$L_D1X_PEAP" "$L_D1X_TLS")
   h= u= br= brf= dom= lbi= tr=auto thr= off= nm=dhcp ip= mask= gw= d1= d2= ntp= wf=on ws= wp= um=all ur= wb=none wu= ku= kr=
-  pon= poff= pdays= share= mu= mp= su=on ln=en ean= epw=
+  pon= poff= pdays= share= mu= mp= su=on an=on ln=en ean= epw=
   wsec=peap d1x=tls d1xs="eth0: authenticated (EAP-TLS)" eid='EXAMPLE\thin' eca=system esn=nps.example.test
   settings_spec > /tmp/spec
   settings_read "$(printf 'DOT1X=peap\nEAP_PASSWORD=p w=x\nEAP_IDENTITY=EX\\u\nWIFI_SECURITY=tls\nEAP_SERVER_NAME=a.example b.example\n')"
@@ -740,6 +742,17 @@ WS=$(eval "$(sed -n '/^parse_scan(){/,/^}/p' $OTR/wifi.sh)"; printf '%s\n' "$SCA
 ok "wifi.sh: scan read right: strongest first, one line per name, psk/eap/open/wep, hidden names out" '[ "$(printf "%s\n" "$WS" | head -1)" = "$(printf "%s\t%s\t%s" -52 psk "Finco Work")" ] && [ $(printf "%s\n" "$WS" | grep -c "Finco Work") -eq 1 ] && printf "%s\n" "$WS" | grep -q "eap	Finco Corp" && printf "%s\n" "$WS" | grep -q "open	Guest" && printf "%s\n" "$WS" | grep -q "wep	Old Router" && [ $(printf "%s\n" "$WS" | grep -c .) -eq 4 ]'
 ok "wifi.sh: the kiosk may run it through sudo; a wrong password changes nothing (tried before save-config)" 'grep -q "/opt/openthinrdp/wifi.sh" /etc/sudoers.d/openthinrdp && [ $(grep -n "step test" $OTR/wifi.sh | cut -d: -f1) -lt $(grep -n "save-config.sh\" \"\$f\"" $OTR/wifi.sh | cut -d: -f1) ]'
 ok "ui.py: compiles, with the Wi-Fi page and the network on the sign-in screen" 'python3 -m py_compile $OTR/ui.py && grep -q "^if MODE == .wifi.:" $OTR/ui.py && grep -q "leave(8)" $OTR/ui.py'
+
+# --- anonymous counts: on by default, what is sent, nothing when off (curl replaced: no test talks to GoatCounter)
+ok "anonymous counts: on by default, the setting kept by save-config" '[ "$(cfg ANON_STATS)" = on ] && printf "ANON_STATS=No\n" > "$T" && $OTR/save-config.sh "$T" --print 2>/dev/null | grep -qx "ANON_STATS=off"'
+SP=$($OTR/stats.sh --print)
+ok "anonymous counts: only the listed counts, no name of the device, no address" '[ $(printf "%s\n" "$SP" | grep -c .) -eq 11 ] && ! printf "%s\n" "$SP" | grep -v "^otr/\(version\|model\|cpu\|ram\|freerdp\|transport\|language\|mode\|wifi\|tpm\|managed\)/" | grep -q . && ! printf "%s\n" "$SP" | grep -qiF "$(hostname)" && ! printf "%s\n" "$SP" | grep -qE "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+|([0-9a-f]{2}:){5}"'
+SB=$(mktemp -d); printf '#!/bin/bash\necho "$*" >> %s/sent\n' "$SB" > "$SB/curl"; chmod +x "$SB/curl"; rm -f /var/lib/openthinrdp/stats-sent
+printf 'ANON_STATS=off\n' > /etc/openthinrdp/openthinrdp.conf; PATH="$SB:$PATH" $OTR/stats.sh
+ok "anonymous counts: off = nothing sent" '[ ! -e "$SB/sent" ] && [ ! -e /var/lib/openthinrdp/stats-sent ]'
+: > /etc/openthinrdp/openthinrdp.conf; PATH="$SB:$PATH" $OTR/stats.sh; n1=$(grep -c . "$SB/sent" 2>/dev/null); PATH="$SB:$PATH" $OTR/stats.sh
+ok "anonymous counts: on = sent at once the first time, then not again within the week" '[ "$n1" = 11 ] && [ $(grep -c . "$SB/sent") -eq 11 ] && [ -e /var/lib/openthinrdp/stats-sent ]'
+rm -rf "$SB" /var/lib/openthinrdp/stats-sent
 
 echo "passed $PASS, failed $FAIL"
 [ $FAIL = 0 ]

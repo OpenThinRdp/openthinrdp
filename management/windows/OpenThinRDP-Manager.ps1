@@ -398,6 +398,7 @@ $script:Settings = @(
   (New-Setting 'BG_BOTTOM'           'color'      '#000000')
   (New-Setting 'SUPPORT_TEXT'        'text'       '')
   (New-Setting 'SETTINGS_PIN_SHA256' 'pin'        '')
+  (New-Setting 'ANON_STATS'          'choice'     'on' @('on', 'off'))
 )
 function Get-Setting($key) { $script:Settings | Where-Object Key -eq $key | Select-Object -First 1 }
 
@@ -511,7 +512,7 @@ function ConvertTo-Canonical([string]$key, [string]$v) {
     $alias = @{ NETMODE = @{ statico = 'static' }; USB_MODE = @{ dischi = 'disks' }; WEB_BUTTON = @{ portale = 'app'; portal = 'app'; chrome = 'browser'; chromium = 'browser' }
       RDP_GATEWAY_USE = @{ rileva = 'detect'; auto = 'detect' }; VPN = @{ wg = 'wireguard'; ovpn = 'openvpn' }
       DOT1X = @{ 'eap-tls' = 'tls' }; WIFI_SECURITY = @{ 'eap-tls' = 'tls' } }
-    if ($key -in 'WIFI', 'SSH', 'REMOTE_SCREEN', 'SECURITY_UPDATES', 'TPM_SECRETS') { if ($l -in 'yes', 'true', '1', 'si') { return 'on' }; return 'off' }
+    if ($key -in 'WIFI', 'SSH', 'REMOTE_SCREEN', 'SECURITY_UPDATES', 'TPM_SECRETS', 'ANON_STATS') { if ($l -in 'yes', 'true', '1', 'si') { return 'on' }; return 'off' }
     if ($alias.ContainsKey($key) -and $alias[$key].ContainsKey($l)) { return $alias[$key][$l] }
     return $s.Choices[0]
   }
@@ -3479,7 +3480,13 @@ $btnLocalChoose = New-ActionButton 'BtnLocalChoose' 'Folder' 'secondary'; $btnLo
 $blkLocal = New-VaultBlock 'LocalBlock' 'Folder' @($btnLocalSync, $btnLocalChoose, $btnLocalOpen)
 $btnFolderDom = New-ActionButton 'BtnFolderDomain' 'Shield' 'secondary'; $btnFolderMove = New-ActionButton 'BtnFolderMove' 'Forward' 'secondary'
 $blkFolder = New-VaultBlock 'FolderBlock' 'Folder' @($btnFolderDom, $btnFolderMove)
-$setMgrCard = New-SetCard $tabSetManager; foreach ($b in @($blkFolder, $blkLocal, $blkLang)) { $setMgrCard.Controls.Add($b) }
+# anonymous counts of this manager for the project (on by default): what it sends is said in the block
+$chkAnon = New-Object System.Windows.Forms.CheckBox; $chkAnon.Text = Get-Text 'AnonCheck'; $chkAnon.AutoSize = $true; $chkAnon.Font = $fontBase
+$chkAnon.Checked = -not ((Read-ManagerSettings).PSObject.Properties['AnonStats'] -and (Read-ManagerSettings).AnonStats -eq $false)
+$chkAnon.add_CheckedChanged({ $m = Read-ManagerSettings; Set-ManagerSetting $m 'AnonStats' ([bool]$chkAnon.Checked); Save-ManagerSettings $m
+  Add-ChangeLog "anonymous counts of the manager: $(if ($chkAnon.Checked) { 'on' } else { 'off' })" })
+$blkAnon = New-VaultBlock 'AnonBlock' 'Health' @($chkAnon); $blkAnon.Tag.Note.Text = Get-Text 'AnonNote'
+$setMgrCard = New-SetCard $tabSetManager; foreach ($b in @($blkFolder, $blkLocal, $blkLang, $blkAnon)) { $setMgrCard.Controls.Add($b) }
 $btnFolderDom.add_Click({
   $acc = Get-DeviceAccount; $f = Get-DomainFolderFile
   if (-not $acc) { Show-Message (Get-Text 'FolderBlock') (Get-Text 'FolderNoAccount'); return }
@@ -3537,7 +3544,7 @@ $setTabs.add_SelectedIndexChanged({ Update-SettingsTabs })
 # the screenshots of the documentation: a tab of the Settings page
 if ($env:OTR_MANAGER_SET_TAB) { $setTabs.SelectedIndex = [Math]::Min(3, [int]$env:OTR_MANAGER_SET_TAB) }
 foreach ($cd in @($setHcCard, $setMgrCard)) { $cd.add_Resize({ Set-SettingsHeights }) }
-function Set-SettingsHeights { Set-BlockHeights $setHcCard @($blkSetHc, $blkSetVdi); Set-BlockHeights $setMgrCard @($blkManager, $blkLang, $blkLocal) }
+function Set-SettingsHeights { Set-BlockHeights $setHcCard @($blkSetHc, $blkSetVdi); Set-BlockHeights $setMgrCard @($blkManager, $blkLang, $blkLocal, $blkAnon) }
 # the notes of the blocks and the list of the custom checks, as they are now
 function Update-SettingsTabs {
   $s = if ($script:HealthLoaded) { Get-HealthSettings } else { $null }
@@ -4447,7 +4454,7 @@ function Update-UpdatesView {
   # only when there is one: a disabled blue button still looks like the thing to press
   $btnMgrUpdate.Visible = [bool]($o -and $o.Status -eq 'Available')
   $btnMgrCheck.Enabled = [bool]$script:ManagerVersion -and -not $script:ManagerChecking
-  Set-BlockHeights $updCard @($blkFleet); if ($setMgrCard) { Set-BlockHeights $setMgrCard @($blkManager, $blkLang, $blkLocal) }
+  Set-BlockHeights $updCard @($blkFleet); if ($setMgrCard) { Set-BlockHeights $setMgrCard @($blkManager, $blkLang, $blkLocal, $blkAnon) }
 }
 
 # ---------------- the manager updates itself ----------------
@@ -4493,6 +4500,32 @@ function Update-ManagerNotice {
 }
 # At the start, in the background (a runspace: the window does not wait): LATEST.txt + .sig of the latest release,
 # checked here when they are there. Every failure is silent: the Updates page says it only when asked again.
+# Anonymous counts of this manager for the project, once a week (Settings > Manager, on by default; docs/privacy.md):
+# its version, the version of Windows, the language, how many devices in ranges. Never names, addresses, users or
+# servers. Each value one count on GoatCounter, in the background: a slow or missing internet changes nothing here.
+$script:AnonUrl = 'https://ceschi-ops.goatcounter.com/count'
+function Get-AnonEvents {
+  $n = @($script:Devices | Where-Object { -not $_.OldName }).Count
+  $r = if ($n -eq 0) { '0' } elseif ($n -le 5) { '1-5' } elseif ($n -le 20) { '6-20' } elseif ($n -le 100) { '21-100' } else { 'more than 100' }
+  $os = ("$((Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue).Caption)" -replace '^Microsoft ', '' -replace '[^A-Za-z0-9 ._()+-]', ' ' -replace '\s+', ' ').Trim()
+  @("otr/manager/version/$($script:ManagerVersion)", "otr/manager/devices/$r", "otr/manager/windows/$(if ($os) { $os } else { 'unknown' })", "otr/manager/language/$($script:Language)")
+}
+function Start-AnonStats {
+  if (-not $script:ManagerVersion -or $env:OTR_MANAGER_SCREENSHOT) { return }
+  $m = Read-ManagerSettings; if ($m.PSObject.Properties['AnonStats'] -and $m.AnonStats -eq $false) { return }
+  $stamp = Join-Path $env:LOCALAPPDATA 'OpenThinRDP\stats-sent'
+  if ((Test-Path -LiteralPath $stamp) -and ((Get-Date) - (Get-Item -LiteralPath $stamp).LastWriteTime).TotalDays -lt 7) { return }
+  $ps = [powershell]::Create()
+  [void]$ps.AddScript({ param($url, $events, $ua, $stamp)
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    $ok = $false
+    foreach ($p in $events) {
+      try { Invoke-WebRequest -UseBasicParsing -UserAgent $ua -TimeoutSec 10 -Uri "$url`?p=$([uri]::EscapeDataString($p))&e=true&rnd=$(Get-Random)" | Out-Null; $ok = $true } catch { }
+    }
+    if ($ok) { New-Item -ItemType Directory -Force -Path (Split-Path $stamp) | Out-Null; [IO.File]::WriteAllText($stamp, (Get-Date).ToString('s')) }
+  }).AddArgument($script:AnonUrl).AddArgument(@(Get-AnonEvents)).AddArgument("Mozilla/5.0 (Windows NT 10.0) OpenThinRDP-Manager/$($script:ManagerVersion)").AddArgument($stamp)
+  [void]$ps.BeginInvoke()
+}
 function Start-ManagerCheck([switch]$Loud) {
   if (-not $script:ManagerVersion -or $script:ManagerChecking) { return }
   $tmp = Join-Path $env:TEMP "otr-manager-$(Get-Random)"; New-Item -ItemType Directory $tmp | Out-Null
@@ -5959,6 +5992,8 @@ $form.add_Shown({
   if (-not $env:OTR_MANAGER_SCREENSHOT -or $env:OTR_MANAGER_RELEASES) { try { Start-ManagerCheck } catch { } }
   # and again every 6 hours: the window stays open all day, a release can come out meanwhile
   if (-not $env:OTR_MANAGER_SCREENSHOT) { $script:MgrTimer = New-Object System.Windows.Forms.Timer; $script:MgrTimer.Interval = 6 * 3600 * 1000; $script:MgrTimer.add_Tick({ try { Start-ManagerCheck } catch { } }); $script:MgrTimer.Start() }
+  # the anonymous counts of this manager, 2 minutes after the start (the list of devices is read by then)
+  if (-not $env:OTR_MANAGER_SCREENSHOT) { $script:AnonTimer = New-Object System.Windows.Forms.Timer; $script:AnonTimer.Interval = 30000; $script:AnonTimer.add_Tick({ $script:AnonTimer.Stop(); try { Start-AnonStats } catch { } }); $script:AnonTimer.Start() }
 })
 if ($env:OTR_MANAGER_HCSET_SHOT) { $form.add_Shown({ Show-HealthSettingsDialog; $form.Close() }) }
 # test: the notes window of a release, OTR_MANAGER_NOTES_FROM to OTR_MANAGER_NOTES_TO, drawn into OTR_MANAGER_NOTES_SHOT

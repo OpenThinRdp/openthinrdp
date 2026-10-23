@@ -120,6 +120,7 @@ HOME=${HOME:-/root} xfreerdp3 --buildconfig 2>/dev/null | grep -q 'WITH_RDPEUDP=
               /Packages that will be upgraded:/{n=NF-8}
               END{close_run(); print (c?c:"never") "|" (a?a:"never")}' $UL)
   echo "SECURITY_UPDATES=$(cfg SECURITY_UPDATES)"
+  echo "ANON_STATS=$(cfg ANON_STATS)"
   # where the folder password, the Wi-Fi key and the SSH host keys are kept: tpm, or file (no TPM)
   echo "SECRETS=$(secret_mode)"
   echo "LAST_UPDATE_CHECK=${UU%%|*}" | sed 's/=$/=never/'
@@ -264,4 +265,6 @@ esac
 systemctl is-active -q openthinrdp-update.service 2>/dev/null || "$OTR/central-apply.sh"
 # boot splash: always the image's own (a device that took the folder's picture there with 0.1.1 gets it back)
 "$OTR/branding.sh" splash
+# anonymous usage counts, once a week (ANON_STATS=on): in the background, a slow internet never holds the report
+setsid "$OTR/stats.sh" < /dev/null > /dev/null 2>&1 &
 exit 0

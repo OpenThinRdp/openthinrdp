@@ -354,6 +354,8 @@
   Help_SSH                  = 'Amministrazione remota: accesso come otradmin solo con le chiavi della scheda Chiavi SSH.'
   Label_REMOTE_SCREEN       = 'Schermo remoto'
   Help_REMOTE_SCREEN        = 'on = il pulsante Schermo remoto può mostrare e usare lo schermo del dispositivo (via SSH, con un avviso sul dispositivo); off = mai. Serve SSH = on.'
+  Label_ANON_STATS          = 'Dati anonimi per il progetto'
+  Help_ANON_STATS           = 'on (predefinito) = una volta a settimana il dispositivo invia al progetto OpenThinRDP conteggi anonimi: versione, marca e modello del computer, processore, memoria, versione di FreeRDP, trasporto, lingua, sistema live o installato, presenza di Wi-Fi e TPM, gestito o no. Mai nomi, indirizzi IP o MAC, utenti, dominio, server o impostazioni. off = niente. Elenco completo: docs/privacy.md.'
   Label_WEB_BUTTON          = 'Pulsante web'
   Help_WEB_BUTTON           = "none = nessun pulsante; app = indirizzo web in una finestra app, solo i siti ammessi; browser = navigazione libera, indirizzo web come pagina iniziale; kiosk = pagina kiosk a schermo intero all'accensione (5 s per fermarla dal form di accesso)."
   Label_WEB_LABEL           = 'Etichetta del pulsante web'
@@ -1921,6 +1923,9 @@
   LangAuto               = 'Lingua di Windows'
   LangBlock              = 'Lingua'
   LangNote               = 'La lingua di questa finestra, per questo utente di Windows. Ora: {0}.'
+  AnonBlock              = 'Dati anonimi per il progetto'
+  AnonCheck              = 'Invia ogni settimana i conteggi anonimi di questo gestore'
+  AnonNote               = 'Aiutano il progetto OpenThinRDP a sapere quanti lo usano: versione del gestore, versione di Windows, lingua e numero di postazioni gestite (per fasce: 1-5, 6-20, 21-100, oltre). Mai nomi, indirizzi, utenti, dominio o server. Le postazioni hanno la loro impostazione (Dati anonimi per il progetto), da spegnere anche per tutte nelle impostazioni del sito.'
   LangSaved              = 'Salvato: il gestore parla la nuova lingua dal prossimo avvio.'
   LapsNone               = 'Nessuna password LAPS leggibile per {0}: {1}'
   LapsNoTool             = 'Qui manca il modulo LAPS di Windows e nessun domain controller è raggiungibile.'
