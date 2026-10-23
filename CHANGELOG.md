@@ -5,6 +5,18 @@ update, a change to how a session connects or runs: try it on pilot devices befo
 once more before it goes to all devices).
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.2.20 (2026-10-23)
+
+- **A major update asks once more**: a release marked **Test first** changes how a session connects or runs. The
+  manager says so above the notes, proposes the pilot devices first, and before it goes to all devices it asks once
+  more, with *No* as the default answer.
+- **A release to the groups you choose**: *Release from GitHub* can send the new version to the groups ticked in a
+  list (one or more, with the pilot devices); every other device stays on the version it has. The manager now also
+  reads the version of a group and of the devices inside groups.
+- **The manager accepts a session collection with spaces**: `tsv://MS Terminal Services Plugin.1.<collection>` was
+  refused with *RDS collection not valid*, although the devices take it since 0.2.2. The manager now uses the same
+  rule as the devices, and a test keeps the two equal.
+
 ## 0.2.19 (2026-10-23)
 
 - **The time zone of the device**: `TIMEZONE=Europe/Amsterdam` (any zone, in the settings of the device, centrally or
