@@ -415,7 +415,8 @@ $script:Rx = @{
   Share      = '^(\\\\|//)[A-Za-z0-9.-]+[\\/][A-Za-z0-9 ._$\\/-]+$'
   Extra      = '^[A-Za-z0-9 /:+,._=#-]*$'
   Time       = '^([01][0-9]|2[0-3]):[0-5][0-9]$'
-  Collection = '^[A-Za-z0-9._:/#=-]*$'
+  # as RE_LBI of save-config.sh: a session collection is tsv://MS Terminal Services Plugin.1.<name>, with spaces
+  Collection = '^[A-Za-z0-9._:/#= -]*$'
   Gfx        = '^[A-Za-z0-9:,]*$'
   RdpKbd     = '^(0x[0-9a-fA-F]{8})?$'
   Usb        = '^([0-9a-f]{4}:[0-9a-f]{4}( [0-9a-f]{4}:[0-9a-f]{4})*)?$'
