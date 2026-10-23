@@ -3,6 +3,13 @@
 Every release, newest first. **Security** marks what every device should get at once.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.2.17 (2026-10-23)
+
+- **The anonymous counts say what went wrong**: frozen and dropped sessions (with the exit code of FreeRDP),
+  connections that failed or timed out, failed updates, programs that crashed, graphics hangs, kernel errors and
+  stops without a shutdown, counted since the last send, by version and by model. Only the kind, a code number and the
+  name of a program leave the device, never the text of a message. [docs/privacy.md](docs/privacy.md) lists them.
+
 ## 0.2.16 (2026-10-23)
 
 - **The network on the sign-in screen, and a Wi-Fi page**: a small sign at the top right shows Wi-Fi with its signal,
