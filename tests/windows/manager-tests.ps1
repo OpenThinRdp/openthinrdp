@@ -311,6 +311,18 @@ try {
   Move-DeviceToGroup 'tc-g2' 'shop'
   ok 'group: a device without a file gets one in the folder' { Test-Path (Join-Path (Get-GroupsDir) 'shop\tc-g2.conf') }
   ok 'group: not deleted while it has devices' { try { Remove-DeviceGroup 'shop'; $false } catch { $true } }
+  # ---- a release to some groups only: UPDATE_TO in the _group.conf, the devices of the group follow it
+  $cb = (Read-ConfFile $script:CommonFile)['UPDATE_TO']
+  [IO.File]::WriteAllText((Get-HostFile 'tc-g1'), "USB_MODE=disks`r`nUPDATE_TO=latest`r`n")
+  [void](Set-GroupUpdateTo 'latest' 'shop')
+  $rs = Get-RolloutState
+  ok 'groups: UPDATE_TO written in _group.conf, common.conf untouched; read back, and a pilot inside a group seen' { (Read-ConfFile (Join-Path (Get-GroupsDir) 'shop\_group.conf'))['UPDATE_TO'] -eq 'latest' -and (Read-ConfFile $script:CommonFile)['UPDATE_TO'] -eq $cb -and $rs.Pins.Groups['shop'] -eq 'latest' -and $rs.Pilots -contains 'tc-g1' }
+  ok 'groups: a device of the group follows it, its own line wins, a device in no group follows common.conf' { (Get-DeviceTrack 'tc-g2' $rs).Kind -eq 'group' -and (Get-DeviceTrack 'tc-g2' $rs).Group -eq 'shop' -and (Get-DeviceTrack 'tc-g1' $rs).Kind -eq 'pilot' -and (Get-DeviceTrack 'tc-nogroup' $rs).Kind -eq 'fleet' }
+  [void](Set-GroupUpdateTo $null 'shop')
+  ok 'groups: the line off again, the group follows common.conf' { -not (Read-ConfFile (Join-Path (Get-GroupsDir) 'shop\_group.conf')).Contains('UPDATE_TO') -and -not (Get-RolloutState).Pins.Groups.Contains('shop') }
+  [IO.File]::WriteAllText((Get-HostFile 'tc-g1'), "USB_MODE=disks`r`n")
+  $srcG = [IO.File]::ReadAllText((Join-Path $mw 'OpenThinRDP-Manager.ps1'))
+  ok 'groups: Release from GitHub ticks groups; the ticked ones to the newest, a group left on the newest by an earlier release follows common.conf again' { $srcG -match "-groups \`$grpList" -and $srcG -match "Set-GroupUpdateTo 'latest' \`$g" -and $srcG -match "Set-GroupUpdateTo \`$null \`$g" -and $srcG -match '\$pins\.Groups\.Values' }
   # a device before 0.2.9 does not look into groups: moving it there would lose its settings (Finco, 21/10)
   $keepDevices = $script:Devices
   $script:Devices = @([pscustomobject]@{ Name = 'tc-old'; S = @{ SOFTWARE = 'OpenThinRDP 0.2.7' } }, [pscustomobject]@{ Name = 'tc-new'; S = @{ SOFTWARE = 'OpenThinRDP 0.2.10' } })
@@ -357,6 +369,13 @@ try {
   ok 'release notes: the versions after the installed one up to the new one, newest first, no pre-release' { $nt -match '0\.2\.11' -and $nt -match '0\.2\.10' -and $nt -notmatch 'groups' -and $nt -notmatch 'pre' -and $nt.IndexOf('0.2.11') -lt $nt.IndexOf('0.2.10') }
   ok 'release notes: plain text (no ** nor * nor links, no runs of empty lines), bullets' { $nt -match ([char]0x2022 + ' A frozen session reconnects') -and $nt -notmatch '\*' -and $nt -match 'see the PR, \+ Add' -and $nt -notmatch 'https://x' -and $nt -notmatch '(\r\n){3}' }
   ok 'release notes: nothing published yet, every release up to the new one' { (Get-ReleaseNotes '' '0.2.10' $rels) -match 'groups' }
+  # major updates: a release whose notes mark a change Test first (or Major update) asks once more before all devices
+  $relsM = @([pscustomobject]@{ tag_name = 'v0.2.12'; draft = $false; prerelease = $false; body = "- **Test first. A stalled UDP transport** reconnects" },
+    [pscustomobject]@{ tag_name = 'v0.2.11'; draft = $false; prerelease = $false; body = '- **Major update**: a new kiosk' },
+    [pscustomobject]@{ tag_name = 'v0.2.10'; draft = $false; prerelease = $false; body = '- the clock; see test first below, not marked' })
+  ok 'major updates: the marked releases between the two, newest first; nothing past them' { (@(Get-MajorVersions '0.2.9' '0.2.12' $relsM) -join ',') -eq '0.2.12,0.2.11' -and @(Get-MajorVersions '0.2.11' '0.2.12' $relsM).Count -eq 1 -and @(Get-MajorVersions '0.2.12' '0.2.13' $relsM).Count -eq 0 -and @(Get-MajorVersions '0.2.9' '0.2.10' $relsM).Count -eq 0 }
+  $srcM = [IO.File]::ReadAllText((Join-Path $mw 'OpenThinRDP-Manager.ps1'))
+  ok 'major updates: Release from GitHub offers the pilots first and asks once more for all; Release to all and the fleet version ask too' { $srcM -match "if \(\`$pick\.Option -eq 0 -and \`$major\.Count -and -not \(Confirm-Action" -and $srcM -match '\$st\.Pilots\.Count -or \$major\.Count' -and $srcM -match "Confirm-MajorToAll \(Get-Text 'AllTitle'\)" -and $srcM -match "Confirm-MajorToAll \(Get-Text 'FleetTitle'\)" }
   # #80: a device in another time zone (the ISO is built with Etc/UTC) is not hours old because of it
   $nowUtc = [datetime]::UtcNow
   $st = @{ UPDATED = $nowUtc.AddHours(-7).ToString('yyyy-MM-dd HH:mm:ss'); UPDATED_UTC = $nowUtc.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'") }
