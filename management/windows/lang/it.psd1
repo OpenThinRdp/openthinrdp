@@ -679,7 +679,8 @@
   UpdNoteFleetLatest     = 'Tutte le postazioni: la più nuova (UPDATE_TO = latest).'
   UpdNoteFleetPinned     = 'Tutte le postazioni: {0} (UPDATE_TO in common.conf), fino a Rilascia a tutte.'
   UpdNotePilots          = 'Postazioni pilota ({0}), sempre sulla più nuova: {1}'
-  UpdNoPilots            = 'Postazioni pilota: nessuna (Versione software... nell''intestazione di una postazione).'
+  UpdGroupsAhead         = 'Gruppi che ricevono per primi la più nuova: {0}.'
+  UpdNoGroupsAhead       = 'Gruppi che ricevono per primi la più nuova: nessuno (Release da GitHub..., alcuni gruppi).'
   UpdNoteOwn             = 'Postazioni con una versione propria: {0}'
   UpdNoteVersions        = 'Versioni che si possono scegliere (updates\versions\): {0}'
   UpdNoVersions          = 'updates\versions\ è vuota: si riempie con la prossima release copiata da questo gestore.'
@@ -770,6 +771,8 @@
   MgrDone                = 'Gestore {0} installato in {1} (i file sostituiti sono in previous\).'
   MgrLauncherChanged     = 'L''avviatore è cambiato (Launcher.cs): ricostruite il .exe con {0}, con gli stessi -Name, -Folder, -Language (e -Install su ogni PC che ne ha una copia locale). Quello vecchio funziona fino ad allora.'
   MgrRestart             = 'Il gestore ora si riavvia.'
+  MgrAutoCheck           = 'Aggiorna il gestore da solo (si riavvia con la cassaforte aperta)'
+  MgrAutoFailed          = 'Il gestore non è riuscito ad aggiornarsi alla {0}: {1}'
 
   # ---- Desktop: il lato Windows della VDI (broker, host Hyper-V, desktop, sessioni) ----
   NavDesktops            = 'Desktop'

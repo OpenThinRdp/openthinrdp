@@ -144,6 +144,11 @@ Every release carries `openthinrdp-manager-<version>.zip`: the files of `managem
 - At every start the manager reads `VERSION` next to it, and in the background (the window does not wait) the
   `LATEST.txt` of the latest GitHub release of `UPDATE_GITHUB`, checked against the project key next to it
   (`openthinrdp-release.asc`). When that release has a newer manager, the top bar shows *Manager X available*.
+- **By itself** (on by default; **Updates > This manager**, *Update the manager by itself*): the check runs at the
+  start and every 6 hours, and a newer manager goes in at once with the steps below, when nothing is being edited
+  and no other window is open (otherwise it tries again every 10 minutes). It starts again on the same folder with
+  the vault still open: the access code passes to the new start in a file protected with DPAPI (this Windows user
+  on this PC only), read once and deleted at once, worth 60 seconds.
 - **Update the manager** (that notice, or **Updates > This manager**) downloads the zip, checks its hash against the
   signed `LATEST.txt`, checks that it holds `OpenThinRDP-Manager.ps1` and `VERSION` of that version, copies the files
   it replaces into `previous\` next to the manager (the copy of the update before goes), puts the new ones in place

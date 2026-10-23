@@ -248,6 +248,17 @@ try {
   ok 'a vault and Cancel: the manager does not go on' { $script:GateFailures = 0; (Invoke-StartGate @('cancel')) -eq 'cancel' -and -not (Test-VaultOpen) }
   ok 'a wrong code, then the right one: open, one failure counted' { $script:GateFailures = 0; (Invoke-StartGate @('wrong-code-1', 'correct-horse-1')) -eq 'open' -and (Test-VaultOpen) -and $script:GateFailures -eq 1 }
   ok 'open already: no second question' { (Invoke-StartGate @('cancel')) -eq 'open' }
+  # the manager restarting after it updated itself: the vault handed over (DPAPI, read once, 60 s), never in clear
+  $keepHf = $script:HandoffFile; $script:HandoffFile = Join-Path $tmp 'vault-handoff'
+  Save-VaultHandoff; Close-Vault
+  ok 'restart after an update: the vault opens without the code, the handover read once and gone, not in clear' { -not ([IO.File]::ReadAllText($script:HandoffFile)).Contains('correct-horse-1') -and $(Use-VaultHandoff; Test-VaultOpen) -and -not (Test-Path $script:HandoffFile) }
+  Save-VaultHandoff; Close-Vault; (Get-Item $script:HandoffFile).LastWriteTime = (Get-Date).AddMinutes(-5)
+  [IO.File]::WriteAllBytes($script:HandoffFile, [Security.Cryptography.ProtectedData]::Protect([Text.Encoding]::UTF8.GetBytes("$([DateTime]::UtcNow.AddSeconds(-90).Ticks)`ncorrect-horse-1"), $null, 'CurrentUser'))
+  ok 'restart after an update: a handover older than 60 s opens nothing' { $(Use-VaultHandoff; -not (Test-VaultOpen)) -and -not (Test-Path $script:HandoffFile) }
+  $script:HandoffFile = $keepHf; [void](Open-Vault 'correct-horse-1')
+  $srcA = [IO.File]::ReadAllText((Join-Path $mw 'OpenThinRDP-Manager.ps1'))
+  ok 'the manager updates itself: after the check, not while something is edited or a window is open, the vault handed over; the gate uses it' { $srcA -match "Status -eq 'Available'\) \{ Start-ManagerAutoUpdate \}" -and $srcA -match 'OpenForms\)\.Count -gt 1' -and $srcA -match 'try \{ Save-VaultHandoff \}' -and $srcA -match 'if \(-not \$gateAnswers\) \{ Use-VaultHandoff \}' }
+  ok 'lazy pages: the window first, the other pages built once, at the first visit or after Shown' { $srcA -match 'function Initialize-LazyPages' -and $srcA -match 'if \(\$i -ne 0\) \{ Initialize-LazyPages \}' -and $srcA -match '\$form\.Refresh\(\); Initialize-LazyPages' }
   Close-Vault
   ok 'after 3 wrong codes each try waits longer: 2, 4, 8, 16, then 30 s' { (@(1..8 | ForEach-Object { Get-GateDelay $_ }) -join ',') -eq '0,0,2,4,8,16,30,30' }
   # the whole manager: Cancel at the access code ends it before the folder and the window (exit code 3)

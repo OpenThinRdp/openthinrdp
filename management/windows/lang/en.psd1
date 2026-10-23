@@ -687,7 +687,8 @@
   UpdNoteFleetLatest     = 'All devices: the newest (UPDATE_TO = latest).'
   UpdNoteFleetPinned     = 'All devices: {0} (UPDATE_TO in common.conf), until Release to all devices.'
   UpdNotePilots          = 'Pilot devices ({0}), always on the newest: {1}'
-  UpdNoPilots            = 'Pilot devices: none (Software version... in the header of a device).'
+  UpdGroupsAhead         = 'Groups that take the newest first: {0}.'
+  UpdNoGroupsAhead       = 'Groups that take the newest first: none (Release from GitHub..., some groups).'
   UpdNoteOwn             = 'Devices on a version of their own: {0}'
   UpdNoteVersions        = 'Versions that can be chosen (updates\versions\): {0}'
   UpdNoVersions          = 'updates\versions\ is empty: it fills with the next release copied by this manager.'
@@ -778,6 +779,8 @@
   MgrDone                = 'Manager {0} installed in {1} (the files it replaced are in previous\).'
   MgrLauncherChanged     = 'The launcher changed (Launcher.cs): build the .exe again with {0}, with the same -Name, -Folder, -Language (and -Install on each PC that has a local copy). The old one keeps working until then.'
   MgrRestart             = 'The manager starts again now.'
+  MgrAutoCheck           = 'Update the manager by itself (it starts again with the vault open)'
+  MgrAutoFailed          = 'The manager could not update itself to {0}: {1}'
 
   # ---- Desktops: the Windows side of the VDI (brokers, Hyper-V hosts, desktops, sessions) ----
   NavDesktops            = 'Desktops'
