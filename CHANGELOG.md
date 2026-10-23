@@ -4,6 +4,12 @@ Every release, newest first. **Security** marks what every device should get at 
 to how a session connects or runs: try it on a pilot device before the whole fleet (see the manager, pilot devices).
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.2.19 (2026-10-23)
+
+- **The time zone of the device**: `TIMEZONE=Europe/Amsterdam` (any zone, in the settings of the device, centrally or
+  in the manager). The published ISO runs on UTC, so outside the UTC zone the clock, the power schedule and the time
+  zone of the session were off by hours until now. Empty keeps the one of the image.
+
 ## 0.2.18 (2026-10-23)
 
 - **Test first. A session whose UDP transport stalls comes back by itself**: seen twice in a video call, the pointer
