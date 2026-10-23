@@ -45,7 +45,7 @@ printf 'XKBMODEL="pc105"\nXKBLAYOUT="%s"\nXKBVARIANT=""\nXKBOPTIONS=""\n' "$KEYB
 
 # services
 systemctl enable openthinrdp-secrets.service openthinrdp-boot.service openthinrdp-wol.service openthinrdp-report.timer \
-  openthinrdp-report.path openthinrdp-schedule.timer systemd-timesyncd pcscd.socket
+  openthinrdp-report.path openthinrdp-schedule.timer openthinrdp-keep-log.service systemd-timesyncd pcscd.socket
 systemctl disable ssh 2>/dev/null || true          # apply.sh turns it on with SSH=on and a key
 systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 for s in ModemManager bluetooth cups avahi-daemon; do systemctl disable "$s" 2>/dev/null || true; done
