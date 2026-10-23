@@ -1,7 +1,8 @@
 # Changelog
 
-Every release, newest first. **Security** marks what every device should get at once. **Test first** marks a change
-to how a session connects or runs: try it on a pilot device before the whole fleet (see the manager, pilot devices).
+Every release, newest first. **Security** marks what every device should get at once. **Test first** marks a major
+update, a change to how a session connects or runs: try it on pilot devices before the whole fleet (the manager asks
+once more before it goes to all devices).
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
 ## 0.2.19 (2026-10-23)

@@ -667,6 +667,8 @@
   BadgeDevices           = 'OpenThinRDP {0} su GitHub (alle postazioni: {1}): Aggiornamenti, Release da GitHub.'
   BadgeManager           = 'Gestore {0} disponibile: Aggiornamenti, Aggiorna il gestore.'
   RelNotesIntro          = "La release {0} di OpenThinRDP, al posto della {1} pubblicata ora. Qui sotto cosa cambia; con Avanti si sceglie a quali postazioni va."
+  MajorIntro             = "Aggiornamento importante: la {0} cambia come si apre o funziona una sessione (Test first nelle note). Provatela prima sulle postazioni pilota."
+  MajorConfirmAll        = "La {0} è un aggiornamento importante: la {1} cambia come si apre o funziona una sessione (segnata Test first nelle note).`r`n`r`nLa strada sicura è prima le postazioni pilota, poi tutte quando lì funziona.`r`n`r`nMandarla ADESSO a TUTTE le postazioni lo stesso?"
   NotesHeading           = 'COSA CAMBIA'
   NotesVersion           = '— {0} —'
   NotesNone              = 'GitHub non ha risposto: le novità non sono disponibili ora. Si trovano anche su https://github.com/OpenThinRdp/openthinrdp/releases'

@@ -675,6 +675,8 @@
   BadgeDevices           = 'OpenThinRDP {0} on GitHub (on the devices: {1}): Updates, Release from GitHub.'
   BadgeManager           = 'Manager {0} available: Updates, Update the manager.'
   RelNotesIntro          = 'Release {0} of OpenThinRDP, in place of {1} published now. Below what changes; Next chooses which devices it goes to.'
+  MajorIntro             = 'Major update: {0} changes how a session connects or runs (Test first in the notes). Try it on pilot devices first.'
+  MajorConfirmAll        = "{0} is a major update: {1} changes how a session connects or runs (marked Test first in the notes).`r`n`r`nThe safe way is the pilot devices first, then all of them once it works there.`r`n`r`nSend it to ALL devices now anyway?"
   NotesHeading           = 'WHAT CHANGES'
   NotesVersion           = '--- {0} ---'
   NotesNone              = 'GitHub did not answer: the changes are not available now. They are also on https://github.com/OpenThinRdp/openthinrdp/releases'

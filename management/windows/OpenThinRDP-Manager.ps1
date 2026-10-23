@@ -681,17 +681,35 @@ function ConvertFrom-ReleaseMarkdown([string]$md) {
     $b = $l -match '^(\s*)[-*] (.*)$'; if ($b) { $l = "$($Matches[1])$([char]0x2022) $($Matches[2])" }
     $l -replace '(?<![\w*])\*([^*\s][^*]*)\*(?![\w*])', '$1' }) -join "`r`n" -replace '(\r\n){3,}', "`r`n`r`n" -replace '^(\r\n)+|(\r\n)+$', ''
 }
+# The stable releases after $from up to $to, newest first (Version, Body). The answer of GitHub is kept 10 minutes:
+# one update asks for its notes and whether it is a major one.
+function Get-ReleasesBetween([string]$from, [string]$to, $json = $null) {
+  if ($null -eq $json -and $env:OTR_MANAGER_NOTES) { $json = Get-Content -LiteralPath $env:OTR_MANAGER_NOTES -Raw | ConvertFrom-Json }
+  if ($null -eq $json -and $script:ReleasesCache -and $script:ReleasesCache.At -gt (Get-Date).AddMinutes(-10)) { $json = $script:ReleasesCache.Json }
+  if ($null -eq $json) {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    $json = Invoke-RestMethod -Uri "https://api.github.com/repos/$(Get-ReleaseRepo)/releases?per_page=40" -Headers @{ 'User-Agent' = 'OpenThinRDP-Manager' } -TimeoutSec 20 -ErrorAction Stop
+    $script:ReleasesCache = @{ At = Get-Date; Json = $json }
+  }
+  $sel = @(@($json) | Where-Object { -not $_.draft -and -not $_.prerelease } | ForEach-Object { [pscustomobject]@{ V = ([string]$_.tag_name) -replace '^v', ''; Body = [string]$_.body } } |
+    Where-Object { $_.V -match '^\d+\.\d+' -and (-not $from -or $from -notmatch '^\d' -or (Compare-Version $_.V $from) -gt 0) -and (-not $to -or (Compare-Version $_.V $to) -le 0) })
+  @(Get-NewestFirst @($sel | ForEach-Object { [pscustomobject]@{ Version = $_.V; Body = $_.Body } }))
+}
 function Get-ReleaseNotes([string]$from, [string]$to, $json = $null) {
-  try {
-    if ($null -eq $json -and $env:OTR_MANAGER_NOTES) { $json = Get-Content -LiteralPath $env:OTR_MANAGER_NOTES -Raw | ConvertFrom-Json }
-    if ($null -eq $json) {
-      [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-      $json = Invoke-RestMethod -Uri "https://api.github.com/repos/$(Get-ReleaseRepo)/releases?per_page=40" -Headers @{ 'User-Agent' = 'OpenThinRDP-Manager' } -TimeoutSec 20 -ErrorAction Stop
-    }
-    $sel = @(@($json) | Where-Object { -not $_.draft -and -not $_.prerelease } | ForEach-Object { [pscustomobject]@{ V = ([string]$_.tag_name) -replace '^v', ''; Body = [string]$_.body } } |
-      Where-Object { $_.V -match '^\d+\.\d+' -and (-not $from -or $from -notmatch '^\d' -or (Compare-Version $_.V $from) -gt 0) -and (-not $to -or (Compare-Version $_.V $to) -le 0) })
-    (@(Get-NewestFirst @($sel | ForEach-Object { [pscustomobject]@{ Version = $_.V; Body = $_.Body } }) | ForEach-Object { "$(Get-Text 'NotesVersion' $_.Version)`r`n`r`n$(ConvertFrom-ReleaseMarkdown $_.Body)" })) -join "`r`n`r`n"
-  } catch { '' }
+  try { (@(Get-ReleasesBetween $from $to $json) | ForEach-Object { "$(Get-Text 'NotesVersion' $_.Version)`r`n`r`n$(ConvertFrom-ReleaseMarkdown $_.Body)" }) -join "`r`n`r`n" } catch { '' }
+}
+# Major updates: the releases between the two whose notes mark a change **Test first** (or **Major update**), a change
+# to how a session connects or runs, to try on pilot devices before the whole fleet. Before it goes to all devices
+# the manager asks once more. The versions, newest first; none when GitHub does not answer.
+function Get-MajorVersions([string]$from, [string]$to, $json = $null) {
+  try { @(Get-ReleasesBetween $from $to $json | Where-Object { $_.Body -match '\*\*(Test first|Major update)' } | ForEach-Object Version) } catch { @() }
+}
+# The fleet is about to get $to (from $from): $true to go on. A major update asks once more, No by default.
+function Confirm-MajorToAll([string]$title, [string]$from, [string]$to) {
+  if (-not $to -or ($from -match '^\d' -and (Compare-Version $to $from) -le 0)) { return $true }
+  $form.Cursor = 'WaitCursor'; $major = @(Get-MajorVersions $from $to); $form.Cursor = 'Default'
+  if (-not $major.Count) { return $true }
+  Confirm-Action $title (Get-Text 'MajorConfirmAll' $to ($major -join ', ')) 'Button2'
 }
 # The notes in a window before an update: what it is (the question), what changes (scrolling), go on or not
 function Show-NotesDialog([string]$title, [string]$intro, [string]$notes, [string]$okKey) {
@@ -4338,17 +4356,21 @@ function Start-ReleaseImport {
     if ($sg.Error) { Show-Message (Get-Text 'RelTitle') $sg.Error 'Error'; return }
     $st = Get-RolloutState
     # first what changes from the version published now to this one; then where it goes
-    $form.Cursor = 'WaitCursor'; $notes = Get-ReleaseNotes ([string]$st.Latest) $rel.Version; $form.Cursor = 'Default'
-    if (-not (Show-NotesDialog (Get-Text 'RelTitle') (Get-Text 'RelNotesIntro' $rel.Version $(if ($st.Latest) { $st.Latest } else { Get-Text 'UpdNone' })) $notes 'BtnNext')) { return }
+    $form.Cursor = 'WaitCursor'; $notes = Get-ReleaseNotes ([string]$st.Latest) $rel.Version; $major = @(Get-MajorVersions ([string]$st.Latest) $rel.Version); $form.Cursor = 'Default'
+    $intro = Get-Text 'RelNotesIntro' $rel.Version $(if ($st.Latest) { $st.Latest } else { Get-Text 'UpdNone' })
+    if ($major.Count) { $intro += ' ' + (Get-Text 'MajorIntro' ($major -join ', ')) }
+    if (-not (Show-NotesDialog (Get-Text 'RelTitle') $intro $notes 'BtnNext')) { return }
     # the others stay on the version published now: there must be one, signed, to keep them on
     $l = Join-Path (Get-UpdatesDir) 'LATEST.txt'
     $stay = if ($st.Pinned) { $st.Fleet } elseif ($st.Latest -and (Test-Path -LiteralPath "$l.sig")) { $st.Latest } else { $null }
     $pilots = if ($st.Pilots.Count) { $st.Pilots -join ', ' } else { Get-Text 'RelNoPilots' }
     $opts = @((Get-Text 'RelScopeAll' $rel.Version),
       $(if ($stay) { , @((Get-Text 'RelScopePilot' $st.Pilots.Count $stay $pilots), $true) } else { , @((Get-Text 'RelScopePilotNo'), $false) }))
-    $sel = if ($stay -and ($st.Pinned -or $st.Pilots.Count)) { 1 } else { 0 }
+    # a major update offers the pilot devices first, and to all devices it asks once more
+    $sel = if ($stay -and ($st.Pinned -or $st.Pilots.Count -or $major.Count)) { 1 } else { 0 }
     $pick = Show-PickDialog (Get-Text 'RelTitle') (Get-Text 'RelConfirm' $rel.Version (Get-PublishedUpdate) $sg.Text) $opts $sel -okKey 'BtnPublish'
     if (-not $pick) { return }
+    if ($pick.Option -eq 0 -and $major.Count -and -not (Confirm-Action (Get-Text 'RelTitle') (Get-Text 'MajorConfirmAll' $rel.Version ($major -join ', ')) 'Button2')) { return }
     # Devices before 0.2.0 do not know UPDATE_TO (their report has no UPDATE_TO line): on the folder they take the new
     # LATEST.txt whatever common.conf says, so pilot only would not hold them back. Said before anything is written.
     if ($pick.Option -eq 1) {
@@ -4402,6 +4424,7 @@ function Start-ReleaseToAll {
   if (-not $st.Pinned) { Show-Message (Get-Text 'AllTitle') (Get-Text 'AllNothing') 'Information'; return }
   if (-not $st.Latest) { Show-Message (Get-Text 'AllTitle') (Get-Text 'UpdNone') 'Information'; return }
   if (-not (Confirm-Action (Get-Text 'AllTitle') (Get-Text 'AllConfirm' $st.Fleet $st.Latest))) { return }
+  if (-not (Confirm-MajorToAll (Get-Text 'AllTitle') $st.Fleet $st.Latest)) { return }
   try { [void](Set-UpdateTo 'latest') } catch { Show-Message (Get-Text 'MsgErrorTitle') (Get-Text 'MsgSaveFailed' $_.Exception.Message) 'Error'; return }
   $barText.Text = Get-Text 'AllDone' $st.Latest
   Sync-UpdateToRows
@@ -4418,6 +4441,8 @@ function Start-FleetVersion {
   if ($v -eq $st.Fleet) { Show-Message (Get-Text 'MsgNoChangesTitle') (Get-Text 'MsgNoChanges') 'Information'; return }
   $back = Get-BackText $v $st
   if (-not (Confirm-Action (Get-Text 'FleetTitle') (Get-Text 'FleetConfirm' (Format-Target $st.Fleet $st) (Format-Target $v $st) $back) $(if ($back) { 'Button2' } else { 'Button1' }))) { return }
+  $from = if ($st.Pinned) { $st.Fleet } else { $st.Latest }
+  if (-not (Confirm-MajorToAll (Get-Text 'FleetTitle') $from $(if ($v -eq 'latest') { $st.Latest } else { $v }))) { return }
   try { [void](Set-UpdateTo $v) } catch { Show-Message (Get-Text 'MsgErrorTitle') (Get-Text 'MsgSaveFailed' $_.Exception.Message) 'Error'; return }
   $barText.Text = Get-Text 'SavedCommon' $script:CommonFile (Get-Text 'ColSource')
   Sync-UpdateToRows

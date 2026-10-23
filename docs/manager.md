@@ -113,6 +113,11 @@ applied when the session is over.
    `common.conf`), and only then the new version goes into the folder.
 3. **Watch the pilots** for a few days: their **Summary** and **Events**, and the **History** page.
 
+**Major updates.** A release with a change to how a session connects or runs is marked **Test first** in its notes
+(and in the [CHANGELOG](../CHANGELOG.md)). The manager says so above the notes, proposes *pilot devices only*, and
+before a major update goes to all devices (from **Release from GitHub...**, **Release to all devices** or **Version
+for all devices...**) it asks once more, with *No* as the default answer.
+
 ### Release it to the whole fleet
 
 When the pilots are fine: **Updates > Release to all devices**. `common.conf` goes back to `UPDATE_TO=latest`
