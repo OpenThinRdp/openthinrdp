@@ -86,6 +86,15 @@ T=/etc/systemd/timesyncd.conf.d/openthinrdp.conf
 if [ -n "$(cfg NTP)" ]; then printf '[Time]\nNTP=%s\nFallbackNTP=\n' "$(cfg NTP)" > $T.new; else : > $T.new; fi
 if ! cmp -s $T.new $T; then mv -f $T.new $T; [ "$1" = now ] && systemctl restart systemd-timesyncd 2>/dev/null; else rm -f $T.new; fi
 
+# --- time zone (empty = the one of the image): the clock, the logs, the power schedule and, through FreeRDP, the time
+# zone of the session. The power-on alarm of the firmware is in local time: set again for the new zone
+Z=$(cfg TIMEZONE)
+if [ -n "$Z" ] && [ -f "/usr/share/zoneinfo/$Z" ] && [ "$(readlink /etc/localtime)" != "/usr/share/zoneinfo/$Z" ]; then
+  ln -sf "/usr/share/zoneinfo/$Z" /etc/localtime; echo "$Z" > /etc/timezone
+  ev "time zone: $Z"
+  [ "$1" = now ] && "$OTR/schedule.sh" alarm >/dev/null 2>&1
+fi
+
 # --- Debian security updates (FreeRDP excluded, see security-updates.sh): SECURITY_UPDATES=on|off
 if command -v unattended-upgrade >/dev/null; then
   if [ "$(cfg SECURITY_UPDATES)" = off ]; then AU=0; else AU=1; fi
