@@ -1,7 +1,21 @@
 # Changelog
 
-Every release, newest first. **Security** marks what every device should get at once.
+Every release, newest first. **Security** marks what every device should get at once. **Test first** marks a change
+to how a session connects or runs: try it on a pilot device before the whole fleet (see the manager, pilot devices).
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
+
+## 0.2.18 (2026-10-23)
+
+- **Test first. A session whose UDP transport stalls comes back by itself**: seen twice in a video call, the pointer
+  moved but the picture, the camera and the microphone stayed stuck until the device was switched off, while the
+  server sent nothing for hours. When FreeRDP keeps sending over UDP and nothing comes back for 60 seconds, the
+  session is closed and reopened over TCP until the device restarts (`TRANSPORT=auto`); what FreeRDP was doing goes to
+  `session-hang.log`. An idle session is never taken for one.
+- **The log of the last session survives a power off**: the FreeRDP log (in memory) is kept at shutdown as
+  `/var/log/openthinrdp/last-session.log`. A device switched off during a session says so in its events, with the
+  threads of FreeRDP in `session-hang.log`. Both, and a stalled UDP transport, are in the anonymous counts.
+- **A reinstalled device: its new SSH key is confirmed from any command**: *Restart*, *Update* and the other device
+  commands now ask whether to accept the new host key, as the remote screen did, instead of showing the ssh warning.
 
 ## 0.2.17 (2026-10-23)
 
