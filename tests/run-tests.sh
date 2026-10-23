@@ -166,6 +166,10 @@ ok "HOSTNAME ignored in common.conf" '! grep -q "^HOSTNAME" $OTR_CONF && [ "$(ho
 printf 'VPN_ADDRESS=10.8.0.99/24\r\n' >> $OTR_LIB/central-common.conf; $OTR/central-apply.sh
 ok "VPN_ADDRESS ignored in common.conf (one per device)" '! grep -q "^VPN_ADDRESS" $OTR_CONF'
 sed -i '/^VPN_ADDRESS/d' $OTR_LIB/central-common.conf; $OTR/central-apply.sh
+# a setting this version does not know yet (written by a newer manager): left out, the rest applied as before
+printf 'SOME_FUTURE_SETTING=on\r\n' >> $OTR_LIB/central-common.conf; $OTR/central-apply.sh
+ok "a setting unknown to this version (a newer manager) is left out, the central settings still applied" 'grep -q "^applied" $OTR_LIB/central-status && ! grep -q "^SOME_FUTURE_SETTING" $OTR_CONF && grep -qx "USB_MODE=disks" $OTR_CONF'
+sed -i '/^SOME_FUTURE_SETTING/d' $OTR_LIB/central-common.conf; $OTR/central-apply.sh
 $OTR/central-apply.sh
 ok "second run: in line, no loop" 'grep -q "^in line" $OTR_LIB/central-status'
 N=$(grep -c "central configuration applied" $OTR_EVENTS)

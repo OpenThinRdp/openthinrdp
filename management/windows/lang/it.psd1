@@ -549,7 +549,7 @@
   SendKeyRunning         = 'Chiave del sito a {0}...'
   SendKeyDone            = 'Chiave del sito {0}: le postazioni la dichiarano entro 5 minuti (Riepilogo, Firma aggiornamenti). Postazioni spente: {1}.'
   RemoteHostKeyChanged   = "{0} ({1}) risponde con una chiave SSH dell'host diversa da quella che il gestore conosce. È normale se la postazione è stata reinstallata; altrimenti al suo posto potrebbe rispondere un'altra macchina.`r`n`r`nDimenticare la vecchia chiave e accettare la nuova?"
-  SendKeyHostChanged     = "la sua chiave SSH dell'host è cambiata (reinstallata?): aprite una volta il suo Schermo remoto per confermare la nuova chiave"
+  SendKeyHostChanged     = "la sua chiave SSH dell'host è cambiata (reinstallata?): un qualsiasi comando al dispositivo (Riavvia, Schermo remoto...) chiede di confermare la nuova chiave"
   Label_RDP_GATEWAY      = 'RD Gateway'
   Help_RDP_GATEWAY       = "Remote Desktop Gateway per le postazioni fuori sede, nome[:porta] (443 se manca la porta), es. rdgateway.example.com. La connessione al broker e alla VM passa da lì in HTTPS, con le credenziali della sessione. Vuoto = direttamente al broker. Attraverso un gateway la sessione va in TCP: FreeRDP non porta l'UDP attraverso il gateway."
   Label_RDP_GATEWAY_USE  = 'Uso del gateway'
