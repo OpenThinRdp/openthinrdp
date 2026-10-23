@@ -277,7 +277,7 @@ connect(){
   fi
   if [ -n "$v" ] && [ "$(cfg RDP_GATEWAY_USE)" != detect ]; then :
   # auto after the UDP transport stalled in this run (watchdog 3, /tmp/kiosk.udpstall): TCP until the device restarts
-  elif [ $HASUDP = 1 ] && [ "$(cfg TRANSPORT)" != tcp ] && [ ! -f /tmp/kiosk.udpstall ]; then o+=(/network:auto)
+  elif [ $HASUDP = 1 ] && [ "$(cfg TRANSPORT)" != tcp ] && { [ "$(cfg TRANSPORT)" = udp ] || [ ! -f /tmp/kiosk.udpstall ]; }; then o+=(/network:auto)
   elif [ $HASUDP = 1 ]; then o+=(/network:lan -multitransport)
   else o+=(/network:lan); fi
   v=$(cfg RDP_KEYBOARD); [ -n "$v" ] && o+=(/kbd:layout:"$v")
