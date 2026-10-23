@@ -135,6 +135,26 @@ of a shortcut's program only from a local disk. On each PC that starts the manag
 It builds the `.exe` in `%ProgramData%\OpenThinRDP` with a `.script` file that points to the manager on the share
 (one copy of the manager for everybody), and puts a shortcut with the icon on the desktop.
 
+### Diagnostics of a device
+
+One file with what is needed to understand a problem: the events, the log of the last session (kept also when the
+device was switched off) and of the frozen ones, the status, the journal of this start and of the one before, the
+kernel, the update logs, the network, the hardware, and the settings **without their secrets** (passwords, Wi-Fi
+keys, PIN and private keys are removed; the credential, Wi-Fi and 802.1X files and the keys are never taken). User
+and server names stay in it.
+
+- **From the manager**: the power menu of a device, *Collect its diagnostics*. The device answers at its next report
+  (within 5 minutes; at once when SSH is on and the vault open) and the file lands in `diag\` of the management
+  folder. *Open its diagnostics* shows the newest one in Explorer and, if you want, opens a new issue on GitHub with
+  the version filled in: you look at the file and attach it there yourself.
+- **From the device**: the diagnostics screen (ℹ), *Send to the administrator*. Without a management folder the file
+  stays on the device, in `/var/lib/openthinrdp/diag`.
+- **By itself**: when the kiosk ends a frozen session, or the device is switched off with a session open, it
+  collects them (at most once an hour) and sends them to `diag\` at the next report. The header of the device in the
+  manager shows when there are some.
+
+Nothing goes to the project unless you send it.
+
 ### The manager updates itself
 
 Every release carries `openthinrdp-manager-<version>.zip`: the files of `management/windows` (without the launcher

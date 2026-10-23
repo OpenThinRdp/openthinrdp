@@ -285,6 +285,9 @@ request:
 
 - **Network installation (PXE)** for many devices at once.
 - **More tested hardware** and more languages (one file each).
+- **Programs on demand**: the browser to use (Firefox ESR, Brave, Google Chrome, Microsoft Edge, or the Chromium of
+  the image), and other programs or Debian packages, installed only on the devices that choose them and kept up to
+  date; the web button could also start one of them. We will build it as soon as a second user asks for it.
 
 ## Build your own image
 

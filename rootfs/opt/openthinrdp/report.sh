@@ -175,6 +175,19 @@ else
     [ -n "$OLD" ] && [ "$OLD" != "$H" ] && rm -f "$MNT/status/$OLD.txt" "$MNT/status/$OLD-events.log"
     cp "$OUT" "$MNT/status/$H.txt" && { [ -f "$OTR_EVENTS" ] && cp "$OTR_EVENTS" "$MNT/status/$H-events.log"; echo "$H" > "$OTR_LIB/share-name"
       echo "$(date '+%F %T') sent to $RS" > "$LOG"; }
+    # diagnostics (diag-bundle.sh): asked by the manager (diag\<hostname>.request newer than the last one answered),
+    # then every file waiting here goes to diag\ of the folder (the 3 last sent stay on the device)
+    if [ -f "$MNT/diag/$H.request" ] && [ "$MNT/diag/$H.request" -nt "$OTR_LIB/diag-request-done" ]; then
+      touch "$OTR_LIB/diag-request-done"; "$OTR/diag-bundle.sh" requested >/dev/null 2>&1
+    fi
+    for f in "$OTR_LIB"/diag/*.tar.gz; do
+      [ -f "$f" ] || continue
+      mkdir -p "$MNT/diag" "$OTR_LIB/diag/sent" 2>/dev/null
+      if cp "$f" "$MNT/diag/" 2>/dev/null; then
+        mv -f "$f" "$OTR_LIB/diag/sent/"; ls -t "$OTR_LIB"/diag/sent/*.tar.gz 2>/dev/null | tail -n +4 | xargs -r rm -f
+        ev "diagnostics in the management folder: diag\\$(basename "$f")"
+      fi
+    done
     # central settings -> local copies (= last good ones). If the folder answers and a file is gone, those keys are no
     # longer managed centrally. Groups are folders: config\groups\<group>\_group.conf (the settings of the group) and
     # the files of its devices, config\groups\<group>\<hostname>.conf; moving the file of a device to another folder

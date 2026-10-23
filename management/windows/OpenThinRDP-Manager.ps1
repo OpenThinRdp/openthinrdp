@@ -2980,7 +2980,7 @@ $btnTrackDev = New-ActionButton 'BtnDeviceVersion' 'Download' 'secondary'
 # power on (Wake-on-LAN), restart, switch off, report now, a command: one button with its menu
 $btnPowerDev = New-ActionButton 'BtnDevicePower' 'Power' 'secondary'
 $mnuPower = New-Object System.Windows.Forms.ContextMenuStrip; $mnuPower.Font = $fontBase
-foreach ($k in 'wake', 'reboot', 'poweroff', 'disconnect', 'update', 'report', 'command') { $it = $mnuPower.Items.Add((Get-Text "PwrMenu_$k")); $it.Tag = $k; $it.add_Click({ param($s, $e) if ($script:Selected) { Invoke-DeviceAction $script:Selected $s.Tag } }) }
+foreach ($k in 'wake', 'reboot', 'poweroff', 'disconnect', 'update', 'report', 'diag', 'diagopen', 'command') { $it = $mnuPower.Items.Add((Get-Text "PwrMenu_$k")); $it.Tag = $k; $it.add_Click({ param($s, $e) if ($script:Selected) { Invoke-DeviceAction $script:Selected $s.Tag } }) }
 $btnPowerDev.add_Click({ $mnuPower.Show($btnPowerDev, (New-Object System.Drawing.Point(0, $btnPowerDev.Height))) })
 # its group: which one it is in, and moving it to another
 $btnGroupDev = New-ActionButton 'BtnDeviceGroup' 'Folder' 'secondary'
@@ -4378,6 +4378,8 @@ function Update-DeviceHeader($d) {
   if ($script:Rollout) { $t = Get-DeviceTrack $d.Name $script:Rollout
     if ($t.Kind -eq 'pilot') { $parts += Get-Text 'DevPilot' } elseif ($t.Kind -eq 'own') { $parts += Get-Text 'DevOwnVersion' $t.Target }
     elseif ($t.Kind -eq 'group' -and $t.Target -ne $script:Rollout.Fleet) { $parts += Get-Text 'DevGroupVersion' $t.Group $(if ($t.Target -eq 'latest') { Get-Text 'TrackNewest' $script:Rollout.Latest } else { $t.Target }) } }
+  # diagnostics waiting in diag\ (asked, or collected by the device after a frozen session)
+  $df = Get-LatestDiag $d.Name; if ($df) { $parts += Get-Text 'DevDiag' $df.LastWriteTime.ToString('g') }
   $lblDevInfo.Text = $parts -join $dot
   $btnRemoteDev.Enabled = $true; $btnPowerDev.Enabled = $true; $btnGroupDev.Enabled = $true; $btnBrandDev.Enabled = $true; $btnTrackDev.Enabled = $true; $btnVpnDev.Visible = ($s['CFG_VPN'] -eq 'openvpn')
   $btnDot1xDev.Visible = ($s['CFG_DOT1X'] -in 'peap', 'tls') -or ($s['CFG_WIFI'] -eq 'on' -and $s['CFG_WIFI_SECURITY'] -in 'peap', 'tls')
@@ -6222,8 +6224,39 @@ $hcTimer.add_Tick({ if (-not $env:OTR_MANAGER_HEALTH_DEMO) { Start-HealthRefresh
 # Only the key of the vault is offered (IdentitiesOnly): the keys in the profile of this account do not open
 # screens. The device shows a notice while it lasts and stops by itself after 2 hours; closing the window here ends it.
 # kind: wake, reboot, poweroff, report, command
+# Diagnostics of a device (diag-bundle.sh on it, without its secrets): asked with diag\<name>.request in the management
+# folder, answered at its next report (5 minutes at most; at once when SSH is on and the vault is open); the file lands
+# in diag\, next to the ones the device collects by itself (a frozen session, a power off in a session).
+function Get-DiagDir { Join-Path $script:Folder 'diag' }
+function Get-LatestDiag([string]$name) {
+  @(Get-ChildItem -LiteralPath (Get-DiagDir) -Filter "$name-*.tar.gz" -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending) | Select-Object -First 1
+}
+function Request-DeviceDiag($d) {
+  $dd = Get-DiagDir; New-Item -ItemType Directory -Force -Path $dd | Out-Null
+  [IO.File]::WriteAllText((Join-Path $dd "$($d.Name).request"), (Get-Date).ToString('s'))
+  Add-ChangeLog "$($d.Name): diagnostics asked"
+  $now = $false
+  if ($d.S['CFG_SSH'] -eq 'on' -and (Test-VaultOpen)) {
+    $ip = Get-DeviceIp $d; $key = Get-VaultKeyFile
+    if ($key -and $ip -match '^\d{1,3}(\.\d{1,3}){3}$') { try { $now = (Invoke-DeviceSsh $ip 'sudo systemctl start openthinrdp-report.service' $key $d.Name).Code -eq 0 } catch { } }
+  }
+  $barText.Text = Get-Text $(if ($now) { 'DiagAskedNow' } else { 'DiagAsked' }) $d.Name
+}
+# the newest file of the device in Explorer, then, if wanted, a new issue on GitHub with its version filled in: the
+# administrator attaches the file there after looking at it (it holds user and server names)
+function Open-DeviceDiag($d) {
+  $df = Get-LatestDiag $d.Name
+  if (-not $df) { Show-Message (Get-Text 'DiagTitle' $d.Name) (Get-Text 'DiagNone' $d.Name) 'Information'; return }
+  Start-Process explorer.exe "/select,`"$($df.FullName)`""
+  if (Confirm-Action (Get-Text 'DiagTitle' $d.Name) (Get-Text 'DiagReport' $df.Name $df.LastWriteTime.ToString('g')) 'Button2') {
+    $q = "template=bug_report.yml&title=$([uri]::EscapeDataString("Diagnostics of a device: "))&version=$([uri]::EscapeDataString((Get-Version $d.S)))"
+    Start-Process "https://github.com/$(Get-ReleaseRepo)/issues/new?$q"
+  }
+}
 function Invoke-DeviceAction($d, [string]$kind) {
   $name = $d.Name; $title = Get-Text 'PwrTitle' $name
+  if ($kind -eq 'diag') { Request-DeviceDiag $d; return }
+  if ($kind -eq 'diagopen') { Open-DeviceDiag $d; return }
   if ($kind -eq 'wake') {
     if (-not (Confirm-Action $title (Get-Text 'PwrWakeAsk' $name ([string]$d.S['MAC'])))) { return }
     if (Send-DeviceWake $d) { $barText.Text = Get-Text 'PwrWakeSent' $name } else { Show-Message $title (Get-Text 'PwrNoMac') }
