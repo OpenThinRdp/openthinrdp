@@ -5,6 +5,21 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.2.21 (2026-10-23)
+
+- **Major updates go through the manager**: we mark in the release the ones that change how a session connects or
+  runs. A device with a management folder installs one only once the manager released it to that device, after a
+  second confirmation, also when it updates straight from GitHub. The first major update marked this way comes later:
+  0.2.21 itself is not one.
+- **The update question only without a management folder**: the live system from the USB stick, or an image of its
+  own with `site.conf` only, asks every new version at the sign-in, with its changes. A normal update installs after
+  30 seconds without an answer, a major one only with a yes; *Not now* lasts until the next start. Installed and
+  managed devices update as the site says, without a question.
+- **Pilot devices are a group**: *Release from GitHub* sends a new version to all devices or to the groups ticked.
+- **The manager starts in under 2 seconds** instead of about 9: the other pages are built right after the window shows.
+- **The manager updates itself** (on by default, *Updates > This manager*) when nothing is being edited, and starts
+  again with the vault still open.
+
 ## 0.2.20 (2026-10-23)
 
 - **A major update asks once more**: a release marked *Test first* changes how a session connects or runs. The
