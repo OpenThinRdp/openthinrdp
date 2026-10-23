@@ -175,6 +175,7 @@ V[UPDATE_TO]=$(low "$(get UPDATE_TO)")
 case "${V[UPDATE_TO]}" in ''|latest|ultima|ultimo) V[UPDATE_TO]=latest ;; *) [[ ${V[UPDATE_TO]} =~ ^[0-9a-z._-]+$ ]] || err "$V_UPDATE_TO" ;; esac
 V[SSH]=$(onoff "$(get SSH)")
 V[REMOTE_SCREEN]=$(onoff "$(get REMOTE_SCREEN)")
+V[ANON_STATS]=$(onoff "$(get ANON_STATS)")
 
 # --- web button and kiosk page
 case "$(low "$(get WEB_BUTTON)")" in app|portale|portal) V[WEB_BUTTON]=app ;; browser|chrome|chromium) V[WEB_BUTTON]=browser ;; kiosk) V[WEB_BUTTON]=kiosk ;; *) V[WEB_BUTTON]=none ;; esac

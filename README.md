@@ -310,6 +310,7 @@ The result is `out/openthinrdp-<version>.iso`. See [docs/building.md](docs/build
 - [docs/management.md](docs/management.md): the management folder, central settings, SSH keys, signed updates.
 - [docs/building.md](docs/building.md): building and customizing the image.
 - [docs/security.md](docs/security.md): security model and known limits.
+- [docs/privacy.md](docs/privacy.md): the anonymous counts the project receives, all of them, and how to switch them off.
 - [docs/hardware.md](docs/hardware.md): tested hardware and firmware settings.
 - [docs/udp.md](docs/udp.md): the UDP transport and the FreeRDP the image ships.
 

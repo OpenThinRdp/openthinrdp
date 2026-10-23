@@ -400,6 +400,7 @@ settings_spec(){
   fld MGMT_PASSWORD password "$L_F_MGMTPW" "" "" "$L_H_MGMTPW"
   fld SECURITY_UPDATES choice "$L_F_UPDATES" "$su" "$(chs ONV ONL)" "$L_H_UPDATES"
   fld LANGUAGE choice "$L_F_LANGUAGE" "$ln" "$(chs LNV LNL)" "$L_H_LANGUAGE"
+  fld ANON_STATS choice "$L_F_ANON" "$an" "$(chs ONV ONL)" "$L_H_ANON"
 }
 # KEY=value lines of the settings screen into the values of settings_dialog
 settings_read(){
@@ -411,7 +412,7 @@ settings_read(){
       LOAD_BALANCE_INFO) lbi=$v ;; NETMODE) nm=$v ;; IPADDR) ip=$v ;; NETMASK) mask=$v ;; GATEWAY) gw=$v ;;
       DNS1) d1=$v ;; DNS2) d2=$v ;; NTP) ntp=$v ;; SHUTDOWN_SECS) off=$v ;; SESSION_THRESHOLD) thr=$v ;;
       TRANSPORT) tr=$v ;; LANGUAGE) ln=$v ;; MGMT_SHARE) share=$v ;; MGMT_USER) mu=$v ;; MGMT_PASSWORD) mp=$v ;;
-      USB_MODE) um=$v ;; USB_REDIRECT) ur=$v ;; SECURITY_UPDATES) su=$v ;; WEB_BUTTON) wb=$v ;; WEB_URL) wu=$v ;;
+      USB_MODE) um=$v ;; USB_REDIRECT) ur=$v ;; SECURITY_UPDATES) su=$v ;; ANON_STATS) an=$v ;; WEB_BUTTON) wb=$v ;; WEB_URL) wu=$v ;;
       KIOSK_URL) ku=$v ;; KIOSK_RELOAD_MIN) kr=$v ;; POWER_ON_TIME) pon=$v ;; POWER_OFF_TIME) poff=$v ;;
       POWER_ON_DAYS) pdays=$v ;; WIFI) wf=$v ;; WIFI_SSID) ws=$v ;; WIFI_PSK) wp=$v ;;
       WIFI_SECURITY) wsec=$v ;; DOT1X) d1x=$v ;; EAP_IDENTITY) eid=$v ;; EAP_ANONYMOUS) ean=$v ;; EAP_PASSWORD) epw=$v ;;
@@ -454,7 +455,7 @@ settings_dialog(){
   local -a WEBV=(none app browser kiosk) WEBL=("$L_WEB_NONE" "$L_WEB_APP" "$L_WEB_BROWSER" "$L_WEB_KIOSK")
   local -a LNV=(en it) LNL=(English Italiano)
   local -a WSECV=(psk peap tls) WSECL=("$L_WSEC_PSK" "$L_WSEC_PEAP" "$L_WSEC_TLS") D1XV=(off peap tls) D1XL=("$L_OFF" "$L_D1X_PEAP" "$L_D1X_TLS")
-  local h u br brf dom lbi nm ip mask gw d1 d2 ntp off thr share mu mp um ur su tr wb wu ku kr pon poff pdays wf ws wp ln
+  local h u br brf dom lbi nm ip mask gw d1 d2 ntp off thr share mu mp um ur su an tr wb wu ku kr pon poff pdays wf ws wp ln
   local wsec d1x d1xs eid ean epw eca esn
   wsec=$(cfg WIFI_SECURITY); d1x=$(cfg DOT1X); eid=$(cfg EAP_IDENTITY); ean=$(cfg EAP_ANONYMOUS); eca=$(cfg EAP_CA); esn=$(cfg EAP_SERVER_NAME)
   d1xs=$("$OTR/dot1x.sh" status 2>/dev/null)
@@ -463,7 +464,7 @@ settings_dialog(){
   if [ "$nm" = static ]; then ip=$(cfg IPADDR); mask=$(cfg NETMASK); gw=$(cfg GATEWAY)
   else ip=$IPC; mask=$([ -n "$IPC" ] && pfx2mask "$PFX" || cfg NETMASK); gw=${GWC:-$(cfg GATEWAY)}; fi
   d1=$(cfg DNS1); d2=$(cfg DNS2); ntp=$(cfg NTP); off=$(cfg_num SHUTDOWN_SECS 10); thr=$(cfg_num SESSION_THRESHOLD 10)
-  share=$(cfg MGMT_SHARE); um=$(cfg USB_MODE); ur=$(cfg USB_REDIRECT); su=$(cfg SECURITY_UPDATES); tr=$(cfg TRANSPORT)
+  share=$(cfg MGMT_SHARE); um=$(cfg USB_MODE); ur=$(cfg USB_REDIRECT); su=$(cfg SECURITY_UPDATES); an=$(cfg ANON_STATS); tr=$(cfg TRANSPORT)
   wb=$(cfg WEB_BUTTON); wu=$(cfg WEB_URL); ku=$(cfg KIOSK_URL); kr=$(cfg_num KIOSK_RELOAD_MIN 10)
   pon=$(cfg POWER_ON_TIME); poff=$(cfg POWER_OFF_TIME); pdays=$(cfg POWER_ON_DAYS); wf=$(cfg WIFI); ws=$(cfg WIFI_SSID); ln=$(cfg LANGUAGE)
   # two columns: on one column the dialog does not fit a 1440x900 screen and Save disappears. Below 900 px
@@ -526,7 +527,7 @@ settings_dialog(){
     printf '%s\n' "HOSTNAME=$h" "DEFAULT_USER=$u" "BROKER=$br" "BROKER_FALLBACK=$brf" "DOMAIN=$dom" \
       "LOAD_BALANCE_INFO=$lbi" "NETMODE=$nm" "IPADDR=$ip" "NETMASK=$mask" "GATEWAY=$gw" "DNS1=$d1" "DNS2=$d2" \
       "NTP=$ntp" "SHUTDOWN_SECS=$off" "SESSION_THRESHOLD=$thr" "MGMT_SHARE=$share" "MGMT_USER=$mu" "USB_MODE=$um" \
-      "USB_REDIRECT=$ur" "SECURITY_UPDATES=$su" "TRANSPORT=$tr" "WEB_BUTTON=$wb" "WEB_URL=$wu" "KIOSK_URL=$ku" \
+      "USB_REDIRECT=$ur" "SECURITY_UPDATES=$su" "ANON_STATS=$an" "TRANSPORT=$tr" "WEB_BUTTON=$wb" "WEB_URL=$wu" "KIOSK_URL=$ku" \
       "KIOSK_RELOAD_MIN=$kr" "POWER_ON_TIME=$pon" "POWER_OFF_TIME=$poff" "POWER_ON_DAYS=$pdays" "LANGUAGE=$ln" \
       "WIFI=$wf" "WIFI_SSID=$ws" "WIFI_SECURITY=$wsec" "DOT1X=$d1x" "EAP_IDENTITY=$eid" "EAP_ANONYMOUS=$ean" \
       "EAP_CA=$eca" "EAP_SERVER_NAME=$esn" > "$tmp"

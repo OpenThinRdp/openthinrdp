@@ -118,6 +118,12 @@ themselves.
 
 See [security.md](security.md) and [SECURITY.md](../SECURITY.md).
 
+### Does it send anything to the project?
+
+A few anonymous counts, at the first start and then once a week: the version, the model of the computer, its
+processor and memory, and a few yes/no. Never names, addresses, users or anything typed. `ANON_STATS=off` switches
+it off; [privacy.md](privacy.md) lists everything.
+
 ### Does it boot over the network (PXE)?
 
 Not yet. OpenThinRDP runs live from a USB stick or is installed, with an automatic installation for rollouts.
