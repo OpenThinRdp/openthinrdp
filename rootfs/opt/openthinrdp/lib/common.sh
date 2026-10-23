@@ -108,3 +108,26 @@ if tag != 6 or body[0] != 4: sys.exit(1)
 print(hashlib.sha1(b'\x99' + len(body).to_bytes(2, 'big') + body).hexdigest().upper())
 PY
 }
+
+# bytes waiting, unread, in the sockets of a process (TCP and UDP)
+recvq(){ ss -tunpH 2>/dev/null | grep "pid=$1," | awk '{s += $3} END {print s + 0}'; }
+# What a stuck FreeRDP was doing, before it is killed: its threads (state, where they sleep, the system call they
+# wait in), with eu-stack their stacks when it is installed, and the end of its log. Kept across a restart in
+# session-hang.log (prepared by boot.sh, at most 1 MB), read over SSH. The whole log of the session is in /tmp, and
+# kept at shutdown as last-session.log (keep-session-log.sh). From the kiosk watchdog, and at shutdown.
+hang_report(){ local f=$OTR_LOG/session-hang.log t
+  {
+    echo "=== $(date '+%Y-%m-%d %H:%M:%S') FreeRDP $1 ($(xfreerdp3 --version 2>/dev/null | head -1)), sockets:"
+    ss -tunpH 2>/dev/null | grep "pid=$1," | awk '{print "  " $1, $2, "unread", $3, "unsent", $4}'
+    for t in /proc/"$1"/task/*; do
+      printf '  %-16s %s wchan=%s syscall=%s\n' "$(cat "$t/comm" 2>/dev/null)" "$(awk '{print $3}' "$t/stat" 2>/dev/null)" \
+        "$(cat "$t/wchan" 2>/dev/null)" "$(cut -d' ' -f1 "$t/syscall" 2>/dev/null)"
+    done
+    command -v eu-stack >/dev/null && timeout 20 eu-stack -p "$1" 2>&1 | head -400
+    echo "--- end of the FreeRDP log"; tail -80 /tmp/kiosk.log 2>/dev/null
+  } >> "$f" 2>/dev/null
+  if [ "$(stat -c %s "$f" 2>/dev/null || echo 0)" -gt 1000000 ]; then tail -c 500000 "$f" > "$f.tmp" 2>/dev/null && cat "$f.tmp" > "$f"; rm -f "$f.tmp"; fi
+}
+# UDP datagrams this device received and sent so far ("in out"), all sockets: on a thin client nearly all are the
+# UDP transport of FreeRDP; the rest (DNS, time) is a few datagrams now and then
+udp_counts(){ awk '/^Udp:/ {n++} n == 2 && /^Udp:/ {print $2, $5; exit}' /proc/net/snmp; }

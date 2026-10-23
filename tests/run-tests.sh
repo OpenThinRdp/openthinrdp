@@ -427,8 +427,14 @@ ok "RD Gateway: use always, detect (rileva), anything else always" 'printf "RDP_
   printf 'RDP_AUTH=ntlm\nRDP_GATEWAY=rdg.example.test\n' > $OTR_CONF; connect u p rdbroker.example.test; cp /tmp/frdp.args /tmp/frdp.always
   printf 'RDP_AUTH=ntlm\nRDP_GATEWAY=rdg.example.test:8443\nRDP_GATEWAY_USE=detect\n' > $OTR_CONF; connect u p rdbroker.example.test; cp /tmp/frdp.args /tmp/frdp.detect
   echo 10.9.9.9 > /tmp/kiosk.vm; vm_alive && echo alive > /tmp/frdp.vm || echo "not asked" > /tmp/frdp.vm
+  # after the UDP transport stalled (watchdog 3): TCP with auto, still UDP when UDP was asked for
+  printf 'RDP_AUTH=ntlm\n' > $OTR_CONF; touch /tmp/kiosk.udpstall; connect u p rdbroker.example.test; cp /tmp/frdp.args /tmp/frdp.stalled
+  printf 'RDP_AUTH=ntlm\nTRANSPORT=udp\n' > $OTR_CONF; connect u p rdbroker.example.test; cp /tmp/frdp.args /tmp/frdp.stalledudp
+  rm -f /tmp/kiosk.udpstall
   cp /tmp/conf.save $OTR_CONF
 )
+ok "after a UDP stall: the next connections over TCP (auto), UDP stays when it is required" 'grep -qx -- "-multitransport" /tmp/frdp.stalled && grep -qx "/network:lan" /tmp/frdp.stalled && grep -qx "/network:auto" /tmp/frdp.stalledudp && ! grep -qx -- "-multitransport" /tmp/frdp.stalledudp'
+ok "watchdog 3: a UDP stall is FreeRDP sending for 60 s with nothing back, kept in session-hang.log, then TCP" 'grep -q "lut)) -ge 60 ] && \[ \$((uo - luo)) -ge 20 ]" $OTR/kiosk.sh && grep -q "received nothing over UDP" $OTR/kiosk.sh && grep -q "touch /tmp/kiosk.udpstall" $OTR/kiosk.sh && [ -n "$(udp_counts)" ]'
 ok "connect without a gateway: no /gateway, /network:auto (UDP)" '! grep -q "^/gateway" /tmp/frdp.none && grep -qx "/network:auto" /tmp/frdp.none && ! grep -qx -- "-multitransport" /tmp/frdp.none'
 ok "connect with RDP_GATEWAY: through it, same credentials, no UDP offered" 'grep -qx "/gateway:g:rdg.example.test,type:auto,usage-method:direct" /tmp/frdp.always && grep -qx -- "-multitransport" /tmp/frdp.always && [ "$(grep -cx "/network:auto" /tmp/frdp.always)" = 1 ] && grep -qx "/v:rdbroker.example.test" /tmp/frdp.always'
 ok "connect with RDP_GATEWAY_USE=detect: the gateway only when needed" 'grep -qx "/gateway:g:rdg.example.test:8443,type:auto,usage-method:detect" /tmp/frdp.detect && ! grep -qx -- "-multitransport" /tmp/frdp.detect && grep -qx "/network:auto" /tmp/frdp.detect'
@@ -672,7 +678,7 @@ ok "netif: nic_ipv4 of a missing adapter is empty" '[ -z "$(nic_ipv4 nosuchnic0)
 ok "report: falls back to the route when the main adapter has no address" 'grep -q "IPC=\$(nic_ipv4 \"\$R\")" /opt/openthinrdp/report.sh'
 
 # a FreeRDP that no longer reads: data waits in its socket (kiosk.sh recvq), and what it was doing is kept (hang_report)
-eval "$(sed -n '/^recvq(){/p; /^hang_report(){/,/^}/p' $OTR/kiosk.sh)"
+: # recvq and hang_report come from lib/common.sh
 python3 -c 'import socket,time
 s=socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(("127.0.0.1", 47123)); s.listen(2)
 for i in range(2):
@@ -765,6 +771,18 @@ ok "anonymous counts: off = nothing sent" '[ ! -e "$SB/sent" ] && [ ! -e /var/li
 : > /etc/openthinrdp/openthinrdp.conf; PATH="$SB:$PATH" $OTR/stats.sh; n1=$(grep -c . "$SB/sent" 2>/dev/null); PATH="$SB:$PATH" $OTR/stats.sh
 ok "anonymous counts: on = sent at once the first time, then not again within the week" '[ "$n1" = 12 ] && [ $(grep -c . "$SB/sent") -eq 12 ] && [ -e /var/lib/openthinrdp/stats-sent ]'
 rm -rf "$SB" /var/lib/openthinrdp/stats-sent; mv /tmp/events.keep $OTR_EVENTS
+n=$(date '+%Y-%m-%d %H:%M:%S'); cp $OTR_EVENTS /tmp/events.keep
+{ echo "$n watchdog: FreeRDP received nothing over UDP for 75 s while it sent 40 datagrams, killed: TCP until the device restarts (session-hang.log)"
+  echo "$n power off with a session still open (FreeRDP 123): its threads in session-hang.log, its log in last-session.log"; } > $OTR_EVENTS
+SP=$($OTR/stats.sh --print | grep "^otr/error/")
+ok "anonymous counts: a UDP stall and a power off in a session are kinds of their own" 'printf "%s\n" "$SP" | grep -qx "otr/error/udp-stalled/1" && printf "%s\n" "$SP" | grep -qx "otr/error/switched-off-in-session/1" && ! printf "%s\n" "$SP" | grep -q session-frozen'
+# at shutdown (openthinrdp-keep-log.service): the FreeRDP log kept, a FreeRDP still running said and its threads kept
+: > $OTR_EVENTS; rm -f /tmp/kiosk.log.prev; cp /bin/sleep /tmp/xfreerdp3; /tmp/xfreerdp3 30 & XF=$!; echo "session log line" > /tmp/kiosk.log
+$OTR/keep-session-log.sh
+ok "at shutdown: the FreeRDP log kept as last-session.log; a session still open is said, its threads kept" 'grep -q "session log line" /var/log/openthinrdp/last-session.log && grep -q "power off with a session still open (FreeRDP $XF)" $OTR_EVENTS && grep -q "^=== .* FreeRDP $XF" /var/log/openthinrdp/session-hang.log'
+kill $XF 2>/dev/null; rm -f /tmp/xfreerdp3 /tmp/kiosk.log /tmp/kiosk.log.prev; : > $OTR_EVENTS; $OTR/keep-session-log.sh
+ok "at shutdown with no session since the start: the last kept log stays, nothing said" 'grep -q "session log line" /var/log/openthinrdp/last-session.log && ! grep -q "power off" $OTR_EVENTS && grep -q "openthinrdp-keep-log.service" /src/management/publish/install.sh'
+rm -f /var/log/openthinrdp/last-session.log; mv /tmp/events.keep $OTR_EVENTS
 
 echo "passed $PASS, failed $FAIL"
 [ $FAIL = 0 ]

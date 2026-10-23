@@ -52,6 +52,8 @@ problems(){
   from=$(date -d "@$1" '+%Y-%m-%d %H:%M:%S')
   # the events of the device
   awk -v f="$from" 'substr($0, 1, 19) > f' "$OTR_EVENTS" 2>/dev/null | sed -nE \
+    -e 's/.*watchdog: FreeRDP received nothing over UDP.*/udp-stalled/p' \
+    -e 's/.*power off with a session still open.*/switched-off-in-session/p' \
     -e 's/.*watchdog: FreeRDP .*/session-frozen/p' \
     -e 's/.*no desktop after [0-9]+ s, stopped.*/connect-timeout/p' \
     -e 's/.*attempt [0-9]+ for .* failed after .*\(code ([0-9]+), .*/connect-failed \1/p' \

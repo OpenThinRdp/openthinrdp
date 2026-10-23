@@ -1,0 +1,15 @@
+[Unit]
+Description=OpenThinRDP: keep the log of the last session at shutdown
+# stopped before the kiosk (getty@tty1 runs it): FreeRDP is still there when ExecStop runs, /tmp still mounted
+After=tmp.mount getty@tty1.service local-fs.target
+RequiresMountsFor=/var/log /tmp
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+ExecStop=/opt/openthinrdp/keep-session-log.sh
+TimeoutStopSec=40
+
+[Install]
+WantedBy=multi-user.target

@@ -276,7 +276,8 @@ connect(){
     else o+=(/gateway:g:"$v",type:auto,usage-method:direct /network:auto -multitransport); fi
   fi
   if [ -n "$v" ] && [ "$(cfg RDP_GATEWAY_USE)" != detect ]; then :
-  elif [ $HASUDP = 1 ] && [ "$(cfg TRANSPORT)" != tcp ]; then o+=(/network:auto)
+  # auto after the UDP transport stalled in this run (watchdog 3, /tmp/kiosk.udpstall): TCP until the device restarts
+  elif [ $HASUDP = 1 ] && [ "$(cfg TRANSPORT)" != tcp ] && [ ! -f /tmp/kiosk.udpstall ]; then o+=(/network:auto)
   elif [ $HASUDP = 1 ]; then o+=(/network:lan -multitransport)
   else o+=(/network:lan); fi
   v=$(cfg RDP_KEYBOARD); [ -n "$v" ] && o+=(/kbd:layout:"$v")
@@ -633,24 +634,6 @@ reason(){ case "$1" in
   3) echo "idle timeout" ;; 5) echo "session opened from another device" ;;
   11|12) echo "user disconnect or sign out" ;; 137) echo "killed (watchdog or kill -9)" ;; 147) echo "network lost" ;; *) echo "error $1" ;; esac; }
 deliberate(){ case "$1" in 0|1|2|3|11|12) return 0 ;; *) return 1 ;; esac; }
-# bytes waiting, unread, in the sockets of a process (TCP and UDP)
-recvq(){ ss -tunpH 2>/dev/null | grep "pid=$1," | awk '{s += $3} END {print s + 0}'; }
-# What a stuck FreeRDP was doing, before it is killed: its threads (state, where they sleep, the system call they
-# wait in), with eu-stack their stacks when it is installed, and the end of its log. Kept across a restart in
-# session-hang.log (prepared by boot.sh, at most 1 MB), read over SSH: the log of the session itself is in /tmp.
-hang_report(){ local f=$OTR_LOG/session-hang.log t
-  {
-    echo "=== $(date '+%Y-%m-%d %H:%M:%S') FreeRDP $1 ($(xfreerdp3 --version 2>/dev/null | head -1)), sockets:"
-    ss -tunpH 2>/dev/null | grep "pid=$1," | awk '{print "  " $1, $2, "unread", $3, "unsent", $4}'
-    for t in /proc/"$1"/task/*; do
-      printf '  %-16s %s wchan=%s syscall=%s\n' "$(cat "$t/comm" 2>/dev/null)" "$(awk '{print $3}' "$t/stat" 2>/dev/null)" \
-        "$(cat "$t/wchan" 2>/dev/null)" "$(cut -d' ' -f1 "$t/syscall" 2>/dev/null)"
-    done
-    command -v eu-stack >/dev/null && timeout 20 eu-stack -p "$1" 2>&1 | head -400
-    echo "--- end of the FreeRDP log"; tail -80 /tmp/kiosk.log 2>/dev/null
-  } >> "$f" 2>/dev/null
-  if [ "$(stat -c %s "$f" 2>/dev/null || echo 0)" -gt 1000000 ]; then tail -c 500000 "$f" > "$f.tmp" 2>/dev/null && cat "$f.tmp" > "$f"; rm -f "$f.tmp"; fi
-}
 # Why FreeRDP ended this session, for the event of a drop (" - text", or nothing): its last connection error
 # (ERRCONNECT_/ERRINFO_), else its last error that is not the noise of the channels closing behind it. Plain "last
 # ERROR" named a smart card channel failing after the UDP tunnel broke down (measured 13/10/2026).
@@ -760,7 +743,7 @@ session(){
       # redirected to the virtual machine (a connection to another address), the desktop window on screen. With the
       # window the screen closes (100); a closed screen must not end this loop (watchdog): writes ignore SIGPIPE.
       trap '' PIPE
-      local s1=0 s2=0 s3=0 n=0 s1n=0 s1w="" seen=0 lost=0 tcponly=0 fp ips first="" q lastq=0 stuck=0 stopped=0
+      local s1=0 s2=0 s3=0 n=0 s1n=0 s1w="" seen=0 lost=0 tcponly=0 fp ips first="" q lastq=0 stuck=0 stopped=0 ui uo lui="" luo=0 lut=0
       while kill -0 $xp 2>/dev/null; do
         fp=$(pgrep -P $xp -x xfreerdp3 | head -1)
         # Cancel pressed before FreeRDP was there: it goes as soon as it is
@@ -801,6 +784,20 @@ session(){
             hang_report "$fp"; ev "watchdog: FreeRDP connected but no longer reading for 60 s ($q bytes waiting), killed (session-hang.log)"
             kill -9 "$fp"; stuck=0
           fi
+          # Watchdog 3: the UDP transport stalled. FreeRDP keeps sending over UDP (input, acknowledgements, resends)
+          # and for 60 s nothing comes back: the server no longer sends the screen. Seen twice during calls with
+          # camera and microphone (21 and 23/10/2026, VM event 145 "no updates for 11038 s"): the pointer moved, the
+          # picture and the sound were stuck, nothing waited unread (watchdog 2 saw nothing). An idle session sends
+          # nothing and is never taken for one. Killed, it reconnects over TCP until the device restarts.
+          if ss -uanpH 2>/dev/null | grep -q "pid=$fp,"; then
+            read -r ui uo < <(udp_counts)
+            if [ "$ui" != "$lui" ]; then lui=$ui; luo=$uo; lut=$(date +%s)
+            elif [ $(( $(date +%s) - lut )) -ge 60 ] && [ $((uo - luo)) -ge 20 ]; then
+              hang_report "$fp"; ev "watchdog: FreeRDP received nothing over UDP for $(( $(date +%s) - lut )) s while it sent $((uo - luo)) datagrams, killed: TCP until the device restarts (session-hang.log)"
+              [ "$(cfg TRANSPORT)" = auto ] && touch /tmp/kiosk.udpstall
+              kill -9 "$fp"; lui=""
+            fi
+          else lui=""; fi
           # the server it is connected to now, after the broker's redirect the VM (vm_alive)
           ss -tnpH state established 2>/dev/null | grep "pid=$fp," | awk '{print $4}' | sed 's/:[0-9]*$//' | tail -1 > /tmp/kiosk.vm
           # TRANSPORT=udp: connected for 30 s without a UDP socket = UDP blocked, or FreeRDP fell back to TCP
