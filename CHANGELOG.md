@@ -5,6 +5,43 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.2.23 (2026-10-25)
+
+- **The manager is a project of its own**: [openthinrdp-manager](https://github.com/OpenThinRdp/openthinrdp-manager),
+  free for any use, also commercial, and closed from this release. What it runs on your servers stays readable
+  (`commands\`, `rds\`), and it shows what it will do before you confirm. The manager of the releases up to 0.2.22
+  stays under the GNU GPL. The thin client does not change: GPLv3, open.
+- **It works without devices too**: the first start offers the servers alone, a Health Center for Hyper-V, clusters,
+  Remote Desktop, SQL and backups.
+- **A new Home**: the infrastructure, the devices, one list of what to look at, the sign-ins of today in their phases,
+  the jobs of today, 30 days of memory with a forecast. It shows the last reading of your PC at once, with its time,
+  while the new one comes (the infrastructure takes about half a minute).
+- **Experience**: how long each sign-in takes (broker, VM, Windows), the latency of the sessions, dropped and frozen
+  ones, per user and device, kept 40 days. Tell your users: see [privacy](docs/privacy.md).
+- **Scheduled jobs**: restart, switch off, a message or an update, once, daily or weekly, on devices or groups; each
+  device reports how it went.
+- **Certificates and the enterprise CA**: every certificate of every server on its page (what uses it, when it
+  expires, whether it renews by itself), the CA and its revocation list, and which RDP servers present a certificate a
+  device could verify. *Security > Enterprise CA* requests the signing certificate of the manager from your CA and
+  follows its renewals, sends the CA to the devices, which trust it from their next report, and gives the desktops
+  their RDP certificate from your CA (a template and the GPO, renewed by themselves): the way to `RDP_CERT=verify`,
+  the pilot groups first.
+- **Not only Hyper-V**: Proxmox VE, VMware vSphere, Veeam Backup & Replication and Citrix Virtual Apps and Desktops in
+  the Health Center, each from its own API, read only; the hardware of HPE iLO, Lenovo XClarity and Supermicro too.
+- **Peripherals and inventory**: model, serial number, BIOS and the USB devices of each device; a required peripheral
+  that is gone is shown to look at. Rules per group, an inventory to export, a status page in HTML.
+- **Health Center**: maintenance per item, notices when a problem comes or goes, history and forecast, the services
+  as their users reach them, leftovers, a baseline to come back to, iDRAC (power, supplies, temperatures), custom
+  checks and commands, backup of the VMs to a share (a Linux VM is copied with its memory), the witness and the FSMO
+  roles, administration without administrator rights (JEA), and `-HealthReport -Json` for Task Scheduler.
+- **The manager starts at once**: its launcher draws the access window in a fraction of a second while the manager
+  loads behind it; the menu and the titles come first, each page whole after. `OpenThinRDP-Manager.cmd` and `.vbs` go:
+  start `OpenThinRDP-Manager.exe` (`-Install` for a shortcut on each PC).
+- **The manager refuses changed files**: the files of a release are signed (`MANIFEST.txt`, the project key); a file
+  changed, missing or added stops the start with their list.
+- **Remote screen with consent**: `REMOTE_CONSENT=ask` asks the user of the device before the screen is shared.
+- Note: Microsoft Defender with old signatures may hold the manager back; update its signatures.
+
 ## 0.2.22 (2026-10-23)
 
 - **Diagnostics of a device in one file**: the events, the log of the last session and of the frozen ones, the

@@ -26,6 +26,8 @@ ST=$W/status
 # a device without a management folder asks before installing (kiosk.sh update_question): "<new> <current> [<major>]"
 OFFER=/run/openthinrdp-update-offer
 mkdir -p $W; chmod 700 $W
+# an update job of the manager (schedule.sh) asks now: no 3-hour pause, no UPDATE_HOURS, for one hour
+[ -n "$(find /run/openthinrdp-update-now -mmin -60 2>/dev/null)" ] && OTR_UPDATE_NOW=1
 
 if [ "$1" = install ]; then
   V=$2; P=$W/pkg-$V; L=$OTR_LOG/update-$V.log
@@ -137,7 +139,8 @@ case "$1" in
     # at most every 3 hours once GitHub answered (report.sh runs every 5 minutes: without network, e.g. right
     # after boot, it simply tries again at the next run); a changed UPDATE_TO is asked at once
     # (an open offer is not held back: the answer from the device is waited for)
-    [ -f $W/github-checked ] && [ "$(cat $W/github-checked)" = "$TO" ] && [ ! -f $OFFER ] && [ $(( $(date +%s) - $(stat -c %Y $W/github-checked) )) -lt 10800 ] && exit 0 ;;
+    # (OTR_UPDATE_NOW: a scheduled job of the manager asks now)
+    [ -z "$OTR_UPDATE_NOW" ] && [ -f $W/github-checked ] && [ "$(cat $W/github-checked)" = "$TO" ] && [ ! -f $OFFER ] && [ $(( $(date +%s) - $(stat -c %Y $W/github-checked) )) -lt 10800 ] && exit 0 ;;
   *) echo "usage: $0 check <mounted folder> | check-github | install <version> [downgrade]"; exit 2 ;;
 esac
 [ -s "${KEYS[0]}" ] || [ -s "${KEYS[1]:-}" ] || { echo "updates disabled: no signing key" > $ST; exit 0; }
@@ -209,7 +212,16 @@ else
     echo "found $V ($SRC): asked on the device at the sign-in$([ -n "$CROSS" ] && echo ", major update")" > $ST; exit 0
   fi
 fi
-rm -f $OFFER
+# UPDATE_HOURS = the hours an update may install in (02-05, also across midnight: 22-06), managed devices only; the
+# package is already here, it installs at the first report inside them (or at once with a scheduled update job)
+UH=$(cfg UPDATE_HOURS)
+if [ -s "$OTR_LIB/central-common.conf" ] && [ -z "$OTR_UPDATE_NOW" ] && [[ $UH =~ ^([0-9]{1,2})-([0-9]{1,2})$ ]]; then
+  a=$((10#${BASH_REMATCH[1]})); b=$((10#${BASH_REMATCH[2]})); h=$((10#$(date +%H)))
+  if { [ $a -le $b ] && { [ $h -lt $a ] || [ $h -ge $b ]; }; } || { [ $a -gt $b ] && [ $h -lt $a ] && [ $h -ge $b ]; }; then
+    echo "found $V ($SRC$PIN): installs between $a:00 and $b:00 (UPDATE_HOURS)" > $ST; exit 0
+  fi
+fi
+rm -f $OFFER /run/openthinrdp-update-now
 echo $((N + 1)) > "$W/attempts-$V"
 if [ -n "$DOWN" ]; then echo "found $V ($SRC$PIN): going back from $CUR, install started" > $ST; ev "software update: going back from $CUR to $V (UPDATE_TO)"
 else echo "found $V ($SRC$PIN): install started" > $ST; fi

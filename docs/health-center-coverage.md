@@ -1,6 +1,6 @@
 # Health Center coverage
 
-The Health Center of the manager (page **Health Center**, `management/windows/OtrHealth.ps1`) was built from the
+The Health Center of the manager (page **Health Center**; what it runs on the servers is in `commands\` of the manager) was built from the
 emergency runbook script of the first site that ran OpenThinRDP with Hyper-V VDI: an interactive PowerShell menu with
 an automatic check-and-repair run, about fifty numbered runbook commands and a few maintenance procedures. This page
 lists every check and every command of that script, one row each, and says:

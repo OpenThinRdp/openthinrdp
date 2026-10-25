@@ -1,6 +1,0 @@
-2026-10-19 07:00:02 kiosk started
-2026-10-19 09:15:00 broker rdbroker.example.com: connecting to rdcb2.example.com (Kerberos)
-2026-10-19 09:15:03 attempt 1 for carol on rdbroker.example.com failed after 2s (code 131, broker): [kerberos] error
-2026-10-19 09:15:28 broker 192.0.2.11: connecting to rdcb1.example.com (Kerberos)
-2026-10-19 09:16:10 attempt 2 for carol on 192.0.2.11 failed after 41s (code 147, vm): the virtual machine could not be started
-2026-10-19 09:16:11 desktop not available for carol after 2 attempts: vm

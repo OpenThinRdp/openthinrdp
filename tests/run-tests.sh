@@ -100,6 +100,12 @@ printf 'TIMEZONE=Europe/Amsterdam\n' > /etc/openthinrdp/openthinrdp.conf; : > $O
 ( set +u; eval "$(sed -n '/^# --- time zone/,/^fi$/p' /src/rootfs/opt/openthinrdp/apply.sh)" )
 ok "time zone: applied to the clock, said once in the events" '[ "$(readlink /etc/localtime)" = /usr/share/zoneinfo/Europe/Amsterdam ] && [ "$(cat /etc/timezone)" = Europe/Amsterdam ] && grep -q "time zone: Europe/Amsterdam" $OTR_EVENTS'
 : > /etc/openthinrdp/openthinrdp.conf; : > $OTR_EVENTS
+# report interval: 2 to 30 minutes, applied as a drop-in of the timer; reports spread at random (a large fleet)
+ok "REPORT_INTERVAL: 2 to 30 minutes, 5 when empty" 'check x "REPORT_INTERVAL=10" && check x "REPORT_INTERVAL=" && ! check x "REPORT_INTERVAL=1" && ! check x "REPORT_INTERVAL=31" && ! check x "REPORT_INTERVAL=x"'
+printf 'REPORT_INTERVAL=10\n' > /etc/openthinrdp/openthinrdp.conf
+( set +u; systemctl(){ :; }; eval "$(sed -n '/^# --- how often the status is sent/,/^else rm -f \$DI\/interval.conf.new; fi$/p' /src/rootfs/opt/openthinrdp/apply.sh)" )
+ok "REPORT_INTERVAL: the timer of the reports every 10 minutes, a minute at random on top" 'grep -qx "OnUnitActiveSec=10min" /etc/systemd/system/openthinrdp-report.timer.d/interval.conf && grep -qx "RandomizedDelaySec=60" /etc/systemd/system/openthinrdp-report.timer && grep -q "REPORT_INTERVAL=\$(cfg_num REPORT_INTERVAL 5)" $OTR/report.sh'
+: > /etc/openthinrdp/openthinrdp.conf; rm -rf /etc/systemd/system/openthinrdp-report.timer.d
 um_of(){ printf 'USB_MODE=%s\n' "$1" > "$T"; $OTR/save-config.sh "$T" --print 2>&1 | sed -n 's/^USB_MODE=//p'; }
 ok "USB_MODE auto, all and disks kept, anything else is all" '[ "$(um_of Auto)" = auto ] && [ "$(um_of disks)" = disks ] && [ "$(um_of all)" = all ] && [ "$(um_of garbage)" = all ]'
 
@@ -390,6 +396,18 @@ darch 1.5 amd64 $U/pkg-0.3.1/debs/amd64/otr-dummy_1.5_amd64.deb; darch 1.0 arm64
 $OTR/auto-update.sh install 0.3.1 downgrade
 ok "going back: the .deb of this architecture in debs/<arch>/ is put back, the other one ignored" '[ "$(dpkg-query -W -f "\${Version}" otr-dummy)" = 1.5 ] && grep -q "^up to date: 0.3.1" $U/status'
 dpkg -r otr-dummy >/dev/null 2>&1; rm -f /tmp/otr-dummy-2.deb; to ""
+# the user of the device asked before the remote screen (REMOTE_CONSENT=ask): no yes = nothing starts
+ok "REMOTE_CONSENT: ask or off" 'printf "REMOTE_CONSENT=chiedi\n" > "$T"; $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "REMOTE_CONSENT=ask" && printf "REMOTE_CONSENT=x\n" > "$T" && $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "REMOTE_CONSENT=off"'
+ok "remote screen: with REMOTE_CONSENT=ask the question comes before x11vnc, and anything but a yes is ERROR=REFUSED" 'a=$(grep -n "cfg REMOTE_CONSENT)\" = ask" $OTR/remote-screen.sh | cut -d: -f1); b=$(grep -n "systemd-run --unit=\$U" $OTR/remote-screen.sh | cut -d: -f1); [ -n "$a" ] && [ "$a" -lt "$b" ] && grep -q "ui.py\" ask " $OTR/remote-screen.sh && grep -q "\[ \$a = 0 \] || {.*ERROR=REFUSED\"; exit 8; }" $OTR/remote-screen.sh'
+ok "ui.py: the question at the top (ask) compiles, a popup above the session, no keyboard focus" 'python3 -m py_compile $OTR/ui.py && grep -q "^if MODE == .ask.:" $OTR/ui.py && sed -n "/^if MODE == .ask.:/,/sys.exit(code)/p" $OTR/ui.py | grep -q "WindowType.POPUP" && sed -n "/^if MODE == .ask.:/,/sys.exit(code)/p" $OTR/ui.py | grep -q "set_can_focus(False)"'
+for l in en it nl; do ok "lang $l: the question of the remote screen" "grep -q '^L_REMOTE_ASK_T=' $OTR/lang/$l.sh && grep -q '^L_REMOTE_ASK=' $OTR/lang/$l.sh && grep -q '^L_REMOTE_ASK_YES=' $OTR/lang/$l.sh && grep -q '^L_REMOTE_ASK_NO=' $OTR/lang/$l.sh"; done
+# signed central configuration (CONFIG_SIGNED=required): a file of the folder only with the signature of the site key
+ok "CONFIG_SIGNED: required or off" 'printf "CONFIG_SIGNED=Required\n" > "$T"; $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "CONFIG_SIGNED=required" && printf "CONFIG_SIGNED=x\n" > "$T" && $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "CONFIG_SIGNED=off"'
+eval "$(sed -n '/^    SIGNED=0; \[ "\$(cfg CONFIG_SIGNED)" = required \]/,/^      \[ -f "\$m" \] || /p' $OTR/report.sh | sed 's/^    //')"
+printf 'TITLE=signed\n' > /tmp/sc.conf; gpg -q --batch --yes --local-user s@example.invalid --armor --detach-sign -o /tmp/sc.conf.sig /tmp/sc.conf
+ok "signed configuration: a file signed with the site key taken, a changed one or one without signature not" 'SIGNED=1; signed_ok /tmp/sc.conf && { echo "TITLE=evil" >> /tmp/sc.conf; ! signed_ok /tmp/sc.conf; } && { rm -f /tmp/sc.conf.sig; ! signed_ok /tmp/sc.conf; } && { SIGNED=0; signed_ok /tmp/sc.conf; }'
+ok "signed configuration: a missing file keeps its last settings, the keys of the folder are not dropped either" 'grep -q "elif \[ \$SIGNED = 1 \] && \[ -f \"\$OTR_LIB/central-\$n.conf\" \]; then :" $OTR/report.sh && grep -q "authorized_keys.central\" \] && \[ \$SIGNED = 0 \]" $OTR/report.sh'
+rm -f /tmp/sc.conf /tmp/sc.conf.sig
 # major updates: LATEST.txt names the newest one (major=); crossing it needs UPDATE_MAJOR, written by the manager
 ok "UPDATE_MAJOR a version or empty" 'check x "UPDATE_MAJOR=0.4.1" && check x "UPDATE_MAJOR=" && ! check x "UPDATE_MAJOR=0.4 1!"'
 echo 0.4.0 > $OTR_LIB/update-version; release 0.4.2 p@example.invalid /tmp/share/updates 0.4.1; $OTR/auto-update.sh check /tmp/share
@@ -419,31 +437,34 @@ ok "debs of an update package on arm64: never an amd64 one" '[ "$(OTR_ARCH=arm64
 ok "install.sh takes the package list and the .deb files by architecture" 'grep -q "pkg_list \"\$ARCH\" packages.list" /src/management/publish/install.sh && grep -q "DEBS=\$(pkg_debs .)" /src/management/publish/install.sh && bash -n /src/management/publish/install.sh'
 rm -rf $PD /tmp/pl
 ok "UPDATE_GITHUB must be owner/repository" '! check x "UPDATE_GITHUB=not a repo"'
-ok "the manager carries the same project key as the devices" 'cmp -s /src/management/windows/openthinrdp-release.asc /src/rootfs/opt/openthinrdp/keys/openthinrdp-release.asc'
+[ -d /src/management/windows ] && ok "the manager carries the same project key as the devices" 'cmp -s /src/management/windows/openthinrdp-release.asc /src/rootfs/opt/openthinrdp/keys/openthinrdp-release.asc'
 # make-update.sh without -k: the package and LATEST.txt for the manager to sign (vault), never published unsigned
 rm -rf /tmp/mu; cp -a /src /tmp/mu; rm -rf /tmp/mu/out
-ok "make-update without -k: LATEST.txt to sign in the manager, no signature" '/tmp/mu/management/publish/make-update.sh -v 9.0.1 >/tmp/mu.log 2>&1 && grep -q "NOT signed yet" /tmp/mu.log && grep -qx "version=9.0.1" /tmp/mu/out/update-9.0.1/LATEST.txt && [ -f /tmp/mu/out/update-9.0.1/openthinrdp-update-9.0.1.tar.gz ] && [ ! -e /tmp/mu/out/update-9.0.1/LATEST.txt.sig ]'
-ok "make-update without -k does not publish into a management folder" '! /tmp/mu/management/publish/make-update.sh -v 9.0.2 -o /tmp/mu-share >/dev/null 2>&1 && [ ! -e /tmp/mu-share/updates ]'
+# the manager as build-release.ps1 leaves it (-m): a stand-in of each part
+mgr(){ local d=/tmp/mgr-$1; mkdir -p $d/lang $d/commands; echo core > $d/OpenThinRDP-Manager.core; echo MZ > $d/OpenThinRDP-Manager.exe; cp $d/OpenThinRDP-Manager.exe $d/OpenThinRDP-Manager.launcher; echo stub > $d/OpenThinRDP-Manager.ps1; echo '@{}' > $d/lang/en.psd1; echo x > $d/commands/health-probe.ps1; echo "$1" > $d/VERSION; echo $d; }
+ok "make-update without -k: LATEST.txt to sign in the manager, no signature" '/tmp/mu/management/publish/make-update.sh -v 9.0.1 -m $(mgr 9.0.1) >/tmp/mu.log 2>&1 && grep -q "NOT signed yet" /tmp/mu.log && grep -qx "version=9.0.1" /tmp/mu/out/update-9.0.1/LATEST.txt && [ -f /tmp/mu/out/update-9.0.1/openthinrdp-update-9.0.1.tar.gz ] && [ ! -e /tmp/mu/out/update-9.0.1/LATEST.txt.sig ]'
+ok "make-update without -k does not publish into a management folder" '! /tmp/mu/management/publish/make-update.sh -v 9.0.2 -m $(mgr 9.0.2) -o /tmp/mu-share >/dev/null 2>&1 && [ ! -e /tmp/mu-share/updates ]'
 # with -k and -o: the manager of the same version in the release, the index of the version, pinned packages kept
 mkdir -p /tmp/mu-share/updates /tmp/mu-share/config; printf 'UPDATE_TO=9.0.1\n' > /tmp/mu-share/config/thinclient-a.conf
 for p in 8.0.0:4 9.0.1:3 9.0.0:2 9.0.2:1; do touch -d "-${p#*:} days" /tmp/mu-share/updates/openthinrdp-update-${p%:*}.tar.gz; done
-/tmp/mu/management/publish/make-update.sh -v 9.0.3 -k p@example.invalid -o /tmp/mu-share >/tmp/mu.log 2>&1
+/tmp/mu/management/publish/make-update.sh -v 9.0.3 -m $(mgr 9.0.3) -k p@example.invalid -o /tmp/mu-share >/tmp/mu.log 2>&1
 MZ=/tmp/mu/out/update-9.0.3/openthinrdp-manager-9.0.3.zip
 ok "make-update: the manager zip, named and hashed in the signed LATEST.txt" 'grep -qx "manager=openthinrdp-manager-9.0.3.zip" /tmp/mu-share/updates/LATEST.txt && grep -qx "manager_sha256=$(sha256sum < $MZ | cut -c1-64)" /tmp/mu-share/updates/LATEST.txt && sqv --keyring $OTR/keys/openthinrdp-release.asc /tmp/mu-share/updates/LATEST.txt.sig /tmp/mu-share/updates/LATEST.txt >/dev/null 2>&1'
-ok "make-update: the zip has the manager and its VERSION, no .exe" 'python3 -c "import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); n=z.namelist(); sys.exit(not (\"OpenThinRDP-Manager.ps1\" in n and \"lang/en.psd1\" in n and z.read(\"VERSION\").strip()==b\"9.0.3\" and not any(x.endswith(\".exe\") for x in n)))" $MZ'
+ok "make-update: the zip has the manager as released, MANIFEST.txt signed, the launcher in the zip but not in MANIFEST.txt" 'python3 -c "import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); n=z.namelist(); m=z.read(\"MANIFEST.txt\").decode(); sys.exit(not (\"OpenThinRDP-Manager.core\" in n and \"OpenThinRDP-Manager.exe\" in n and \"MANIFEST.txt.sig\" in n and \"lang/en.psd1\" in m and \"commands/health-probe.ps1\" in m and \".exe\" not in m and z.read(\"VERSION\").strip()==b\"9.0.3\"))" $MZ'
 ok "make-update -o: the index of the version in updates/versions" 'cmp -s /tmp/mu-share/updates/LATEST.txt /tmp/mu-share/updates/versions/9.0.3.txt && cmp -s /tmp/mu-share/updates/LATEST.txt.sig /tmp/mu-share/updates/versions/9.0.3.txt.sig'
 ok "make-update -o: the last 3 packages and the ones devices are set to are kept" '[ ! -e /tmp/mu-share/updates/openthinrdp-update-8.0.0.tar.gz ] && [ -e /tmp/mu-share/updates/openthinrdp-update-9.0.1.tar.gz ] && [ -e /tmp/mu-share/updates/openthinrdp-update-9.0.3.tar.gz ]'
 # -f: the FreeRDP builds of every architecture, each in debs/<arch>/ (stand-in packages)
 FC=$(. /tmp/mu/image/freerdp/freerdp.conf; echo $FREERDP_COMMIT)
 mkdir -p /tmp/mu/out/freerdp/$FC; darch 9 amd64 /tmp/mu/out/freerdp/$FC/freerdp3-x11_9_amd64.deb; (cd /tmp/mu/out/freerdp/$FC && sha256sum *.deb > SHA256SUMS)
-/tmp/mu/management/publish/make-update.sh -v 9.0.4 -f >/tmp/mu.log 2>&1
+/tmp/mu/management/publish/make-update.sh -v 9.0.4 -m $(mgr 9.0.4) -f >/tmp/mu.log 2>&1
 ok "make-update -f without an arm64 build: amd64 in debs/amd64, arm64 devices keep theirs" 'grep -q "no arm64 FreeRDP packages" /tmp/mu.log && [ "$(tar -tzf /tmp/mu/out/update-9.0.4/openthinrdp-update-9.0.4.tar.gz | grep "\.deb$" | tr "\n" " ")" = "./debs/amd64/freerdp3-x11_9_amd64.deb " ]'
 mkdir -p /tmp/mu/out/freerdp/$FC-arm64; darch 9 arm64 /tmp/mu/out/freerdp/$FC-arm64/freerdp3-x11_9_arm64.deb; (cd /tmp/mu/out/freerdp/$FC-arm64 && sha256sum *.deb > SHA256SUMS)
-/tmp/mu/management/publish/make-update.sh -v 9.0.5 -f >/tmp/mu.log 2>&1
+/tmp/mu/management/publish/make-update.sh -v 9.0.5 -m $(mgr 9.0.5) -f >/tmp/mu.log 2>&1
 ok "make-update -f with the arm64 build too: both, each in its folder" '[ "$(tar -tzf /tmp/mu/out/update-9.0.5/openthinrdp-update-9.0.5.tar.gz | grep "\.deb$" | sort | tr "\n" " ")" = "./debs/amd64/freerdp3-x11_9_amd64.deb ./debs/arm64/freerdp3-x11_9_arm64.deb " ]'
 echo broken >> /tmp/mu/out/freerdp/$FC-arm64/freerdp3-x11_9_arm64.deb
-ok "make-update -f refuses an arm64 build that does not match its SHA256SUMS" '! /tmp/mu/management/publish/make-update.sh -v 9.0.6 -f >/dev/null 2>&1'
-rm -rf /tmp/mu /tmp/mu-share /tmp/mu.log
+ok "make-update -f refuses an arm64 build that does not match its SHA256SUMS" '! /tmp/mu/management/publish/make-update.sh -v 9.0.6 -m $(mgr 9.0.6) -f >/dev/null 2>&1'
+rm -rf /tmp/mu /tmp/mu-share /tmp/mu.log /tmp/mgr-*
+ok "make-update refuses to build without the manager as released (-m)" '! /src/management/publish/make-update.sh -v 9.0.7 >/dev/null 2>&1'
 
 # --- RD Gateway: validation, and the options connect() of the kiosk gives FreeRDP (FreeRDP replaced by a stub)
 ok "RD Gateway: a name, a name:port and an address are accepted" 'check x "RDP_GATEWAY=rdg.example.com" && check x "RDP_GATEWAY=rdg.example.com:8443" && check x "RDP_GATEWAY=192.0.2.10"'
@@ -828,5 +849,44 @@ ok "diagnostics: an automatic one (a frozen session) at most once an hour" '[ $(
 ok "diagnostics: asked by the manager (diag\<hostname>.request), sent to diag\ of the folder; automatic after a watchdog and at a power off in a session" 'grep -q "MNT/diag/\$H.request\" -nt \"\$OTR_LIB/diag-request-done\"" $OTR/report.sh && grep -q "cp \"\$f\" \"\$MNT/diag/\"" $OTR/report.sh && grep -q "diag-bundle.sh\" watchdog" $OTR/lib/common.sh && grep -q "diag-bundle.sh\" power-off" $OTR/keep-session-log.sh && grep -q "/opt/openthinrdp/diag-bundle.sh" /etc/sudoers.d/openthinrdp'
 sed -i '/^WIFI_PSK=supersecretpsk/d; /^EAP_PASSWORD=hunter2pw/d; /^SETTINGS_PIN_SHA256=abcabc/d; /^DEFAULT_USER=mario/d' $OTR_CONF; rm -rf $OTR_LIB/diag /tmp/db
 
+
+# --- 0.2.23: the scheduled jobs of the manager (schedule.sh, section 2), run by the device with the manager closed
+S=/tmp/sched; rm -rf $S; mkdir -p $S/bin; cp /src/rootfs/opt/openthinrdp/schedule.sh $S/schedule.sh
+# systemctl: what it was asked; is-active = nothing running (no update to wait for)
+printf '#!/bin/bash\ncase "$1" in is-active) exit 3 ;; esac\necho "$*" >> /tmp/sched/systemctl.log\n' > $S/bin/systemctl; chmod +x $S/bin/systemctl
+# a remote session: a process called xfreerdp3 with /u: on its command line
+printf '#!/bin/bash\nsleep 300\n' > $S/xfreerdp3; chmod +x $S/xfreerdp3
+ME=$(hostname); PAST=$(date -d '-1 min' '+%Y-%m-%d %H:%M'); PASTHM=$(date -d '-1 min' '+%H:%M'); JF=$OTR_LIB/jobs.conf
+sched(){ rm -f $S/systemctl.log; PATH=$S/bin:$PATH bash $S/schedule.sh >/dev/null 2>&1; }
+rm -f $OTR_LIB/jobs-state $OTR_LIB/jobs-last; : > $OTR_EVENTS
+printf '#@j1 Riavvio\nj1|%s|once||restart|*|0|\nj2|%s|once||poweroff|other-device|0|\n' "$PAST" "$PAST" > $JF; sched
+ok "jobs: a restart for all runs at its time (after the 60 s warning, nobody there to see it); one for another device does not" 'grep -qx "reboot" $S/systemctl.log && ! grep -q poweroff $S/systemctl.log && grep -q "^j1=done@" $OTR_LIB/jobs-last && grep -q "job j1 (restart): done" $OTR_EVENTS'
+sched
+ok "jobs: a job done is not done again" '[ ! -s $S/systemctl.log ]'
+$S/xfreerdp3 /u:alice & XP=$!; sleep 0.3
+printf 'j3|%s|daily||restart|%s|0|\n' "$PASTHM" "$ME" > $JF; sched
+ok "jobs: with a remote session open a restart waits for it to end, said in the report" '[ ! -s $S/systemctl.log ] && grep -q "^j3=waiting@" $OTR_LIB/jobs-last && grep -q "job j3 (restart): waiting, remote session open" $OTR_EVENTS'
+printf 'j4|%s|daily||restart|%s|1|\n' "$PASTHM" "$ME" > $JF; sched
+ok "jobs: forced, a restart goes also with a session open (after the warning the user can cancel)" 'grep -qx "reboot" $S/systemctl.log && grep -q "^j4=done@" $OTR_LIB/jobs-last'
+pkill -P $XP; kill $XP 2>/dev/null; wait $XP 2>/dev/null
+printf 'j3|%s|daily||restart|%s|0|\n' "$PASTHM" "$ME" > $JF; sched
+ok "jobs: the session ended, the restart that waited runs" 'grep -qx "reboot" $S/systemctl.log && grep -q "^j3=done@" $OTR_LIB/jobs-last'
+echo cassa > $OTR_LIB/central-group-name
+printf 'j5|%s|weekly|%s|update|g:CASSA|0|\nj6|%s|weekly|%s|poweroff|g:cassa|0|\n' "$PASTHM" "$(date -d '-1 min' +%u)" "$PASTHM" "$(date -d '+1 day' +%u)" > $JF; sched
+ok "jobs: a group by its name (any case), on its days only; an update job asks now, past the window and the 3 hours; the results of jobs gone from the file dropped" 'grep -q "start --no-block openthinrdp-report.service" $S/systemctl.log && ! grep -q poweroff $S/systemctl.log && [ -f /run/openthinrdp-update-now ] && grep -q "^j5=done@" $OTR_LIB/jobs-last && ! grep -q "^j[34]=" $OTR_LIB/jobs-last'
+rm -f $OTR_LIB/central-group-name /run/openthinrdp-update-now
+printf 'j7|%s|once||restart|*|0|\n' "$(date -d '-4 hours' '+%Y-%m-%d %H:%M')" > $JF; sched
+ok "jobs: past the 3 hours a job that never started is not run" '[ ! -s $S/systemctl.log ] && ! grep -q "^j7=" $OTR_LIB/jobs-last'
+printf 'bad;id|%s|once||restart|*|0|\nj8|%s|once||format-disk|*|0|\n' "$PAST" "$PAST" > $JF; sched
+ok "jobs: a line with a wrong name or an action it does not know is ignored" '[ ! -s $S/systemctl.log ] || { cat $S/systemctl.log; false; }'
+rm -f $JF $OTR_LIB/jobs-state $OTR_LIB/jobs-last; rm -rf $S
+ok "jobs: copied from the folder only signed as the settings, removed with the file only when signing is off" 'grep -q "if \[ -f \"\$JF\" \] && ! signed_ok \"\$JF\"; then unsigned config/jobs.conf" $OTR/report.sh && grep -q "elif \[ \$SIGNED = 0 \]; then rm -f \"\$OTR_LIB/jobs.conf\"; fi" $OTR/report.sh'
+# --- the hours of the updates (UPDATE_HOURS), the report for the inventory and the peripherals, the sign-in times
+ok "UPDATE_HOURS: from-to hours or empty" 'printf "UPDATE_HOURS=2-5\n" > "$T"; $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "UPDATE_HOURS=2-5" && printf "UPDATE_HOURS=02:00\n" > "$T" && ! $OTR/save-config.sh "$T" --print >/dev/null 2>&1'
+ok "UPDATE_HOURS: outside the hours a managed device keeps the update downloaded for later; an update job installs at once" 'grep -q "installs between \$a:00 and \$b:00 (UPDATE_HOURS)" $OTR/auto-update.sh && grep -q "find /run/openthinrdp-update-now -mmin -60" $OTR/auto-update.sh'
+$OTR/report.sh >/dev/null 2>&1
+ok "report: model, serial number and BIOS for the inventory, the peripherals by kind, the jobs" 'grep -q "^HW_MODEL=" /run/openthinrdp-status.txt && grep -q "^HW_SERIAL=" /run/openthinrdp-status.txt && grep -q "^BIOS=" /run/openthinrdp-status.txt && grep -q "^PERIPHERALS=" /run/openthinrdp-status.txt && grep -q "^JOBS=" /run/openthinrdp-status.txt'
+ok "kiosk: the sign-in in its phases and the quality of the session, in events the manager reads" 'grep -q "ev \"sign-in of \$U: \$(tenths \$((t3 - t0))) s (broker \$(tenths \$((t1 - t0))) s, VM \$(tenths \$((t2 - t1))) s, Windows \$(tenths \$((t3 - t2))) s)" $OTR/kiosk.sh && grep -q "^    quality_event \"\$U\"" $OTR/kiosk.sh'
+ok "kiosk: the quality event from the samples (latency in tenths of a ms, kbit/s over the session), none for a short session" '( eval "$(sed -n "/^duration(){/p; /^tenths(){/p; /^quality_event(){/,/kbit\/s average/p" $OTR/kiosk.sh)"; : > $OTR_EVENTS; echo "8 200 90 1000 3001000 9000 400" > /tmp/kiosk.quality; quality_event alice; echo "2 20 10 0 0 0 10" > /tmp/kiosk.quality; quality_event bob; [ "$(grep -c "session quality" $OTR_EVENTS)" = 1 ] && grep -q "session quality of alice: latency 2.5 ms (max 9.0 ms), 60 kbit/s average (peak 9000 kbit/s), 6 min" $OTR_EVENTS && [ ! -f /tmp/kiosk.quality ] )'
 echo "passed $PASS, failed $FAIL"
 [ $FAIL = 0 ]

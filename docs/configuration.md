@@ -97,6 +97,7 @@ own input is used. A device listed in `USB_REDIRECT` is still passed whole.
 | `DNS1`, `DNS2` | | DNS servers; empty = from DHCP. Required with a static address |
 | `NTP` | | time servers; empty = Debian pool |
 | `TIMEZONE` | | time zone of the device, as Linux names it (`Europe/Amsterdam`, `Europe/Rome`, `UTC`): the clock, the logs, the power schedule and the time zone of the session. Empty = the one of the image (`Etc/UTC` in the published ISO, so set it) |
+| `REPORT_INTERVAL` | `5` | minutes between two reports of the status and readings of the central settings, 2 to 30; each report comes up to a minute later at random. The manager counts a device off after three intervals (15 minutes at least) |
 | `HOSTNAME` | `thinclient-` + the last 6 digits of the MAC address | name of the device (the system host name, not stored in the settings file) |
 | `WIFI` | `off` | `on` = use Wi-Fi when no cable is connected |
 | `WIFI_SSID`, `WIFI_COUNTRY` | | network name, regulatory country (two letters) |
@@ -335,9 +336,12 @@ own to test on. Reports are welcome in the [Discussions](https://github.com/Open
 | `UPDATE_FROM` | `github` | OpenThinRDP software updates: `github` (signed releases, checked every 3 hours), `share` (`updates\` of the management folder) or `off`, see [management.md](management.md#signed-updates) |
 | `UPDATE_GITHUB` | `OpenThinRdp/openthinrdp` | repository of the releases, `owner/repository` (for a fork) |
 | `UPDATE_KEY` | `any` | signature an update from the management folder needs: `any` (project key or site key) or `site` (only the site key, once the device has it), see [management.md](management.md#a-fleet-on-its-own-key) |
+| `CONFIG_SIGNED` | `off` | `required` = the device takes the files of the management folder (`config`, the group and its own file, `authorized_keys`) only with the signature of the site key the manager writes next to each; a file without it, or a missing one, leaves the last good settings. Set it in a signed `common.conf`: once set, only a signed file switches it off. See [management.md](management.md#signed-configuration) |
 | `UPDATE_TO` | `latest` | `latest` = the newest version published; a version (e.g. `0.2.0`) = exactly that one, also an older one (going back, FreeRDP included), and nothing newer until it changes. A pilot group: the current version in `common.conf`, `latest` for the pilot devices. Going back works to 0.2.0 or later. See [management.md](management.md#signed-updates) |
+| `UPDATE_HOURS` | | `from-to`, e.g. `02-05` (also across midnight: `22-06`): an update installs only in those hours, downloaded before; empty = any time. Devices with a management folder only; a scheduled update job of the manager installs at once |
 | `SSH` | `off` | `on` = SSH for the `otradmin` account, key login only |
 | `REMOTE_SCREEN` | `on` | `off` = no remote screen from the manager ([management.md](management.md#remote-screen)); it needs `SSH=on` |
+| `REMOTE_CONSENT` | `off` | `ask` = the device asks its user before the remote screen starts; without *Allow* within a minute it does not start |
 
 ## Web button and kiosk page
 

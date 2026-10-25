@@ -18,6 +18,9 @@
 #   ui.py toast ...      small notice in the top right corner with the progress of the software update; ends with it.
 #                        --while-file PATH: a plain notice (no bar, warning icon) that stays while PATH exists
 #                        (remote-screen.sh: "Remote assistance active").
+#   ui.py ask ...        a question in a small window at the top, above whatever is on the screen (the remote desktop
+#                        too): --heading, --text, --button LABEL:CODE, --primary CODE, --timeout N (70 when it runs out).
+#                        With the mouse or the touch screen only: the session keeps the keyboard.
 #   ui.py form ...       the settings of the device: sections on the left, every field with its hint (spec on stdin,
 #                        see below). Exit: 0 = save (KEY=value lines on stdout), 11 = close, 12 = terminal.
 #   ui.py pin ...        the settings PIN: 0 = OK (the PIN on stdout), 11 = cancel.
@@ -288,6 +291,36 @@ if MODE == 'toast':
     poll(); GLib.timeout_add(700, poll)
     win.show_all()
     w, h = win.get_size(); win.move(geo.x + SW - w - 24, geo.y + 24)
+    Gtk.main(); sys.exit(code)
+
+# --- a question at the top of the screen (remote-screen.sh: REMOTE_CONSENT=ask) --------------------------------
+if MODE == 'ask':
+    win = Gtk.Window(type=Gtk.WindowType.POPUP)
+    win.set_wmclass('OtrAsk', 'OtrAsk')
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10); box.get_style_context().add_class('toast')
+    head = Gtk.Box(spacing=12); head.pack_start(icon('warn', 28, COLORS['warn'], 1.0), False, False, 0)
+    head.pack_start(label(A.heading, 'heading', xalign=0, chars=44), True, True, 0); box.pack_start(head, False, False, 0)
+    tx = label(A.text.replace('\\n', '\n'), 'text', xalign=0, chars=52); tx.set_justify(Gtk.Justification.LEFT)
+    box.pack_start(tx, False, False, 0)
+    bar = Gtk.ProgressBar()
+    if A.timeout: box.pack_start(bar, False, False, 0)
+    row = Gtk.Box(spacing=10, halign=Gtk.Align.END)
+    for b in A.button:
+        text, _, c = b.rpartition(':')
+        bt = Gtk.Button(label=text); bt.get_style_context().add_class('primary' if c == A.primary else 'secondary')
+        bt.set_can_focus(False)
+        bt.connect('clicked', lambda _b, c=int(c): leave(c)); row.pack_start(bt, False, False, 0)
+    box.pack_start(row, False, False, 0); win.add(box)
+    if A.timeout:
+        T = max(1, int(A.timeout)); t0 = time.time()
+        def tick():
+            left = T - (time.time() - t0)
+            if left <= 0:
+                leave(70); return False
+            bar.set_fraction(left / T); return True
+        tick(); GLib.timeout_add(100, tick)
+    win.show_all()
+    w, h = win.get_size(); win.move(geo.x + (SW - w) // 2, geo.y + 24)
     Gtk.main(); sys.exit(code)
 
 # --- full screen: background, the picture of the site, a card ------------------------------------------------

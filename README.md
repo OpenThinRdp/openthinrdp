@@ -27,7 +27,7 @@ agent, no cloud service to depend on: a shared folder and a small Windows manage
 | **The whole fleet in one window** | state of every device, central settings, signed updates with pilot devices and rollback, power on (Wake-on-LAN), restart, remote screen |
 | **The Windows side too** | Health Center: brokers, Hyper-V hosts and cluster, VMs, DCs, DNS, SQL AlwaysOn and backups, with a plain sentence and a fix for each problem |
 | **Any x86-64 hardware** | UEFI with Secure Boot or legacy BIOS, complete Debian 13 kernel and firmware, from 2 GB of RAM |
-| **Open source** | GPLv3: free to use, and every copy stays open source; Debian underneath, every client script readable in `rootfs/opt/openthinrdp` |
+| **Free** | the client is GPLv3, every copy stays open source (Debian underneath, every client script readable in `rootfs/opt/openthinrdp`); the [Windows manager](https://github.com/OpenThinRdp/openthinrdp-manager) is free for any use, closed, with every command it runs on your servers readable |
 
 > **In production every day.** OpenThinRDP runs the whole thin client fleet of the company it was built for:
 > 14 Dell OptiPlex 3000 Thin Clients at desks, tills, a laboratory, weighing stations and a wall screen on Wi-Fi,
@@ -179,8 +179,10 @@ What the device needs: [Requirements](#requirements). The whole path, from the U
 
 ## The manager: the whole fleet from one window
 
-`OpenThinRDP-Manager` is one PowerShell script for Windows 10/11 (English and Italian, nothing to install) that works
-on the shared folder the devices report to. No server, no agent, no database: what you see is the files in the folder.
+The [OpenThinRDP Manager](https://github.com/OpenThinRdp/openthinrdp-manager) is a free program for Windows 10/11 and
+Windows Server (English and Italian, nothing to install) that works on the shared folder the devices report to. No
+server, no agent, no database: what you see is the files in the folder. It also works alone, without devices, as a
+health center for Hyper-V, clusters, Remote Desktop, SQL and backups.
 
 <p align="center">
 <img src="docs/screenshots/manager-devices.png" alt="Manager: every device, its state, user and version, and its settings" width="49%">
@@ -263,7 +265,7 @@ that you can read: the whole client side is a few shell scripts in `rootfs/opt/o
 | | **OpenThinRDP** | Dell ThinOS | IGEL OS | Stratodesk NoTouch | ThinStation |
 |---|---|---|---|---|---|
 | Cost | free | comes with Dell thin clients | subscription per device | licence per device | free |
-| Source | open (GPLv3) | closed | closed | closed | open |
+| Source | client open (GPLv3), manager free but closed | closed | closed | closed | open |
 | Runs on | x86-64 PCs and thin clients, UEFI or BIOS; Raspberry Pi 4 (experimental) | Dell thin clients | many x86-64 devices | x86-64 PCs, Raspberry Pi | x86 PCs |
 | Protocols | RDP only | Citrix, Omnissa/VMware, Microsoft and more | Citrix, Omnissa/VMware, Microsoft and more | many | many (you build the image) |
 | Management | shared folder + Windows tool, no server | Wyse Management Suite | UMS server | NoTouch Center | configuration files on a network server |
@@ -304,6 +306,8 @@ The result is `out/openthinrdp-<version>.iso`. See [docs/building.md](docs/build
 
 - [CHANGELOG.md](CHANGELOG.md): what changed in each release.
 - [docs/status.md](docs/status.md): what is in production, what is only tested, what does not exist yet; [docs/maturity.md](docs/maturity.md): production readiness area by area, with the evidence.
+- [docs/known-issues.md](docs/known-issues.md): what does not work as it should yet, and what to do meanwhile.
+- [MAINTAINERS.md](MAINTAINERS.md) and the [release checklist](docs/release-checklist.md): who maintains it, how a release is made.
 - [docs/configuration.md](docs/configuration.md): every setting.
 - [docs/guides/getting-started.md](docs/guides/getting-started.md): step by step, from a USB stick to a managed fleet.
 - [docs/faq.md](docs/faq.md): frequently asked questions.
@@ -316,6 +320,7 @@ The result is `out/openthinrdp-<version>.iso`. See [docs/building.md](docs/build
 - [docs/privacy.md](docs/privacy.md): the anonymous counts the project receives, all of them, and how to switch them off.
 - [docs/hardware.md](docs/hardware.md): tested hardware and firmware settings.
 - [docs/udp.md](docs/udp.md): the UDP transport and the FreeRDP the image ships.
+- [docs/guides/hyper-v-rds-health-check.md](docs/guides/hyper-v-rds-health-check.md): the manager alone, a free health check for Hyper-V clusters and Remote Desktop, without an agent.
 
 ## Layout
 
@@ -323,7 +328,7 @@ The result is `out/openthinrdp-<version>.iso`. See [docs/building.md](docs/build
 |---|---|
 | `rootfs/` | everything installed on the thin client (`/opt/openthinrdp`, udev rules, systemd units) |
 | `image/` | the ISO build (live-build in a container), the FreeRDP build and the example site folder |
-| `management/windows/` | the Windows manager (PowerShell, no installation) |
+| [openthinrdp-manager](https://github.com/OpenThinRdp/openthinrdp-manager) | the Windows manager, a separate project: its releases, issues and license |
 | `management/publish/` | building and signing update packages |
 | `tests/` | tests that run in a Debian container |
 
@@ -337,7 +342,8 @@ Security problems: please report them privately, see [SECURITY.md](SECURITY.md).
 
 ## License
 
-GNU General Public License version 3 or later, see [LICENSE](LICENSE) and [NOTICE](NOTICE): anyone may use, study, change and share it, and every copy or modified version that is distributed must stay under the same licence, with its source. Releases up to 0.2.5 were under the Apache License 2.0. The name OpenThinRDP and its logo are not part of the licence: a distributed fork needs a name of its own. OpenThinRDP uses FreeRDP (Apache 2.0), the noVNC viewer for the remote
+The thin client: GNU General Public License version 3 or later, see [LICENSE](LICENSE) and [NOTICE](NOTICE): anyone may use, study, change and share it, and every copy or modified version that is distributed must stay under the same licence, with its source.
+The manager for Windows: from 0.2.23 a separate project, [openthinrdp-manager](https://github.com/OpenThinRdp/openthinrdp-manager), free for any use but closed ([its license](https://github.com/OpenThinRdp/openthinrdp-manager/blob/main/LICENSE.md)); the commands it runs on your servers stay readable. The manager of the releases up to and including 0.2.22 was published under the GNU GPL version 3 or later and stays under it.
 screen (included unmodified, MPL 2.0 and BSD, [rootfs/opt/openthinrdp/novnc](rootfs/opt/openthinrdp/novnc)) and Debian packages under
 their own licenses. Windows and Remote Desktop are trademarks of Microsoft; this project is not affiliated with
 Microsoft or with any vendor named above.

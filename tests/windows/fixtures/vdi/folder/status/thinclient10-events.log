@@ -1,5 +1,0 @@
-2026-10-19 07:00:02 kiosk started
-2026-10-19 07:40:08 broker rdbroker.example.com: connecting to rdcb2.example.com (Kerberos)
-2026-10-19 07:40:12 attempt 1 for judy on rdbroker.example.com failed after 2s (code 131, broker): [kerberos] error
-2026-10-19 08:20:32 broker rdbroker.example.com: connecting to rdcb1.example.com (Kerberos)
-2026-10-19 08:20:42 session of judy opened (broker rdbroker.example.com)

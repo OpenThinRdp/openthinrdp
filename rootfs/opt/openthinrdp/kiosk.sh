@@ -694,6 +694,16 @@ show_err(){ local cl=$1 u=$2 before=$3 t sup
   ui message --icon=error --heading="$(plain "${before:+$before - }$(err_title "$cl")")" --text="$(plain "$t")" \
      --small="$(hostname)  ·  IP $(ipv4)  ·  $(date '+%d/%m %H:%M')" --timeout=60 --button="$L_OK:0" --primary=0 --default=0; }
 duration(){ [ "$1" -lt 120 ] && echo "$1 s" || echo "$(( $1 / 60 )) min"; }
+# tenths of a second (or of a millisecond) written as 12.3
+tenths(){ echo "$(( $1 / 10 )).$(( $1 % 10 ))"; }
+# The quality of a session, sampled by the watchdog every ~5 s into /tmp/kiosk.quality ("<samples> <latency sum>
+# <latency max> <bytes in at the start> <bytes in now> <peak kbit/s> <seconds>", latency in tenths of a ms): one
+# event at its end, read by the manager (Experience)
+quality_event(){ local q; read -r -a q < /tmp/kiosk.quality 2>/dev/null || return 0; rm -f /tmp/kiosk.quality
+  [ "${q[0]:-0}" -ge 6 ] || return 0
+  ev "session quality of $1: latency $(tenths $(( q[1] / q[0] ))) ms (max $(tenths "${q[2]}") ms), $(( (q[4] - q[3]) * 8 / 1000 / (q[6] > 0 ? q[6] : 1) )) kbit/s average (peak ${q[5]} kbit/s), $(duration "${q[6]}")"; }
+# bytes received by the network adapters (not lo)
+rx_bytes(){ awk 'NR > 2 { sub(/^ +/, ""); split($0, a, /[: ]+/); if (a[1] != "lo") s += a[2] } END { print s + 0 }' /proc/net/dev; }
 # Broker for attempt n: the first 2 on BROKER, then in turn on BROKER_FALLBACK, so one broken broker
 # does not lock anybody out while DNS round robin keeps sending half of the devices to it
 pick_broker(){ local n=$1 ha=$2; set -- $(cfg BROKER_FALLBACK)
@@ -740,7 +750,7 @@ session(){
       continue
     fi
     # the log of the previous attempt or session stays as kiosk.log.prev: after a drop the next attempt starts at once
-    [ -s /tmp/kiosk.log ] && mv -f /tmp/kiosk.log /tmp/kiosk.log.prev; : > /tmp/kiosk.log; rm -f /tmp/kiosk.vm
+    [ -s /tmp/kiosk.log ] && mv -f /tmp/kiosk.log /tmp/kiosk.log.prev; : > /tmp/kiosk.log; rm -f /tmp/kiosk.vm /tmp/kiosk.quality
     st=$(date +%s)
     B=$(pick_broker $att "$BRHA")
     ( connect "$U" "$P" "$B"; echo $? > /tmp/kiosk.rc ) &
@@ -756,6 +766,9 @@ session(){
       # window the screen closes (100); a closed screen must not end this loop (watchdog): writes ignore SIGPIPE.
       trap '' PIPE
       local s1=0 s2=0 s3=0 n=0 s1n=0 s1w="" seen=0 lost=0 tcponly=0 fp ips first="" q lastq=0 stuck=0 stopped=0 ui uo lui="" luo=0 lut=0
+      # the times of the sign-in (in tenths of a second): the broker, the VM made ready, Windows until the desktop
+      local t0 t1="" t2="" t3 qn=0 qs=0 qm=0 qrx0=0 qrx qpk=0 qt0=0 qlr=0 qlt=0 r
+      t0=$(date +%s%1N)
       while kill -0 $xp 2>/dev/null; do
         fp=$(pgrep -P $xp -x xfreerdp3 | head -1)
         # Cancel pressed before FreeRDP was there: it goes as soon as it is
@@ -763,11 +776,13 @@ session(){
         if [ -n "$fp" ] && [ $s3 -eq 0 ]; then
           ips=$(ss -tnpH state established 2>/dev/null | grep "pid=$fp," | awk '{print $4}' | sed 's/:[0-9]*$//' | sort -u)
           [ -z "$first" ] && first=$(echo "$ips" | head -1)
-          if [ $s1 -eq 0 ] && [ -n "$ips" ]; then echo "30"; echo "# $L_P_AUTH"; s1=1; s1n=$n; fi
+          if [ $s1 -eq 0 ] && [ -n "$ips" ]; then echo "30"; echo "# $L_P_AUTH"; s1=1; s1n=$n; t1=$(date +%s%1N); fi
           # still on the broker after 5 s: it is preparing the virtual machine, usually starting it
           if [ $s1 -eq 1 ] && [ $s2 -eq 0 ] && [ -z "$s1w" ] && [ $((n - s1n)) -ge 12 ]; then echo "45"; echo "# $L_P_VMSTART"; s1w=1; fi
-          if [ $s2 -eq 0 ] && [ -n "$first" ] && echo "$ips" | grep -qvx "$first"; then echo "65"; echo "# $L_P_STARTING"; s2=1; fi
+          if [ $s2 -eq 0 ] && [ -n "$first" ] && echo "$ips" | grep -qvx "$first"; then echo "65"; echo "# $L_P_STARTING"; s2=1; t2=$(date +%s%1N); fi
           if xdotool search --onlyvisible --pid "$fp" >/dev/null 2>&1; then pointer_show; echo "# $L_P_READY"; echo "100"; s3=1
+            t3=$(date +%s%1N); t1=${t1:-$t3}; t2=${t2:-$t1}
+            ev "sign-in of $U: $(tenths $((t3 - t0))) s (broker $(tenths $((t1 - t0))) s, VM $(tenths $((t2 - t1))) s, Windows $(tenths $((t3 - t2))) s)$([ "$3" = reconnect ] && echo ', reconnection')"
             ( sleep 15; sudo -n "$OTR/usb-hold.sh" release >/dev/null 2>&1 ) & echo $! > /tmp/kiosk.usbrel; fi
         fi 2>/dev/null
         sleep 0.4; n=$((n + 1))
@@ -810,6 +825,15 @@ session(){
               kill -9 "$fp"; lui=""
             fi
           else lui=""; fi
+          # the quality of the session for the manager (Experience): the latency of the connection to the VM, what comes in
+          if [ $s3 -eq 1 ]; then
+            r=$(ss -tinpH state established 2>/dev/null | grep -A1 "pid=$fp," | grep -o 'rtt:[0-9.]*' | tail -1 | cut -d: -f2)
+            qrx=$(rx_bytes); r=$(awk -v r="$r" 'BEGIN { printf "%d", r * 10 + 0.5 }')
+            if [ $qn -eq 0 ] && [ $qt0 -eq 0 ]; then qrx0=$qrx; qt0=$(date +%s); qlr=$qrx; qlt=$qt0; fi
+            if [ "$r" -gt 0 ]; then qn=$((qn + 1)); qs=$((qs + r)); [ "$r" -gt $qm ] && qm=$r; fi
+            if [ $(( $(date +%s) - qlt )) -gt 0 ]; then r=$(( (qrx - qlr) * 8 / 1000 / ($(date +%s) - qlt) )); [ $r -gt $qpk ] && qpk=$r; qlr=$qrx; qlt=$(date +%s); fi
+            [ $qn -gt 0 ] && echo "$qn $qs $qm $qrx0 $qrx $qpk $(( $(date +%s) - qt0 ))" > /tmp/kiosk.quality
+          fi
           # the server it is connected to now, after the broker's redirect the VM (vm_alive)
           ss -tnpH state established 2>/dev/null | grep "pid=$fp," | awk '{print $4}' | sed 's/:[0-9]*$//' | tail -1 > /tmp/kiosk.vm
           # TRANSPORT=udp: connected for 30 s without a UDP socket = UDP blocked, or FreeRDP fell back to TCP
@@ -837,6 +861,7 @@ session(){
     pointer_idle_hide
     d=$(( $(date +%s) - st )); ec=$(cat /tmp/kiosk.rc 2>/dev/null)
     SESS_SECS=$d
+    quality_event "$U"
     # Ended by the Cancel button (5: back to the sign-in, no message), or killed stuck or without a desktop in
     # time (6: said on the screen, never retried by itself)
     if [ -f /tmp/kiosk.cancel ]; then rm -f /tmp/kiosk.cancel /tmp/kiosk.stopped /tmp/kiosk.timeout; ev "connection of $U cancelled with the button after ${d}s"; return 5; fi

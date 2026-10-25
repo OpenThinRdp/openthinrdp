@@ -27,7 +27,7 @@ and what is still missing. It is updated when something changes. What runs where
   `tests/run-tests.sh`, about 240 checks): settings validation, central settings and their layers, updates with
   signature checks, pilot devices and **rollback**, interrupted and repeated installs, USB classification, secrets
   in a simulated TPM, language files.
-- Manager tests (`tests/windows`, about 240 checks in Windows PowerShell 5.1): save plans, the configuration as text,
+- Manager tests (in its own repository, about 400 checks in Windows PowerShell 5.1, at every change): save plans, the configuration as text,
   permissions, the Health Center model, actions in dry-run mode.
 - At every release the ISO boots in QEMU/KVM with Secure Boot; the UDP transport has a reproducible lossy-line bench
   ([tests/udp-bench](../tests/udp-bench/README.md)); 802.1X has a lab with hostapd and FreeRADIUS (`tests/lab-8021x`).
