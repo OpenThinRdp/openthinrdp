@@ -1,21 +1,33 @@
 # The OpenThinRDP manager
 
-The manager is the one place where you run a fleet of OpenThinRDP devices: one PowerShell script for Windows 10/11,
-in English and Italian, with nothing to install. It works on the shared folder the devices report to: no server,
-no agent, no database. What you see is the files in that folder, and everything you change is a file in that
-folder too, with a backup and a line in the change log.
+The OpenThinRDP Manager is a free program for Windows, in English and Italian, with nothing to install. It is two
+things in one window:
+
+- **A health center for your Windows infrastructure**, also without any OpenThinRDP device: Hyper-V hosts and failover
+  clusters, Remote Desktop Services, domain controllers and DNS, SQL Server AlwaysOn, the backups of the VMs and Dell
+  iDRAC. It finds what is wrong, says it in one sentence and repairs it when you confirm. No agent, no server, no
+  database; what it runs on your servers is readable. See [a health check for Hyper-V and Remote Desktop](guides/hyper-v-rds-health-check.md).
+- **The one place where you run a fleet of OpenThinRDP devices**. It works on the shared folder the devices report
+  to: what you see is the files in that folder, and everything you change is a file in that folder too, with a backup
+  and a line in the change log.
+
+Download: [its releases](https://github.com/OpenThinRdp/openthinrdp-manager/releases/latest) (or the zip in every
+release of OpenThinRDP). Free for any use, closed: [its license](https://github.com/OpenThinRdp/openthinrdp-manager/blob/main/LICENSE.md).
 
 <p align="center">
 <img src="screenshots/manager-devices.png" alt="Devices page: every device with its state, user, version and last report; the selected device with its settings" width="100%">
 </p>
 
 - [What you need](#what-you-need)
+- [Home: everything at a glance](#home-everything-at-a-glance)
 - [Devices: the whole fleet at a glance](#devices-the-whole-fleet-at-a-glance)
+- [Peripherals and inventory](#peripherals-and-inventory)
 - [Settings for all devices or one](#settings-for-all-devices-or-one)
 - [Updates: a few devices first, then all, and back when something breaks](#updates-a-few-devices-first-then-all-and-back-when-something-breaks)
 - [Remote screen](#remote-screen)
-- [History: problems across the fleet](#history-problems-across-the-fleet)
-- [Desktops, brokers and Hyper-V hosts](#desktops-brokers-and-hyper-v-hosts)
+- [Scheduled jobs](#scheduled-jobs)
+- [History: problems across the fleet, and every change](#history-problems-across-the-fleet-and-every-change)
+- [Users and desktops: sessions and experience](#users-and-desktops-sessions-and-experience)
 - [Health Center: the whole infrastructure](#health-center-the-whole-infrastructure)
 - [Vault, keys and the site key](#vault-keys-and-the-site-key)
 - [Logo, background, SSH keys, permissions](#logo-background-ssh-keys-permissions)
@@ -33,7 +45,39 @@ folder too, with a backup and a line in the change log.
   From then on it [updates itself](#the-manager-updates-itself).
 - The devices set to that folder: `MGMT_SHARE` in their settings dialog, or in the image you build.
 
-Start `OpenThinRDP-Manager.vbs` (no console window) or `OpenThinRDP-Manager.cmd -Folder \\fileserver\thinclients`.
+Start `OpenThinRDP-Manager.exe` (see [Starting it](#starting-it-and-the-command-line)). The access window is on the
+screen at once; the manager loads behind it. The first time without a folder it offers the servers alone, without
+devices: the Health Center, the desktops, the cluster and the backups work the same.
+
+The menu on the left, top to bottom: **Home**, **Devices**, **Users** (sessions and experience), **Infrastructure**
+(the Health Center), **Scheduled**, **Updates**, **History**, **Settings**. Each item opens one page; what you do
+with a device is in its page, what you do with a server is in its page, and the settings of all of it are in
+**Settings** (tabs Infrastructure, Manager, Security, Custom checks).
+
+## Home: everything at a glance
+
+**Home** is the first page: the whole fleet in cards, and one list of what to look at.
+
+<p align="center">
+<img src="screenshots/manager-home.png" alt="Home: the health of the infrastructure, the cluster, the desktops, the hardware; the devices; what to look at, the worst first; the sign-ins of today in their phases" width="100%">
+</p>
+
+- On top, when the Health Center reads the infrastructure: its health, the cluster and each host, the desktops, the
+  hardware of the iDRACs.
+- The devices: how many are on, to look at or off, the versions they run, the problems of 7 days, how many report.
+- **To look at**, the worst first: the problems of the servers, the devices in error, a required peripheral that is
+  gone, slow sign-ins and sessions with a high latency today. A click opens the item, the device or the experience.
+- **Sign-ins** of today: the median time and its three phases (the broker, the VM made ready, Windows until the
+  desktop), the latency of the sessions, dropped and frozen sessions, the slowest one.
+- **Scheduled** for today: what runs, on how many devices, how far it got.
+- The free memory of the hosts over 30 days with its forecast, the services over 30 days, the last 24 hours.
+
+The count on **Home** in the menu is how many things there are to look at, red when one is an error.
+
+The infrastructure takes about half a minute to read. Meanwhile **Home** shows the last reading of this PC at once,
+with its time on top (*Data from 13:36, the last this PC read: being updated...*), and changes by itself when the new
+one comes. The last readings are kept in your profile on this PC (`%LOCALAPPDATA%\OpenThinRDP`), never on the share,
+and not shown when older than 3 days.
 
 ## Devices: the whole fleet at a glance
 
@@ -49,8 +93,25 @@ screen**, **Logo and background...**, **Software version...**. Under it:
 |---|---|
 | Settings | every setting: the value in use on the device, where it comes from, and the value you set for it |
 | Summary | a readable report: session, transport in use (UDP or TCP), network and Wi-Fi, software and FreeRDP, the version it installs, security updates, management, secrets, uptime |
+| Inventory | model, serial number, BIOS, addresses and version as the device reports them, and the fields you write: place, inventory number, installation date, notes |
+| Peripherals | what is connected now, by kind (printer, scale or serial instrument, card reader, webcam, keyboard...), and which ones are required |
 | Events | the event log of the device: sessions, drops with their cause, updates, settings applied or rejected |
 | Full report | the status file as the device wrote it |
+
+**Export...** over the list writes every device with its state, addresses, hardware, peripherals and inventory to a
+CSV file Excel opens as a table (UTF-8, the list separator of your PC). **Manage groups... > Rules...** places the
+new devices by themselves: a device that is in no group goes to the group of the first rule it matches, by its
+network (`192.168.5.0/24`), its name (`CASSA*`) or its model (`*OptiPlex 3000*`). A device you moved by hand stays
+where it is. The rules are applied by the manager of an administrator, and each move goes to the change log.
+
+## Peripherals and inventory
+
+Each device reports its USB peripherals by kind, and its model, serial number and BIOS (0.2.23 and later). On the
+**Peripherals** tab of a device, select one and choose **Required here** or **Required on the group**: from then on, a
+device that does not have it connected is on Home and in the notices ("TM-T88V not connected"). The required
+peripherals are kept in `health\peripherals.json` of the folder, the fields of the inventory in
+`health\inventory.json`: every manager sees the same.
+
 
 <p align="center">
 <img src="screenshots/manager-pilot.png" alt="A pilot device: the list marks it (pilot), its summary says it installs the newest version" width="100%">
@@ -101,6 +162,26 @@ Everything here is one setting, `UPDATE_TO`, written for you in the right file:
 A device installs a version also when it is **older** than its own, FreeRDP included, and installs nothing newer
 until the setting changes. As always, an update never interrupts a session: it is installed in the background and
 applied when the session is over.
+
+**Hours of the updates** (`UPDATE_HOURS`, e.g. `02-05`, also across midnight: `22-06`): the devices download a new
+version when it comes, and install it only in those hours. A scheduled job *Install updates* installs at once.
+
+## Scheduled jobs
+
+**Scheduled** lists what the devices do at a time: **restart**, **switch off**, show a **message**, **install
+updates**; once, every day or on some days of the week; for all devices, groups or single devices. The devices run
+them by themselves, with the manager closed too (`config\jobs.conf`, signed with the site key as the settings are;
+read within 5 minutes). For each job the page shows the next time and, for the last one, what each device did:
+done, waiting for the session to end, not done because the session stayed open for 3 hours, cancelled by its
+user, off at the time, or no answer.
+
+<p align="center">
+<img src="screenshots/manager-jobs.png" alt="Scheduled: a night restart, a closing message for the shop, the updates on Sunday; each with its next time and what the devices did the last time" width="100%">
+</p>
+
+A restart or a power off waits while a remote session is open (at most 3 hours), unless the job says *also with a
+session open*: then the user sees a 60 s warning and can cancel it. A device that was off at the time does not do it
+later. **Schedule...** in the power menu of a device opens a new job for it.
 
 ### Try a new version on a few devices
 
@@ -161,9 +242,11 @@ user sees, or to sign in once to a web page on a screen with no keyboard.
 It goes **through SSH only**, with the key of the manager's vault and a one-time password: nothing new listens on
 the network, and nothing is installed on your PC. The device shows *Remote assistance active* while it lasts and
 records it in its events; it ends when you close the small window, or by itself after 2 hours. `REMOTE_SCREEN=off`
-turns it off. How it works: [management.md](management.md#remote-screen).
+turns it off. With `REMOTE_CONSENT=ask` the device first asks its user, at the top of the screen and over the session
+too; without *Allow* within a minute it does not start, and the manager says so. How it works:
+[management.md](management.md#remote-screen).
 
-## History: problems across the fleet
+## History: problems across the fleet, and every change
 
 The **History** page reads the event logs of every device together, for today, 24 hours, 7 or 30 days, and groups
 what went wrong: failed sign-ins (by broker), desktops that did not start, sessions dropped (by cause), sessions
@@ -172,15 +255,30 @@ which users, first and last time. A line is orange when 3 or more devices had th
 server or the network, not at a device. "Six devices could not reach the broker this morning" is one line instead
 of six logs.
 
-## Desktops: the Distribution view of the Health Center
+The tab **Changes** is the change log of the managers (`config\changes.log`): who changed what and when, newest first,
+searchable, with **Export...**.
 
+## Users and desktops: sessions and experience
+
+**Users** in the menu has two tabs. **Experience** says how the users live the fleet: how long each sign-in takes,
+split into its phases (the broker, the VM made ready, often started; Windows until the desktop), and how the sessions
+go (the latency to the VM, the bandwidth, drops and frozen sessions). Today in four figures, the median sign-in of
+the last 30 days against the limit, the slowest sign-ins of today, each user over 30 days. The devices measure it
+(0.2.23 and later), the manager keeps it 40 days in `health\experience\`. Over the limits (*Settings >
+Infrastructure > Experience of the users*, 60 s and 50 ms by default) a sign-in or a session is on Home and in the
+notices.
+
+<p align="center">
+<img src="screenshots/manager-experience.png" alt="Experience: today in four figures, the median sign-in of 30 days against the limit of 60 s, the slowest sign-ins of today in their phases" width="100%">
+</p>
+
+**Sessions** is who works where:
 When a user cannot sign in, the cause is often on the Windows side: a broker that fails every request, a host whose
 RDVH agent is stuck, a desktop that is saved or off, a session left disconnected. The desktops are part of the
 **Health Center**: *who cannot sign in now* opens its headline, each personal desktop (VM) in its tree shows the user,
 the Windows session, the last sign-in and the thin client, with the actions on the session (*Shadow*, *Message*,
-*Disconnect*, *Log off*) and *Personal desktop of the user*. The button **Distribution** on top of the Health Center
-shows the whole deployment as one table, searchable: user, device, desktop, host, state of the VM, session, last
-sign-in (**Health Center** goes back to the tree). It works with Remote Desktop Services and Hyper-V (personal
+*Disconnect*, *Log off*) and *Personal desktop of the user*. **Users > Sessions** shows the whole deployment as one
+table, searchable: user, device, desktop, host, state of the VM, session, last sign-in. It works with Remote Desktop Services and Hyper-V (personal
 desktops, and session hosts when there are some).
 
 <p align="center">
@@ -245,22 +343,22 @@ well it is one green line, *Brokers and hosts: all OK*. A right click on a broke
   nodes. **Settings...** on the page (kept for your account on your PC, not in the folder): the **AD group of the
   brokers** (the hosts give their permissions to it, never to single computers), more brokers or hosts if they are not
   found, or the page turned off.
-- How it reads them, and why not the RemoteDesktop cmdlets (blind on any server but the active management server): the
-  comments at the top of `management/windows/OtrVdi.ps1`.
+- How it reads them, and why not the RemoteDesktop cmdlets (blind on any server but the active management server):
+  `commands\vdi-probe.ps1` of the manager, readable.
 
 ### Broker self-repair
 
 A broker can start failing every sign-in after it leaves and joins the farm again: it presents itself without the `$`,
 falls back to NTLM, and every request ends with *access denied* (event 804, `0x80070005`) until its services start
-again. `management/windows/rds/Broker-SelfRepair.ps1` does that by itself, as a scheduled task started by the event
+again. `rds\Broker-SelfRepair.ps1` of the manager does that by itself, as a scheduled task started by the event
 of that fault, at most once every 15 minutes. *Install the broker self-repair* on a broker of the Health Center installs or updates it; by hand:
 `Install-BrokerSelfRepair.ps1 -Broker rdcb1.example.com, rdcb2.example.com` (`-Remove` takes it away). A broker that
 already has a self-repair task of its own is left as it is.
 
 ## Health Center: the whole infrastructure
 
-The Distribution answers "who works where, and who cannot sign in". The **Health Center** looks one
-step further, at what all of it stands on: the Hyper-V hosts and their failover cluster, the storage, the VMs, the
+The sessions answer "who works where, and who cannot sign in". The **Health Center** (**Infrastructure** in the
+menu) looks one step further, at what all of it stands on: the Hyper-V hosts and their failover cluster, the storage, the VMs, the
 domain controllers, DNS, an SQL AlwaysOn group, the NAS or the witness, the backups. One page instead of Failover
 Cluster Manager, Hyper-V Manager, Server Manager, SQL Server Management Studio and the event logs.
 
@@ -311,7 +409,8 @@ The **Mode** on top is for the page; **This item** on the right changes one item
 its hosts, the domain and its DCs). In *Diagnosis only* nothing is changed without a click and a confirmation. In
 *Diagnosis and repair* the **safe** repairs of the items in that mode run by themselves after each reading, one after
 the other, and each goes into `config\changes.log` (`health: automatic repair: ...: done`); the headline says what was
-repaired last. A repair that was tried waits 30 minutes before it is tried again.
+repaired last. A repair that was tried waits 30 minutes before it is tried again. Turning repair mode on, for the page
+or for an item, first lists what it would repair right now, with *No* as the default.
 
 | Safe: runs by itself in repair mode | Always asks |
 |---|---|
@@ -355,9 +454,197 @@ the first time. Servers given by IP address need WinRM over HTTPS or the address
 
 The settings of the desktops (collections, the group of the brokers) are in the same tab, *Desktops (brokers)*.
 
+### Notices, and the Health Center without the window
+
+*Settings > Health Center > Notices*: when the problems change, a message with what came and what went to a webhook (or, ticked, structured JSON)
+(an incoming webhook of Teams or Slack, anything that takes `{"text": ...}`) and/or a mail through an SMTP relay
+without a password. The last state is kept on the PC (`%LOCALAPPDATA%\OpenThinRDP\health-notice.txt`): the window and
+a scheduled run on the same PC do not repeat each other.
+
+`OpenThinRDP-Manager.exe -HealthReport -Json C:\otr\health.json` reads the infrastructure once with the settings of
+your account and writes the problems as JSON: the time, the state, the counts, each problem with its check, where,
+title and text, and the devices with problems in the last 7 days. The exit code is 0 = good, 1 = warnings,
+2 = errors, 3 = the reading failed: for Task Scheduler, Zabbix or Prometheus. The notices go from there too. Custom
+checks need the vault (their signature), so they wait for the window. **Export...** on top of the page writes the
+servers with their state to a CSV file.
+
+**Status page** (*Settings > Infrastructure*): an HTML file with the state of everything, for a phone. Choose where
+(a folder that IIS or another web server publishes); the window writes it every 5 minutes and `-HealthReport` at
+each run. It holds no script and nothing from outside, refreshes itself every 5 minutes, and says what to look at
+first, the devices on, the sign-ins and the servers.
+
+### The summary and the page of an item
+
+The summary of the infrastructure is on **Home**, in cards: the overall health (a ring of the
+checks good, to look at and wrong), the cluster with each host (its memory, its VMs, whether it is in maintenance),
+the witness and whether the cluster holds if a node fails; the desktops (in session, disconnected, who cannot sign
+in); the hardware of the iDRACs; the free memory of the hosts over 30 days with its forecast and the line under which
+the VMs of a failed node no longer fit, and how many more desktops like the others there is room for; what to look
+at, the worst first (a click opens it); the services over 30 days, one block a day; the last 24 hours of every part,
+one box an hour. Each item of the tree opens with its path, its state, its actions on top, then **Overview** (tiles with
+its memory, processors, disk, power, each with its trend) and its checks, or **Activity**: what was done on it, from
+`config\changes.log`. A filter over the tree finds an item by its name.
+
+### Maintenance
+
+*Maintenance...* on any item: until the time given, its problems and those of what is under it stay in sight, grey,
+but they send no notice and nothing is repaired by itself; at that time it is back by itself. Kept in the management
+folder (`health\maintenance.json`), so every administrator and the run without the window see it.
+
+### History and forecast
+
+Each reading leaves one line in `health\history` of the management folder (at most every 10 minutes, 40 days): the
+free memory, disks, shared volumes, the services and the power of the hosts. From the last two weeks the Health
+Center says when a disk, a shared volume or the memory of a host will be full (*Running out*, within
+*Warn when full within (days)*, 30 by default). The charts of the summary come from there: a new installation shows
+*Collecting* for its first days.
+
+### Services, as their users reach them
+
+*Settings > Health Center > Services*: a web address (`https://...`, with a text the page must contain), a TCP port
+(`host:port`) or a database (`sql://server/database`, it connects and runs `SELECT 1`), read from this PC: *Not
+answering*, *Wrong page*, *Slow* (over *Service slow over (ms)*, 3000 by default) and the certificate that expires
+within 30 days (an error within 7).
+
+### Hardware (Redfish: iDRAC, iLO, XClarity)
+
+*Settings > Health Center > Hyper-V*: the controller of each host (Dell iDRAC, HPE iLO, Lenovo XClarity, Supermicro:
+anything that speaks Redfish); *Settings > Manager > Accounts*: one account, read only is enough, kept in the vault. The Health Center reads the power supplies and their redundancy,
+the fans, the temperatures, memory, processors and storage, and the power drawn. The certificate of an iDRAC is trusted
+the first time it answers and only that one after: another one refuses the connection before the password is sent.
+Without the vault open the hardware is not read, and the host says so.
+
+### Certificates and the enterprise CA
+
+Every server the Health Center reads shows its certificates on its page: for whom, issued by whom, until when, what
+uses them (RDP, HTTPS of IIS, RD Gateway, SQL Server, WinRM over HTTPS, LDAPS on a domain controller) and whether they
+renew by themselves (a template of the CA with auto-enrolment on). A certificate in use warns 30 days before it
+expires and is an error in its last week; a renewal left behind is not counted. The domain shows its enterprise CAs,
+until when they are valid, and their revocation list: a list past its next update makes every certificate of the CA
+fail where revocation is checked.
+
+The Health Center also asks every broker and every running Windows desktop for the certificate it presents on RDP,
+without signing in: whether it comes from a CA this PC trusts and is for its name.
+
+**Settings > Security > Enterprise CA**:
+
+- *Request the signing certificate*: a code signing certificate from a template of your CA, into your personal store;
+  the manager signs its launcher with it now, after every update, and when the CA renews it (it follows the new one).
+  AppLocker and WDAC can then allow the manager by its publisher.
+- *Send the CA to the devices*: the certificates of the CAs of your forest go to `config\ca` of the management folder,
+  signed as the settings; the devices (0.2.23 and later) add them to the CAs they trust at their next report.
+- *RDP certificates of the VMs*: the way of Microsoft, each step shown before it is done. You choose the template: one
+  your CA issues already and fits (Server Authentication, the name from Active Directory, the computers of the domain
+  may enroll; *Computer* first, so nothing new is made in Active Directory), or the template `OpenThinRDP-RDP` the
+  manager creates and publishes on your CA. Then it sets *Server authentication certificate template* in the GPO of
+  the desktops you choose (on the PDC emulator, over WinRM). Every VM gets its certificate at its next policy refresh,
+  uses it for RDP and renews it by itself. It needs an administrator of the GPO (and of the enterprise to create a
+  template).
+- *Bind the RDP certificates*: Windows desktops receive the certificate by auto-enrolment but keep their own
+  self-signed one for RDP. On every desktop not ready the manager binds the certificate of the CA to its RDP (over
+  WinRM, `commands\rdp-bind.ps1`); again after a renewal, when the Health Center shows it not ready.
+- *RDP_CERT=verify*: on the groups you choose (the pilot ones first), on every device, or back to what it was; it says
+  which servers are not ready before.
+- What it says: the CA, the signing certificate, whether the devices have the CA, and how many RDP servers are ready
+  for `RDP_CERT=verify` (with the ones that are not, and why: a self-signed certificate, an unknown CA, another name).
+  When all are ready, `RDP_CERT=verify` in the common settings: a device then never connects to a server that cannot
+  prove who it is. For the desktops, the GPO *Server authentication certificate template* (Remote Desktop Services >
+  Remote Desktop Session Host > Security) with a template of your CA.
+
+### Other platforms: Proxmox VE, VMware vSphere, Veeam, Citrix
+
+New in 0.2.23, each an area of *Settings > Health Center* with its own list, and a group of the tree:
+
+| Platform | How it is read | What it checks |
+|---|---|---|
+| Proxmox VE | its API, port 8006, an API token with the role PVEAuditor | quorum, nodes, memory, storage, HA resources, failed tasks (backups included), failing disks |
+| VMware vSphere | the REST API of vCenter (7, 8; 6.7 too), a read-only account | the health of the appliance, hosts disconnected or off, full datastores |
+| Veeam Backup & Replication | its REST API, port 9419 (11, 12), an account with the role Veeam Backup Viewer | failed jobs, jobs that stopped running, repositories almost full or offline |
+| Citrix Virtual Apps and Desktops | its PowerShell on a Delivery Controller, over WinRM | controllers, unregistered machines, groups without free desktops, licenses in grace period |
+
+The accounts of Proxmox, vCenter and Veeam are kept in the vault (*Settings > Manager > Accounts*); the certificate of
+each is trusted the first time it answers and only that one after. Nothing is changed on them: read only. These four
+were built against their documented APIs; if you run one of them, [tell us how it reads](https://github.com/OpenThinRdp/openthinrdp-manager/issues).
+
+### Leftovers
+
+What points to something that is gone: the **planned VMs** a live migration or an import left on a host (*Remove the
+planned VMs*, refused while a migration runs there; the real VMs are not touched), the **virtual disks** on the
+shared volumes that no VM uses (only when every host of the cluster was read; nothing is deleted), the **computers**
+of the domain not seen for 90 days.
+
+### The baseline
+
+The settings that break things when they change with nobody touching them: the drain on shutdown, the quorum and the
+witness of a cluster; the time source and the enhanced session of a host; the stop and offline actions, memory,
+vTPM and clustering of each VM; the time source and the DNS order of a domain controller. The first reading takes them
+as they are (`health\baseline.json`); a value that changes is *Changed*, with before and now: **Put it back** (the
+offline action, the stop action, the drain on shutdown, the enhanced session) or **Approve as it is**.
+
+### Custom commands
+
+*Settings > Health Center > Custom commands*: your own actions in the **Commands** menu of the items they are for
+(hosts, DCs, brokers, SQL, servers, VMs, or names): a script run on the server of the item with your rights (it may
+ask one question first, the answer in `$Param`; what it writes is shown), or a **guide** that is only shown (`{name}`
+= the name of the item). Each says who may run it (operator or admin). Kept in `config\health-commands`, signed with
+the key of the site like the custom checks (changed after = it does not run), never through JEA.
+
+### Backup of the VMs
+
+*Back up the VMs...* on a cluster or a host: all the VMs or some, onto a share (`\\server\share`) that the computer
+accounts of the hosts may write. Every host copies its own VMs where they are, none is moved, in a task of its own
+(the copy goes on with the window closed): without their memory first (each VM stops for about a second, a session
+sees *Connection lost* and comes back), with it when that fails. With them: the settings of the VMs, the certificates
+of their vTPM (the password you give is written next to them: whoever has the share has the disks in clear anyway),
+and `README-RESTORE.txt` with the four traps of a restore. *Logs of the backup* shows how far it got. A Linux VM
+cannot give a copy consistent for its applications (no VSS inside): it is copied with its memory, and the log says
+so; before starting it from that copy, `Remove-VMSavedState`.
+
+### The witness and the FSMO roles
+
+A file share witness that is not online says why, read from this PC: the server does not answer on SMB, the share is
+not there, the account of the cluster is refused, or the logon (1326); a drained node is not shut down while its
+witness is not online. On the domain, *FSMO roles: what to do* shows who holds them and the commands to move them, or
+to take them when their owner is lost for good, with what to do after.
+
+### Without administrator rights on the servers (JEA)
+
+By default the Health Center and the Desktops reach the servers over WinRM with your own account, which must be an
+administrator of each. *Settings > Health Center > JEA* makes an endpoint called `OpenThinRDP` instead
+([Just Enough Administration](https://learn.microsoft.com/powershell/scripting/security/remoting/jea/overview)):
+it runs only the readings and actions of this manager, copied into it and named by the fingerprint of their text, as
+a virtual account of the server. Two roles, for accounts or groups of the domain:
+
+| Role | What it may do |
+|---|---|
+| **Operators** | the readings, and the safe repairs with their arguments checked: starting the services each role needs (not a disabled one), unblocking the agent of a host or the services of a broker, the broker tickets, the time, the witness online, the local groups 576/577/578 for computer accounts or the group of the brokers only |
+| **Admins** | every action of the manager: restarts, drain, quorum, SQL failover, checkpoints... |
+
+An account in both lists is admin. *Register on the checked* copies the endpoint to the servers checked (with your
+rights, once) and restarts WinRM on each 15 seconds later: whatever uses WinRM there drops for a few seconds, so do
+it out of hours. Then tick *The Health Center and the Desktops use the endpoint*. After a manager update that changed
+its readings or actions, register it again: until then the servers answer that they do not know the action.
+
+Never through the endpoint: the **custom checks** (they run any text, they wait), **LAPS** (on a domain controller the
+virtual account is a Domain Admin, so anyone allowed in would read every password: LAPS keeps the rights of your
+account) and the **actions inside the VMs** (log off, messages: the VMs have no endpoint). On a domain controller
+the endpoint runs as a Domain Admin too: the roles above are what keeps it narrow. Every session is recorded in
+`C:\ProgramData\OpenThinRDP\JeaTranscripts` on the server.
+
+**A check that is wrong**: right-click it, *Report a false positive*. The check and what it said, with the names of
+your servers, the domain, your user and the addresses replaced (`host1`, `dc1`, `domain`, `ip`), are shown to read and
+change; *Open on GitHub* puts them in a new issue, which you still send yourself.
+
 ### Custom checks
 
-**Settings > Custom checks** adds your own checks, shown in the tree like the others, on the server they ran on:
+**Settings > Custom checks** adds your own checks, shown in the tree like the others, on the server they ran on.
+
+**Signed.** A custom check runs on the servers with administrator rights, so whoever could change its scripts in
+the folder could run anything there. With a site key in the vault, a check runs only once an administrator signed it:
+saving it here signs it, and *Sign* signs one after you read its scripts. A script changed in the folder after the
+signature does not run, and the Health Center says which. The signature is checked with the key in the vault, never
+with a file of the folder; with the vault closed none runs. A manager without a site key runs them unsigned and says
+so.
 
 <p align="center">
 <img src="screenshots/manager-settings-custom.png" alt="Settings, Custom checks: the list with where each check runs, how often, how its repair runs, and the buttons New check, Change, Open folder, Delete" width="100%">
@@ -397,10 +684,36 @@ Which check of the original runbook script is where: [health-center-coverage.md]
 The manager runs as an account that administers the servers, with **WinRM** (5985) to the hosts, DCs, brokers and SQL
 replicas, NTP (UDP 123) from them to the PDC emulator, and a login on every SQL replica (Windows authentication). The
 probe only reads: `Get-*` commands, `repadmin /showrepl`, `w32tm /query`, `SELECT` on SQL; how it reads and why:
-the comments at the top of `management/windows/OtrHealth.ps1`. Without rights on a server the item says so in one
+`commands\health-probe.ps1` of the manager, readable, as every command it runs on servers (`commands\`, `rds\`).
+Without rights on a server the item says so in one
 sentence and the rest goes on.
 
+## Access by account and levels
+
+*Settings > Manager > Access* replaces the one code for everybody with one access per person or group:
+
+- **A user or a group of the domain**: its members open the manager with their Windows account, nothing to type
+  (DPAPI-NG: the domain unlocks the vault for them, on any PC of the domain).
+- **An account of the manager**: a name and a password, for someone outside the domain.
+- **The emergency code**: the access code of before, kept as an administrator access for when the domain does not
+  answer. Keep it offline.
+
+Each access has a **level**: *Administrator* (everything), *Operator* (commands to the devices, their remote screen,
+the actions on desktops; no settings, no releases, no vault), *Read only* (sees everything, changes nothing). The
+levels are inside the encrypted vault, so whoever can write the file cannot raise their own. Removing an access gives
+the content a new key: a copy of the old access opens nothing that comes after (the domain accesses follow by
+themselves, the accounts of the manager get a new password then). `config\changes.log` names the Windows user and,
+for an account of the manager, that account.
+
+**Rights on the folder** sets them on the management folder for the domain accesses: administrators may change
+`config\`, `updates\` and `diag\`, the others read. Rights from other groups stay as they are: a level is real only
+when nobody below *Administrator* can write `config\` some other way.
+
 ## Vault, keys and the site key
+
+All of this is in **Settings > Security**, with who opens the manager and at which level. The access window at the
+start opens the vault: once in, it stays open. **Lock** in the top bar closes it and asks for the access again,
+for when you leave the PC; with Windows accounts locking Windows does that, and the button is not there.
 
 Two keys rule the fleet: the SSH key that opens the screen of any device, and the key that signs the update packages
 every device installs. The manager keeps both in `vault.otr`, next to it, encrypted with an **access code** that only
@@ -452,6 +765,24 @@ Update the copy the administrators start (on a share, from a PC that can write t
 the new version. The **Updates** page shows the manager's version and has **Check again**. Details:
 [management.md](management.md#the-manager-updates-itself).
 
+### Files as the release signed them
+
+Whoever can write in the folder of the manager could change it to work on your servers with your credentials. From
+0.2.23 the manager of a release carries `MANIFEST.txt`, the SHA-256 of each of its files, signed with the project
+key. The launcher (`OpenThinRDP-Manager.exe`) checks it before anything of the manager runs: a file changed or
+missing, or a script, C# source, language file or library added next to them, and the manager does not start, with
+the list of those files. The key is the one written in the launcher, not just any key in the folder.
+
+- A copy without `MANIFEST.txt` (a development copy, a manager you built without the project key) starts as before,
+  unless this PC already opened it signed: taking `MANIFEST.txt` away does not turn the check off. If that is wanted,
+  the message names the file to delete in your profile.
+- An update brings the new `MANIFEST.txt`, and moves to `previous\` the code the new release no longer has.
+- The launchers are built again only from signed files.
+- The check covers the starts through the launcher. Who can write in the folder can still change the launcher on the
+  share itself: start the manager from the copy `OpenThinRDP-Manager.exe -Install` puts on each PC (on its own disk).
+- The manager itself is sealed in `OpenThinRDP-Manager.core` and runs from memory; what it runs on your servers is in
+  `commands\` and `rds\`, readable, and checked against `MANIFEST.txt` before it is loaded.
+
 ## Power and commands of a device
 
 **Power and commands** in the header of a device:
@@ -464,6 +795,10 @@ the new version. The **Updates** page shows the manager's version and has **Chec
   shows its output and exit code (`sudo` in front for root). Every action goes to the change log.
 
 ## Settings > Manager: language and local copy
+
+- **Code signing**: where only signed programs run (AppLocker, WDAC), *Sign the manager* signs its launcher with a code
+  signing certificate of yours (Current user > Personal, from the CA of the site), again after every update. The
+  manager does not run from script files, so AllSigned does not stop it.
 
 - **Management folder > Name it in the domain** (#82): writes `<account>=<folder>` into
   `\\<domain>\NETLOGON\OpenThinRDP\folders.conf`, for the account of the devices (`MGMT_USER` of the common
@@ -487,14 +822,21 @@ the new version. The **Updates** page shows the manager's version and has **Chec
 
 ## Starting it, and the command line
 
-- `OpenThinRDP-Manager.vbs` starts it without a console window; `build-launcher.ps1` makes an `.exe` with the
-  OpenThinRDP icon to pin to the taskbar, and with `-Install` a shortcut on each PC that starts the copy on the share
-  ([details](management.md#central-settings)).
-- `OpenThinRDP-Manager.cmd -Folder \\fileserver\thinclients -Language en|it`: the folder and the language (by default
+- `OpenThinRDP-Manager.exe` starts it: the access window at once, the manager loading behind it.
+  `OpenThinRDP-Manager.exe -Install [-Name <name>] [-Folder <folder>] [-Language en|it]` puts a copy on this PC with a
+  shortcut on the desktop, that starts the manager on the share ([details](management.md#central-settings)). An
+  update brings a newer launcher in place of the older ones by itself; the `.cmd` and `.vbs` of the releases before
+  0.2.23 go.
+- `OpenThinRDP-Manager.exe -Folder \\fileserver\thinclients -Language en|it`: the folder and the language (by default
   the Windows display language).
-- `OpenThinRDP-Manager.cmd -Sign <folder>\LATEST.txt`: signs an update package you built with `make-update.sh`, with
+- `OpenThinRDP-Manager.exe -Sign <folder>\LATEST.txt`: signs an update package you built with `make-update.sh`, with
   the key in the vault ([Signed updates](management.md#signed-updates)).
-- `OpenThinRDP-Manager.cmd -UpdateManager`: updates the manager without a window (exit code 0 = updated, 1 = error,
+- `OpenThinRDP-Manager.exe -UpdateManager`: updates the manager without a window (exit code 0 = updated, 1 = error,
   2 = nothing to do).
+- `OpenThinRDP-Manager.exe -HealthReport -Json <file>`: the Health Center once, without a window
+  ([details](#notices-and-the-health-center-without-the-window)). With these three the launcher waits for the manager
+  and gives back its exit code and its output, for Task Scheduler and scripts.
+- The manager is free for any use, closed, under [its own license](https://github.com/OpenThinRdp/openthinrdp-manager/blob/main/LICENSE.md); its releases and issues
+  are on [its project](https://github.com/OpenThinRdp/openthinrdp-manager).
 
 What is in the folder, file by file, and how the devices use it: [management.md](management.md).

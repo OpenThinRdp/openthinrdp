@@ -47,8 +47,8 @@ keyboard is untrusted and that the management folder is readable by the devices 
 - **Remote screen only through SSH.** x11vnc and the viewer's WebSocket bridge listen on 127.0.0.1 only, run as the
   account that owns the screen (not root), start only when an administrator asks over SSH (`otradmin`, key login)
   and need a one-time password. While the remote screen is on, the device says so on its screen and its event log
-  records start and end; it stops by itself after 2 hours. `REMOTE_SCREEN=off` turns it off
-  ([management.md](management.md#remote-screen)).
+  records start and end; it stops by itself after 2 hours. `REMOTE_SCREEN=off` turns it off, `REMOTE_CONSENT=ask`
+  makes it wait for a yes from the user of the device ([management.md](management.md#remote-screen)).
 
 ## Known limits
 

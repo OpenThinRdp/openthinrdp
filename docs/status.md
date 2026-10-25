@@ -8,8 +8,8 @@ Is it ready for your production? Area by area, with the evidence and what is sti
 
 ## The production fleet
 
-- **14 Dell OptiPlex 3000 Thin Clients** (BIOS 1.19 to 1.37) in offices, at the tills, in a laboratory and at
-  weighing stations: 13 wired, one on **Wi-Fi** (a wall screen that shows a web page all day).
+- **15 Dell OptiPlex 3000 Thin Clients** (BIOS 1.19 to 1.37) in offices, at the tills, in a laboratory and at
+  weighing stations: 14 wired, one on **Wi-Fi** (a wall screen that shows a web page all day).
 - **Windows 11 VDI on Hyper-V**: personal desktops behind two RD Connection Brokers (DNS round robin), plus a
   handful of session hosts.
 - Every device was **converted in place** from the system it ran before, by an update package, with its settings
@@ -58,16 +58,50 @@ production fleet does not use them, so test them in your environment first:
 - **Raspberry Pi 4** (arm64), experimental: an SD card image
   ([pre-release](https://github.com/OpenThinRdp/openthinrdp/releases/tag/rpi-test-1)), tested only in QEMU arm64
   emulation, not yet on a real board ([what to check](arm.md)).
+- **New in 0.2.23**, in the tests of the manager and of the device, not yet a month in the fleet:
+  - the vault opened by the Windows account, with levels (read, operator, admin) for each account or group
+    ([manager.md](manager.md#access-by-account-and-levels));
+  - signed central configuration (`CONFIG_SIGNED=required`, [management.md](management.md#signed-configuration));
+  - the manager's scripts signed with your code signing certificate, and signed custom checks;
+  - the Health Center without the window (`-HealthReport -Json`), its notices by webhook or mail, the list of what
+    repair mode would do before it goes on, and *Report a false positive*;
+  - the user of the device asked before the remote screen (`REMOTE_CONSENT=ask`);
+  - a new look of the whole manager and a menu in a new order: Home first (everything at a glance, one list of what
+    to look at), Users with the experience (sign-in times in their phases, latency of the sessions, 30 days), the
+    scheduled jobs the devices run by themselves, the peripherals and the inventory of each device with the export to
+    CSV, rules that place new devices in groups, a status page for a phone, the hours of the updates, the change log
+    in History, the vault in Settings > Security with *Lock*;
+  - maintenance, notices of what came and went, history and forecast, services, iDRAC, leftovers, the baseline, custom commands, the backup of the VMs;
+  - the JEA endpoint for the Health Center and the Desktops, in the tests only: not yet registered on a real server
+    ([manager.md](manager.md#without-administrator-rights-on-the-servers-jea)).
 
 ## Not available yet
 
-- Citrix, VMware/Omnissa Horizon or any protocol other than RDP.
-- Azure Virtual Desktop and Windows 365 (Microsoft Entra ID sign-in and Microsoft's gateway).
-- The Raspberry Pi 5 and other ARM devices.
-- Network boot (PXE).
-- Disk encryption, signed central configuration.
+- **Network boot (PXE)**: planned.
+
+- **The Raspberry Pi 4 and 5**: the image exists and runs in QEMU, not tested on a real board yet.
+- **Azure Virtual Desktop and Windows 365**: not planned for now; they need Microsoft Entra ID sign-in and
+  Microsoft's gateway, which the kiosk does not do. An RDS deployment or Windows VMs in Azure work through an RD
+  Gateway or a VPN.
+- **Citrix, VMware/Omnissa Horizon** or any protocol other than RDP: out of scope.
+- Disk encryption.
 
 Tell us what you need first in the [discussions](https://github.com/OpenThinRdp/openthinrdp/discussions).
+
+## Tested setups (23 October 2026)
+
+Known sites: **1 in production** (the fleet above), **1 testing** (Netherlands, HP and Intel NUC devices).
+
+| Part | Tested |
+|---|---|
+| Hosts | Windows Server 2025 Datacenter, Hyper-V failover cluster of 2 nodes with Storage Spaces Direct |
+| Brokers | 2 RD Connection Brokers, Windows Server 2025, high availability with the database on SQL Server AlwaysOn |
+| Gateway | RD Gateway, Windows Server 2025 |
+| Desktops | Windows 11 Enterprise 26H2, personal desktops (VDI); session hosts |
+| Domain | Active Directory, domain controllers on Windows Server 2025 |
+| Manager | Windows Server 2025 and Windows 11, Windows PowerShell 5.1 |
+
+Other versions should work: tell us what you run.
 
 ## Tested hardware
 
@@ -75,6 +109,8 @@ Tell us what you need first in the [discussions](https://github.com/OpenThinRdp/
 |---|---|
 | Dell OptiPlex 3000 Thin Client | production (14 devices, one of them on its built-in Wi-Fi) |
 | QEMU/KVM, UEFI with Secure Boot | tested at every release |
+| HP t520 Flexible Thin Client, Intel NUC | used by a second organisation, in testing (October 2026) |
+| Raspberry Pi 4 (arm64) | QEMU only |
 
 Other x86-64 PCs and thin clients with UEFI should work: reports in the
 [discussions](https://github.com/OpenThinRdp/openthinrdp/discussions) are very welcome.

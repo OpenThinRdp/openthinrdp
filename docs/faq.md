@@ -11,7 +11,8 @@ shared folder.
 
 ### Is it free?
 
-Yes. GPLv3 licence, no cost per device, no subscription, no account. The ISO and the signed updates are on
+Yes. The client is under the GPLv3 and the [Windows manager](https://github.com/OpenThinRdp/openthinrdp-manager) is free for any use (closed, with the commands it
+runs on your servers readable): no cost per device, no subscription, no account. The ISO and the signed updates are on
 [GitHub](https://github.com/OpenThinRdp/openthinrdp/releases/latest).
 
 ### Is it not too young to use in production?

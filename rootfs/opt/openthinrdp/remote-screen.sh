@@ -4,6 +4,7 @@
 #   start   x11vnc on the X display (127.0.0.1:5900, one-time password) and the noVNC viewer with its WebSocket
 #           bridge (127.0.0.1:6080, vncbridge.py), in the unit otr-remote-screen; prints PORT=6080 and PASSWORD=...
 #           Stops by itself after 2 hours. While it is on, the screen says so and the event log records it.
+#           REMOTE_CONSENT=ask: first a question on the screen; without a yes within a minute, ERROR=REFUSED.
 #   stop    off
 #   status  on or off
 #   run     what the unit runs; cleanup  what systemd runs after it
@@ -18,6 +19,14 @@ case "$1" in
     [ "$(cfg REMOTE_SCREEN)" = off ] && { echo "ERROR=the remote screen is off on this device (REMOTE_SCREEN=off)"; exit 3; }
     command -v x11vnc >/dev/null || { echo "ERROR=x11vnc is not installed (the next update installs it)"; exit 4; }
     pgrep -x Xorg >/dev/null || { echo "ERROR=no screen running"; exit 5; }
+    # the user of the device first: no answer, a refusal or a question that could not be shown = no
+    if [ "$(cfg REMOTE_CONSENT)" = ask ]; then
+      runuser -u "$OTR_KIOSK_USER" -- env DISPLAY=:0 python3 "$OTR/ui.py" ask --heading="$L_REMOTE_ASK_T" --text="$L_REMOTE_ASK" \
+        --button="$L_REMOTE_ASK_NO:11" --button="$L_REMOTE_ASK_YES:0" --primary=0 --timeout=60 >/dev/null 2>&1
+      a=$?
+      [ $a = 0 ] || { ev "remote screen: not allowed by the user of the device ($([ $a = 70 ] && echo 'no answer' || echo 'refused'))"; echo "ERROR=REFUSED"; exit 8; }
+      ev "remote screen: allowed by the user of the device"
+    fi
     systemctl stop $U.service >/dev/null 2>&1
     # VNC authentication uses 8 characters at most
     PW=$(tr -dc 'A-HJ-NP-Za-km-z2-9' < /dev/urandom | head -c 8)

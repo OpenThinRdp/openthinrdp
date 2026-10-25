@@ -82,6 +82,21 @@ HOME=${HOME:-/root} xfreerdp3 --buildconfig 2>/dev/null | grep -q 'WITH_RDPEUDP=
   echo "MONITORS=${MON:-none}"
   echo "WEBCAM=${CAM:-none}"
   echo "USB=$(for d in /sys/bus/usb/devices/[0-9]*-[0-9]*; do [ -f "$d/idVendor" ] && [ "$(cat "$d/bDeviceClass")" != 09 ] && printf '%s:%s %s; ' "$(cat "$d/idVendor")" "$(cat "$d/idProduct")" "$(cat "$d/product" 2>/dev/null)"; done)"
+  # the peripherals by kind, for the manager (the device page, and the notice when a required one is gone):
+  # <kind> <vendor:product> <name>; kind from the class of the device or of its first interface
+  echo "PERIPHERALS=$(for d in /sys/bus/usb/devices/[0-9]*-[0-9]*; do [ -f "$d/idVendor" ] || continue
+    c=$(cat "$d/bDeviceClass"); [ "$c" = 09 ] && continue; [ "$c" = 00 ] || [ "$c" = ef ] && c=$(cat "$d"/*:1.0/bInterfaceClass 2>/dev/null | head -1)
+    case "$c" in 07) k=printer ;; 0e) k=camera ;; 01) k=audio ;; 08) k=storage ;; 0b) k=smartcard ;; 02|0a) k=serial ;; 03) k=input ;; e0) k=wireless ;; ff) k=serial ;; *) k=other ;; esac
+    [ "$c" = ff ] && ! ls -d "$d"/*:1.0/ttyUSB* >/dev/null 2>&1 && k=other
+    printf '%s %s:%s %s; ' "$k" "$(cat "$d/idVendor")" "$(cat "$d/idProduct")" "$(cat "$d/product" 2>/dev/null | tr -d ';')"; done)"
+  # the hardware, for the inventory of the manager (the serial number only root reads)
+  echo "HW_MODEL=$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null) $(cat /sys/class/dmi/id/product_name 2>/dev/null)"
+  echo "HW_SERIAL=$(cat /sys/class/dmi/id/product_serial 2>/dev/null)"
+  echo "BIOS=$(cat /sys/class/dmi/id/bios_version 2>/dev/null) $(cat /sys/class/dmi/id/bios_date 2>/dev/null)"
+  # the session now (kiosk.sh writes it every ~5 s): latency and what comes in
+  Q=($(cat /tmp/kiosk.quality 2>/dev/null)); [ -n "$SU" ] && [ "${Q[0]:-0}" -gt 0 ] && echo "SESSION_QUALITY=$(( Q[1] / Q[0] / 10 )).$(( Q[1] / Q[0] % 10 )) ms $(( (Q[4] - Q[3]) * 8 / 1000 / (Q[6] > 0 ? Q[6] : 1) )) kbit/s"
+  # the scheduled jobs (schedule.sh): <id>=<result> <when>, the last of each
+  echo "JOBS=$(tr '\n' ' ' < "$OTR_LIB/jobs-last" 2>/dev/null)"
   echo "TEMPERATURE=$(( ${TEMP:-0} / 1000 )) C"
   echo "DISK_FREE=$(df -h / | awk 'NR==2{print $4}')"
   echo "RAM=$(free -m | awk '/^Mem/{print $3" / "$2" MB"}')"
@@ -121,6 +136,7 @@ HOME=${HOME:-/root} xfreerdp3 --buildconfig 2>/dev/null | grep -q 'WITH_RDPEUDP=
               END{close_run(); print (c?c:"never") "|" (a?a:"never")}' $UL)
   echo "SECURITY_UPDATES=$(cfg SECURITY_UPDATES)"
   echo "ANON_STATS=$(cfg ANON_STATS)"
+  echo "REPORT_INTERVAL=$(cfg_num REPORT_INTERVAL 5)"
   # where the folder password, the Wi-Fi key and the SSH host keys are kept: tpm, or file (no TPM)
   echo "SECRETS=$(secret_mode)"
   echo "LAST_UPDATE_CHECK=${UU%%|*}" | sed 's/=$/=never/'
@@ -193,6 +209,16 @@ else
     # the files of its devices, config\groups\<group>\<hostname>.conf; moving the file of a device to another folder
     # moves it to that group. A device whose file is not in a group folder: its DEVICE_GROUP, else the group named as
     # the account of the management folder, when that folder exists; its own file then in config\<hostname>.conf.
+    # Signed central configuration (CONFIG_SIGNED=required, from a signed common.conf): every file needs its .sig, made
+    # by the manager with the key of the site this device has (update-key.asc). One without, or with a wrong one, is
+    # not taken: its last good copy stays, said once. A missing file does not release its settings either, so deleting
+    # a file is no way around the signature: only a signed file changes the settings.
+    SIGNED=0; [ "$(cfg CONFIG_SIGNED)" = required ] && SIGNED=1; SK=$OTR_ETC/update-key.asc
+    signed_ok(){ [ $SIGNED = 0 ] && return 0; [ -s "$SK" ] && [ -f "$1.sig" ] || return 1
+      if command -v sqv >/dev/null; then sqv --keyring "$SK" "$1.sig" "$1" >/dev/null 2>&1; else gpgv --keyring "$SK" "$1.sig" "$1" >/dev/null 2>&1; fi; }
+    unsigned(){ local m; m=$OTR_LIB/unsigned-$(printf '%s' "$1" | md5sum | cut -c1-8)
+      if [ "$2" = ok ]; then rm -f "$m"; return 0; fi
+      [ -f "$m" ] || { ev "central configuration: $1 is not signed with the site key: not taken, the last good settings stay"; touch "$m"; }; }
     HF=$(ls "$MNT"/config/groups/*/"$H.conf" 2>/dev/null | head -1)
     if [ -n "$HF" ]; then G=$(basename "$(dirname "$HF")")
     else HF=$MNT/config/$H.conf; G=$(cfg DEVICE_GROUP)
@@ -200,10 +226,13 @@ else
     GF=""; [[ $G =~ ^[A-Za-z0-9._-]{1,64}$ ]] && [ -f "$MNT/config/groups/$G/_group.conf" ] && GF=$MNT/config/groups/$G/_group.conf
     for p in "common:$MNT/config/common.conf" "group:$GF" "host:$HF"; do
       n=${p%%:*}; f=${p#*:}
-      if [ -n "$f" ] && [ -f "$f" ]; then
+      if [ -n "$f" ] && [ -f "$f" ] && ! signed_ok "$f"; then unsigned "${f#$MNT/}"
+      elif [ -n "$f" ] && [ -f "$f" ]; then
+        unsigned "${f#$MNT/}" ok
         # 600: they may contain the Wi-Fi key
         ( umask 077; cp "$f" "$OTR_LIB/central-$n.conf.new" ) && mv -f "$OTR_LIB/central-$n.conf.new" "$OTR_LIB/central-$n.conf"
         [ $n = host ] && rm -f "$OTR_LIB/central-host.missing"
+      elif [ $SIGNED = 1 ] && [ -f "$OTR_LIB/central-$n.conf" ]; then :
       elif [ $n = host ] && [ -f "$OTR_LIB/central-host.conf" ]; then
         # The file of this device was there and is not any more (moved by hand, a folder copied in part, a group
         # this version did not know): its last settings stay, said once. No exceptions any more = an EMPTY file
@@ -211,17 +240,38 @@ else
         [ -f "$OTR_LIB/central-host.missing" ] || { ev "central configuration: no file of this device in the folder ($H.conf), its last settings kept"; touch "$OTR_LIB/central-host.missing"; }
       else rm -f "$OTR_LIB/central-$n.conf"; fi
     done
+    # scheduled jobs (config\jobs.conf, schedule.sh runs them): signed as the settings are; gone from the folder = none
+    JF=$MNT/config/jobs.conf
+    if [ -f "$JF" ] && ! signed_ok "$JF"; then unsigned config/jobs.conf
+    elif [ -f "$JF" ]; then unsigned config/jobs.conf ok; cp "$JF" "$OTR_LIB/jobs.conf.new" && mv -f "$OTR_LIB/jobs.conf.new" "$OTR_LIB/jobs.conf"
+    elif [ $SIGNED = 0 ]; then rm -f "$OTR_LIB/jobs.conf"; fi
+    # the certificates of the CAs the manager sends (config\ca\*.crt, Security > Enterprise CA; signed as the
+    # settings): into the trust store of the system next to the ones of the image, as $OTR_ETC/ca/mgmt-*.crt, for
+    # RDP_CERT=verify, 802.1X and the kiosk browser; gone from the folder = gone from the device
+    CANEW=""; for c in "$MNT"/config/ca/*.crt; do [ -f "$c" ] || continue
+      if ! signed_ok "$c"; then unsigned "config/ca/${c##*/}"; continue; fi; unsigned "config/ca/${c##*/}" ok
+      openssl x509 -in "$c" -noout 2>/dev/null && CANEW="$CANEW $c"; done
+    CAH=$(for c in $CANEW; do sha256sum < "$c"; done | sha256sum | cut -c1-64)
+    if [ "$CAH" != "$(cat "$OTR_LIB/central-ca.hash" 2>/dev/null)" ]; then
+      mkdir -p "$OTR_ETC/ca"; rm -f "$OTR_ETC"/ca/mgmt-*.crt
+      for c in $CANEW; do cp "$c" "$OTR_ETC/ca/mgmt-${c##*/}"; done
+      CAD=/usr/local/share/ca-certificates/openthinrdp; mkdir -p $CAD; rm -f $CAD/*.crt; cp "$OTR_ETC"/ca/*.crt $CAD/ 2>/dev/null
+      update-ca-certificates --fresh >/dev/null 2>&1 && ev "certificate authorities of the site: $(ls $CAD/*.crt 2>/dev/null | wc -l) in the system trust store ($(echo $CANEW | wc -w) from the manager)"
+      echo "$CAH" > "$OTR_LIB/central-ca.hash"
+    fi
     if [ -n "$GF" ] || [[ $HF == */groups/* ]]; then echo "$G" > "$OTR_LIB/central-group-name"; else rm -f "$OTR_LIB/central-group-name"; fi
     # SSH keys of the administrators: config\authorized_keys, only well-formed public key lines.
     # Removed from the folder after being used = keys revoked: back to the keys built into the image,
     # kept aside the first time.
     [ -f "$OTR_LIB/authorized_keys.image" ] || { cp "$OTR_ETC/authorized_keys" "$OTR_LIB/authorized_keys.image" 2>/dev/null || : > "$OTR_LIB/authorized_keys.image"; }
-    if [ ! -f "$MNT/config/authorized_keys" ] && [ -f "$OTR_LIB/authorized_keys.central" ]; then
+    if [ ! -f "$MNT/config/authorized_keys" ] && [ -f "$OTR_LIB/authorized_keys.central" ] && [ $SIGNED = 0 ]; then
       install -m644 "$OTR_LIB/authorized_keys.image" "$OTR_ETC/authorized_keys"
       mv -f "$OTR_LIB/authorized_keys.central" "$OTR_LIB/authorized_keys.central.old"
       ev "SSH keys of the management folder removed: back to the keys of the image"; "$OTR/apply.sh" now
     fi
-    if [ -f "$MNT/config/authorized_keys" ]; then
+    if [ -f "$MNT/config/authorized_keys" ] && ! signed_ok "$MNT/config/authorized_keys"; then unsigned config/authorized_keys
+    elif [ -f "$MNT/config/authorized_keys" ]; then
+      unsigned config/authorized_keys ok
       touch "$OTR_LIB/authorized_keys.central"
       sed '1s/^\xEF\xBB\xBF//' "$MNT/config/authorized_keys" | tr -d '\r' | grep -E '^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh.com) [A-Za-z0-9+/=]+( .*)?$' > "$OTR_LIB/authorized_keys.new"
       if ! cmp -s "$OTR_LIB/authorized_keys.new" "$OTR_ETC/authorized_keys"; then

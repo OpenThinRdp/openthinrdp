@@ -4,6 +4,8 @@ Description=OpenThinRDP: status every 5 minutes
 [Timer]
 OnBootSec=45s
 OnUnitActiveSec=5min
+# up to a minute later at random: a large fleet does not reach the management folder all at once
+RandomizedDelaySec=60
 
 [Install]
 WantedBy=timers.target

@@ -94,6 +94,8 @@ for t in ${V[NTP]}; do ipok "$t" || nameok "$t" || err "$V_NTP $t"; done
 # a time zone the image has: Europe/Amsterdam (empty = the one of the image)
 V[TIMEZONE]=$(get TIMEZONE | tr -d " ")
 [ -z "${V[TIMEZONE]}" ] || { [[ ${V[TIMEZONE]} =~ ^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$ ]] && [ -f "/usr/share/zoneinfo/${V[TIMEZONE]}" ]; } || err "$V_TZ ${V[TIMEZONE]}"
+V[REPORT_INTERVAL]=$(get REPORT_INTERVAL | tr -d ' '); [ -z "${V[REPORT_INTERVAL]}" ] && V[REPORT_INTERVAL]=5
+{ [[ ${V[REPORT_INTERVAL]} =~ ^[0-9]{1,2}$ ]] && [ $((10#${V[REPORT_INTERVAL]})) -ge 2 ] && [ $((10#${V[REPORT_INTERVAL]})) -le 30 ]; } || err "$V_INTERVAL"
 
 # --- VPN (vpn.sh). WireGuard needs the server, its key and the address of the device; OpenVPN its profile, which the
 # manager sends over SSH (it is not a setting). Missing WireGuard settings are no error: VPN_ADDRESS is set per
@@ -174,11 +176,14 @@ case "$(low "$(get UPDATE_FROM)")" in share|cartella|folder) V[UPDATE_FROM]=shar
 [ "${V[UPDATE_FROM]}" = share ] && [ -z "${V[MGMT_SHARE]}" ] && [ -z "${V[MGMT_USER]}" ] && [ ! -s "$CRED" ] && err "$V_UPDATE_SHARE"
 V[UPDATE_GITHUB]=$(get UPDATE_GITHUB); [[ ${V[UPDATE_GITHUB]} =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || err "$V_UPDATE_GITHUB"
 case "$(low "$(get UPDATE_KEY)")" in site|sito) V[UPDATE_KEY]=site ;; *) V[UPDATE_KEY]=any ;; esac
+case "$(low "$(get CONFIG_SIGNED)")" in required|on|yes|obbligatoria|richiesta) V[CONFIG_SIGNED]=required ;; *) V[CONFIG_SIGNED]=off ;; esac
 V[UPDATE_TO]=$(low "$(get UPDATE_TO)")
 case "${V[UPDATE_TO]}" in ''|latest|ultima|ultimo) V[UPDATE_TO]=latest ;; *) [[ ${V[UPDATE_TO]} =~ ^[0-9a-z._-]+$ ]] || err "$V_UPDATE_TO" ;; esac
 V[UPDATE_MAJOR]=$(low "$(get UPDATE_MAJOR)"); [ -z "${V[UPDATE_MAJOR]}" ] || [[ ${V[UPDATE_MAJOR]} =~ ^[0-9a-z._-]+$ ]] || err "$V_UPDATE_TO"
+V[UPDATE_HOURS]=$(get UPDATE_HOURS | tr -d ' '); [ -z "${V[UPDATE_HOURS]}" ] || [[ ${V[UPDATE_HOURS]} =~ ^([01]?[0-9]|2[0-3])-([01]?[0-9]|2[0-4])$ ]] || err "$V_UPDATE_HOURS"
 V[SSH]=$(onoff "$(get SSH)")
 V[REMOTE_SCREEN]=$(onoff "$(get REMOTE_SCREEN)")
+case "$(low "$(get REMOTE_CONSENT)")" in ask|chiedi|vraag|on|yes) V[REMOTE_CONSENT]=ask ;; *) V[REMOTE_CONSENT]=off ;; esac
 V[ANON_STATS]=$(onoff "$(get ANON_STATS)")
 
 # --- web button and kiosk page

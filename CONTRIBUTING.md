@@ -23,15 +23,20 @@ Remove from logs and screenshots what you do not want public: domain, server nam
 1. Fork, make a branch, keep the change focused (one fix or feature per pull request).
 2. Follow the style of the file you touch: shell scripts in `rootfs/opt/openthinrdp` are plain bash for Debian 13,
    comments explain *why*; the Windows manager is PowerShell 5.1 (no newer syntax), every text in
-   `management/windows/lang/*.psd1`.
+   `lang\*.psd1` of the [manager](https://github.com/OpenThinRdp/openthinrdp-manager) (an issue there with the file).
 3. A new setting goes into `defaults.conf` (with a comment), `save-config.sh` (validation), the manager
    (`New-Setting` and its texts), [docs/configuration.md](docs/configuration.md), and a test.
 4. Run the tests: `docker run --rm -v "$PWD":/src:ro debian:trixie bash /src/tests/run-tests.sh`.
    For the image: `image/build.sh` and a try in a VM or on a device ([docs/building.md](docs/building.md)).
 5. Describe in the pull request what you tested and on what.
 
-Translations are welcome: one file in `rootfs/opt/openthinrdp/lang/` and one in `management/windows/lang/`
+Translations are welcome: one file in `rootfs/opt/openthinrdp/lang/` and one in `lang\` of the [manager](https://github.com/OpenThinRdp/openthinrdp-manager)
 (see the comments at the top of the English files).
 
 By contributing you agree that your contribution is licensed under the GNU GPL version 3 or later, like the project.
 Please follow the [code of conduct](CODE_OF_CONDUCT.md).
+
+## Who maintains it, and how releases are made
+
+[MAINTAINERS.md](MAINTAINERS.md) says who maintains OpenThinRDP and what happens if they can no longer act; every release
+goes through the [release checklist](docs/release-checklist.md).

@@ -1,12 +1,14 @@
 #!/bin/bash
 # Build and sign an update package for the thin clients, and publish it in the management folder.
-#   make-update.sh -v <version> [-k <gpg key id>] [-f] [-d <debs folder>] [-s <site folder>] [-o <management folder>]
+#   make-update.sh -v <version> -m <manager folder> [-k <gpg key id>] [-f] [-d <debs folder>] [-s <site folder>] [-o <management folder>]
+#     -m  the manager as released, built on Windows by build-release.ps1 of the manager (its own repository): it
+#         goes into the zip of the manager with MANIFEST.txt, signed with -k
 #     -v  version, must grow (e.g. 0.1.1): devices never install an older one
 #     -k  OpenPGP key that signs, in the gpg of this machine: the project key for a release (its public half is
 #         rootfs/opt/openthinrdp/keys/openthinrdp-release.asc), or your own key for your own packages (its public
 #         half is update-key.asc in the site folder of your image).
 #         Without -k nothing is signed here: out/update-<version>/LATEST.txt is signed by the manager with the key
-#         kept in its vault (OpenThinRDP-Manager.cmd -Sign <path>\LATEST.txt, or Vault > Sign an update), so the
+#         kept in its vault (OpenThinRDP-Manager.exe -Sign <path>\LATEST.txt, or Vault > Sign an update), so the
 #         signing key never sits on the build machine.
 #     -f  ship the FreeRDP with UDP of image/freerdp/freerdp.conf (out/freerdp/<commit>, made by image/build.sh
 #         or image/freerdp/build-debs.sh): devices get it when it is newer than theirs. Every architecture built
@@ -26,9 +28,9 @@
 # Needs: bash, tar, gzip, sha256sum, python3 (the zip), gpg (Linux, WSL, or Git Bash with Gpg4win).
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd)
-V=""; KEY=""; DEBS=""; SITE=""; DEST=""; FRDP=""
-while getopts "v:k:fd:s:o:" o; do
-  case $o in v) V=$OPTARG ;; k) KEY=$OPTARG ;; f) FRDP=1 ;; d) DEBS=$OPTARG ;; s) SITE=$OPTARG ;; o) DEST=$OPTARG ;; *) exit 2 ;; esac
+V=""; KEY=""; DEBS=""; SITE=""; DEST=""; FRDP=""; MDIR=""
+while getopts "v:m:k:fd:s:o:" o; do
+  case $o in v) V=$OPTARG ;; m) MDIR=$OPTARG ;; k) KEY=$OPTARG ;; f) FRDP=1 ;; d) DEBS=$OPTARG ;; s) SITE=$OPTARG ;; o) DEST=$OPTARG ;; *) exit 2 ;; esac
 done
 if [ -n "$FRDP" ]; then
   . "$ROOT/image/freerdp/freerdp.conf"
@@ -44,6 +46,8 @@ if [ -n "$FRDP" ]; then
   done
 fi
 [[ $V =~ ^[0-9A-Za-z._-]+$ ]] || { echo "version missing or not valid (-v)"; exit 2; }
+[ -n "$MDIR" ] && [ -f "$MDIR/OpenThinRDP-Manager.core" ] || { echo "the manager as released is missing (-m <folder of build-release.ps1>)"; exit 2; }
+[ "$(tr -d '\r\n' < "$MDIR/VERSION")" = "$V" ] || { echo "the manager in $MDIR is not version $V"; exit 2; }
 # without a key here the package cannot go to a management folder: it would be published unsigned
 [ -n "$KEY" ] || [ -z "$DEST" ] || { echo "-o needs -k: without -k, sign out/update-$V/LATEST.txt in the manager, then copy the 3 files"; exit 2; }
 for f in "$ROOT"/rootfs/opt/openthinrdp/*.sh "$ROOT"/rootfs/opt/openthinrdp/lib/*.sh; do bash -n "$f"; done
@@ -78,18 +82,40 @@ H=$(sha256sum "$OUT/$F" | cut -c1-64)
 # VERSION, not the launcher .exe (built on each PC by build-launcher.ps1) nor anything an administrator made there.
 # Its name and hash go into LATEST.txt, so the one signature covers it too.
 MZ="openthinrdp-manager-$V.zip"
-python3 - "$ROOT/management/windows" "$OUT/$MZ" "$V" <<'PY'
+# MANIFEST.txt in the zip: the SHA-256 of each of its files, and with -k its signature (MANIFEST.txt.sig, the project
+# key). The launcher checks them before the manager starts and refuses a changed file (Launcher.cs, Guard).
+MF="$OUT/manager-MANIFEST.txt"; rm -f "$MF" "$MF.sig"
+python3 - "$MDIR" "$V" "$MF" <<'PY'
+import hashlib, os, sys
+src, ver, mf = sys.argv[1:4]
+skip_ext = ('.exe', '.args', '.old'); skip = {'vault.otr', 'previous', 'VERSION', 'MANIFEST.txt', 'MANIFEST.txt.sig'}
+lines = [hashlib.sha256((ver + '\n').encode()).hexdigest() + '  VERSION']
+# the launcher itself goes in (the release builds it: no source to build it from), its copy .launcher too
+for d, dirs, names in os.walk(src):
+    dirs[:] = sorted(x for x in dirs if x not in skip)
+    for f in sorted(names):
+        if f in skip or f.endswith(skip_ext): continue
+        p = os.path.join(d, f)
+        lines.append(hashlib.sha256(open(p, 'rb').read()).hexdigest() + '  ' + os.path.relpath(p, src).replace(os.sep, '/'))
+open(mf, 'w', newline='\n').write('\n'.join(sorted(lines, key=lambda l: l[66:])) + '\n')
+PY
+[ -z "$KEY" ] || gpg --batch --yes --local-user "$KEY" --armor --detach-sign -o "$MF.sig" "$MF"
+python3 - "$MDIR" "$OUT/$MZ" "$V" "$MF" <<'PY'
 import os, sys, zipfile
-src, dst, ver = sys.argv[1:4]
-skip_ext = ('.exe', '.args', '.old'); skip = {'vault.otr', 'previous', 'VERSION'}
+src, dst, ver, mf = sys.argv[1:5]
+# the launcher too: not in MANIFEST.txt (each PC has its own copy), in the zip for a first install
+skip_ext = ('.args', '.old'); skip = {'vault.otr', 'previous', 'VERSION', 'MANIFEST.txt', 'MANIFEST.txt.sig'}
 with zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED) as z:
-    for d, dirs, files in os.walk(src):
+    for d, dirs, names in os.walk(src):
         dirs[:] = sorted(x for x in dirs if x not in skip)
-        for f in sorted(files):
+        for f in sorted(names):
             if f in skip or f.endswith(skip_ext): continue
             p = os.path.join(d, f); z.write(p, os.path.relpath(p, src).replace(os.sep, '/'))
     z.writestr('VERSION', ver + '\n')
+    z.write(mf, 'MANIFEST.txt')
+    if os.path.exists(mf + '.sig'): z.write(mf + '.sig', 'MANIFEST.txt.sig')
 PY
+rm -f "$MF" "$MF.sig"
 MH=$(sha256sum "$OUT/$MZ" | cut -c1-64)
 printf 'version=%s\nfile=%s\nsha256=%s\nmanager=%s\nmanager_sha256=%s\n' "$V" "$F" "$H" "$MZ" "$MH" > "$OUT/LATEST.txt"
 # The newest major update (a change to how a session connects or runs), from the file MAJOR of the repository: a
@@ -101,7 +127,7 @@ if [ -n "$MJ" ]; then
   echo "major=$MJ" >> "$OUT/LATEST.txt"
 fi
 if [ -z "$KEY" ]; then
-  echo "package ready in $OUT, NOT signed yet: OpenThinRDP-Manager.cmd -Sign <this folder>\\LATEST.txt (key in the vault)"
+  echo "package ready in $OUT, NOT signed yet: OpenThinRDP-Manager.exe -Sign <this folder>\\LATEST.txt (key in the vault)"
   exit 0
 fi
 gpg --batch --yes --local-user "$KEY" --armor --detach-sign -o "$OUT/LATEST.txt.sig" "$OUT/LATEST.txt"

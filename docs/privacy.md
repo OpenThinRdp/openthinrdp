@@ -44,7 +44,8 @@ code and the name of a program leave the device, never the text of a message: th
 
 ## What the manager sends
 
-Half a minute after it starts the first time, then once a week:
+Its first start shows, once, what the manager and the devices send and where each is switched off. Half a minute
+after it starts the first time, then once a week:
 
 | Count | Example |
 |---|---|
@@ -58,6 +59,14 @@ Half a minute after it starts the first time, then once a week:
 The name of a device or of a computer, IP or MAC addresses, user names, passwords, the domain, the names or addresses
 of servers and brokers, settings, the text of logs and error messages, anything typed on a device, anything shown in
 a session.
+
+## What stays at your site
+
+Not sent anywhere, but worth knowing: to show the *experience* (0.2.23), each device writes in its event log how long
+each sign-in took (with the user name) and the latency and bandwidth of each session, and the manager keeps these
+40 days in `health\experience\` of the management folder. They are technical data of the service, readable by whoever
+reads that folder; in some countries measuring the work of employees has rules of its own (in Italy art. 4 of the
+Statuto dei lavoratori): tell the users, as for the other logs of the fleet.
 
 ## Where it goes
 

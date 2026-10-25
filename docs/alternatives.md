@@ -106,4 +106,4 @@ protocols other than RDP.
   if you want.
 - **Built from a fleet in production.** It runs every day on 14 thin clients at desks, tills, a laboratory and
   weighing stations ([status](status.md)), a fleet that left a commercial thin client OS for it.
-- **Free and open** (GPLv3), with no cost per device.
+- **Free**: the client open (GPLv3), the [manager](https://github.com/OpenThinRdp/openthinrdp-manager) free for any use, no cost per device.

@@ -12,6 +12,10 @@ more details.
 Licence history: releases up to and including 0.2.5 were published under the Apache License 2.0, and those
 releases stay under it. From 0.2.6 the project is licensed under the GNU GPL version 3 or later.
 
+The manager for Windows is not part of this repository from 0.2.23: it is a separate project, free for any use but
+closed, under its own license (https://github.com/OpenThinRdp/openthinrdp-manager). The manager of the releases up to and including 0.2.22 (management/windows in
+those releases) was published under the GNU GPL version 3 or later and stays under it.
+
 Parts under other licences, distributed with this program:
 - rootfs/opt/openthinrdp/lang/nl.sh: Dutch translation by @wvanommen, contributed under the Apache License 2.0
   (compatible with the GPL version 3).

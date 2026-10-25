@@ -86,6 +86,15 @@ T=/etc/systemd/timesyncd.conf.d/openthinrdp.conf
 if [ -n "$(cfg NTP)" ]; then printf '[Time]\nNTP=%s\nFallbackNTP=\n' "$(cfg NTP)" > $T.new; else : > $T.new; fi
 if ! cmp -s $T.new $T; then mv -f $T.new $T; [ "$1" = now ] && systemctl restart systemd-timesyncd 2>/dev/null; else rm -f $T.new; fi
 
+# --- how often the status is sent (REPORT_INTERVAL, 5 minutes by default): a drop-in of the report timer
+I=$(cfg_num REPORT_INTERVAL 5); { [ "$I" -ge 2 ] && [ "$I" -le 30 ]; } || I=5
+DI=/etc/systemd/system/openthinrdp-report.timer.d; mkdir -p $DI
+printf '[Timer]\nOnUnitActiveSec=\nOnUnitActiveSec=%smin\n' "$I" > $DI/interval.conf.new
+if ! cmp -s $DI/interval.conf.new $DI/interval.conf; then
+  mv -f $DI/interval.conf.new $DI/interval.conf; systemctl daemon-reload 2>/dev/null
+  [ "$1" = now ] && systemctl restart openthinrdp-report.timer 2>/dev/null
+else rm -f $DI/interval.conf.new; fi
+
 # --- time zone (empty = the one of the image): the clock, the logs, the power schedule and, through FreeRDP, the time
 # zone of the session. The power-on alarm of the firmware is in local time: set again for the new zone
 Z=$(cfg TIMEZONE)

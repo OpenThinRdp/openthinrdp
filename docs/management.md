@@ -75,6 +75,11 @@ anything outside the folder.
 
 ## Central settings
 
+Besides the settings, the folder holds what the managers share: `config\jobs.conf` (the scheduled jobs, read and run
+by the devices: [manager.md](manager.md#scheduled-jobs)), `config\changes.log` (every change made from a manager),
+and in `health\` the history of the infrastructure, the experience of the users (`experience\`, 40 days), the
+required peripherals, the inventory and the group rules. The devices read none of `health\`; only the managers do.
+
 `config\common.conf` and `config\<hostname>.conf` hold the same keys as [configuration.md](configuration.md).
 Files saved on Windows are fine (BOM, CRLF, spaces around `=`, `#` and `;` comments). A device:
 
@@ -94,46 +99,42 @@ settings and follows `site.conf` or the project defaults again, like a device in
 would not be valid (e.g. removing `WEB_URL` while `WEB_BUTTON=app` stays), the key is kept, the event is logged
 once and the release is retried at every run.
 
-The Windows manager (`management/windows/OpenThinRDP-Manager.vbs`, or the `.cmd` to pass `-Folder`/`-Language`) shows the devices, their status and events,
+The [Windows manager](https://github.com/OpenThinRdp/openthinrdp-manager) (`OpenThinRDP-Manager.exe`, in the zip of every release) shows the devices, their status and events,
 and edits these files with the same validation, a backup of every file it overwrites and a change log.
 Before saving `common.conf` it lists the devices that would reject it.
 
 The window has its pages on the left: **Devices** (the list, and the selected device with its settings, a summary,
 its events and its full report), **Health Center** (with the **Distribution** of the desktops), **Settings** (devices, Health Center, manager, custom checks), **Updates** (see [Pilot devices and going back](#pilot-devices-and-going-back)
 and [The manager updates itself](#the-manager-updates-itself)), **Vault** (with the SSH keys of the devices) and **History**; the actions on the
-folder (refresh, open, release from GitHub, check permissions) and the state of the vault are in the bar at the top. In a settings list each row shows
+folder are on their pages (refresh on **Devices**, a release from GitHub on **Updates**, open the folder and check its permissions in **Settings > Manager**), and **Lock** is in the bar at the top. In a settings list each row shows
 the value in use on the device, where it comes from (*the device itself*, *common settings*, *this device* for an
 exception) and *on its way* when a saved value has not reached the device yet (it reads the folder every 5 minutes;
 if it stays, the device has probably rejected the configuration: see its state). The help of the selected setting is
 under the list; the search box finds a setting by name, key or help text.
 It is available in English and Italian: it follows the Windows display language (English for any language
-without a file in `management/windows/lang/`), or `-Language en` / `-Language it` chooses one.
+without a file in `lang\` of the manager), or `-Language en` / `-Language it` chooses one.
 
 The window opens at 85% of the screen (at least 1440×880, maximized on a smaller screen) and works down to 860×560:
 the columns of every list and grid share the width instead of hiding behind a scroll bar, the rows of buttons wrap,
 and the buttons of the top bar and of the device header keep only their icon (their text in the tooltip) when the
 room is short.
 
-**A program to pin.** `build-launcher.ps1` builds `OpenThinRDP-Manager.exe` next to the script, with the
-OpenThinRDP icon, from `Launcher.cs` and the C# compiler that comes with Windows: it starts the manager with no
-console window. Its arguments can live next to it, so a shortcut needs none:
-
-```
-.\build-launcher.ps1 -Name Thin-clients -Folder \\fileserver\thinclients -Language en
-```
-
-writes `Thin-clients.exe` and `Thin-clients.args`. Copy the `.exe` with the other files of the manager (it is not
-signed: an antivirus that holds back unknown programs may want it allowed).
+**Starting it.** `OpenThinRDP-Manager.exe` starts the manager with no console window, and draws the access window at
+once while the manager loads behind it (what is typed goes to the manager through a pipe, never a file or the command
+line). It is not signed with a certificate: Windows SmartScreen or an antivirus that holds back unknown programs may
+ask the first time. Its arguments can live next to it, in `<name>.args` (one line, e.g.
+`-Folder "\\fileserver\thinclients" -Language en`), so a shortcut needs none.
 
 With the manager on a file share, a shortcut to the `.exe` on the share shows a blank icon: Windows reads the icon
 of a shortcut's program only from a local disk. On each PC that starts the manager, run once from the share:
 
 ```
-\\fileserver\it\manager\build-launcher.ps1 -Name "Thin clients" -Folder \\fileserver\thinclients -Install
+\\fileserver\it\manager\OpenThinRDP-Manager.exe -Install -Name "Thin clients" -Folder \\fileserver\thinclients
 ```
 
-It builds the `.exe` in `%ProgramData%\OpenThinRDP` with a `.script` file that points to the manager on the share
-(one copy of the manager for everybody), and puts a shortcut with the icon on the desktop.
+It copies the `.exe` to `%ProgramData%\OpenThinRDP` with a `.script` file that points to the manager on the share
+(one copy of the manager for everybody), and puts a shortcut with the icon on the desktop. The manager keeps those
+copies up to date by itself. The `.cmd` and `.vbs` of the releases before 0.2.23 go to `previous\`.
 
 ### Diagnostics of a device
 
@@ -157,9 +158,11 @@ Nothing goes to the project unless you send it.
 
 ### The manager updates itself
 
-Every release carries `openthinrdp-manager-<version>.zip`: the files of `management/windows` (without the launcher
-`.exe`, which is built where it runs) and a `VERSION` file. Its name and SHA-256 are in the release's `LATEST.txt`
-(`manager=`, `manager_sha256=`), under the same project signature as the update package.
+Every release carries `openthinrdp-manager-<version>.zip`: the manager (`OpenThinRDP-Manager.exe`, the manager itself
+sealed in `OpenThinRDP-Manager.core`, the commands it runs on servers in `commands\` and `rds\`, its languages),
+`VERSION` and `MANIFEST.txt`, the SHA-256 of each file signed with the project key, which the launcher checks before
+the manager starts. Its name and SHA-256 are in the release's `LATEST.txt` (`manager=`, `manager_sha256=`), under the
+same project signature as the update package.
 
 - At every start the manager reads `VERSION` next to it, and in the background (the window does not wait) the
   `LATEST.txt` of the latest GitHub release of `UPDATE_GITHUB`, checked against the project key next to it
@@ -170,18 +173,18 @@ Every release carries `openthinrdp-manager-<version>.zip`: the files of `managem
   the vault still open: the access code passes to the new start in a file protected with DPAPI (this Windows user
   on this PC only), read once and deleted at once, worth 60 seconds.
 - **Update the manager** (that notice, or **Updates > This manager**) downloads the zip, checks its hash against the
-  signed `LATEST.txt`, checks that it holds `OpenThinRDP-Manager.ps1` and `VERSION` of that version, copies the files
+  signed `LATEST.txt`, checks that it holds the manager and `VERSION` of that version, copies the files
   it replaces into `previous\` next to the manager (the copy of the update before goes), puts the new ones in place
   and starts the manager again. `vault.otr`, the launchers (`.exe`, `.args`, `.script`) and anything else that is not
   in the zip stay as they are. A file in use is renamed to `.old` and removed at the next start. If anything fails,
   the files of `previous\` go back.
 - The copy that matters is the one the administrators start: on a file share, update it from a PC that can write
   there (the manager says so when it cannot). PCs with a launcher made by `-Install` start the share copy, so they get
-  the new version at their next start. When `Launcher.cs` changed, the manager asks to build the `.exe` again with
-  `build-launcher.ps1` (the old one keeps working).
-- Without the window, from a console or a script: `OpenThinRDP-Manager.cmd -UpdateManager` (exit code 0 =
+  the new version at their next start. A newer launcher in the release takes the place of the older ones (next to the
+  manager and in `%ProgramData%\OpenThinRDP`) at the next start of the manager on that PC.
+- Without the window, from a console or a script: `OpenThinRDP-Manager.exe -UpdateManager` (exit code 0 =
   updated, 1 = error, 2 = nothing to do).
-- A copy without `VERSION` (the repository) is a development copy and never updates itself.
+- A copy without `VERSION` is a development copy and never updates itself.
 
 The manager keeps the SSH host keys of the devices by device **name** in its own file
 (`%LOCALAPPDATA%\OpenThinRDP\known_hosts`, `HostKeyAlias`), not by address: DHCP may give a device the address
@@ -243,7 +246,7 @@ that signs the update packages every device installs. The manager keeps both in 
   keys are lost with it (a new SSH key is easy; a lost signing key means a key change, see
   [SECURITY.md](../SECURITY.md)).
 - Encryption: PBKDF2-HMAC-SHA256 with 600000 rounds (about 2 seconds to open, on purpose), AES-256-CBC and
-  HMAC-SHA256 over the whole file (`management/windows/OtrVault.cs`). The secrets stay in memory while the window
+  HMAC-SHA256 over the whole file. The secrets stay in memory while the window
   is open; the SSH key is written for `ssh.exe` only into a folder that just your account and SYSTEM can read
   (`%LOCALAPPDATA%\OpenThinRDP\vault-keys`), removed when the vault closes.
 
@@ -287,7 +290,9 @@ sign-in in its profile).
    after 2 hours.
 
 During a remote session the screen is the Windows desktop the user is working on: tell the user, as the notice does.
-`REMOTE_SCREEN=off`, for all devices or one, turns it off. The viewer is noVNC 1.7.0, included unmodified
+`REMOTE_SCREEN=off`, for all devices or one, turns it off. `REMOTE_CONSENT=ask` asks the user first: a question at
+the top of the screen, over the session too, answered with the mouse or the touch screen; refused or unanswered within
+a minute, nothing starts, the event log says which, and the manager tells you. The viewer is noVNC 1.7.0, included unmodified
 (`/opt/openthinrdp/novnc`, MPL 2.0 and BSD licenses).
 
 **When it does not start** the manager shows why: SSH off on the device, no address reported yet, the vault
@@ -358,6 +363,21 @@ not know `UPDATE_TO` and goes straight up again. The device refuses it and says 
 Every change goes through the same files as any setting (`config\backup\`, `config\changes.log`), and the devices
 apply it within 5 minutes, never during a session.
 
+### Signed configuration
+
+Whoever can write in the management folder can change every device: its settings, its group, the SSH keys. With
+`CONFIG_SIGNED=required` in `common.conf` that is no longer enough: the manager signs every file it writes in
+`config\` (and `authorized_keys`) with the key of the site in its vault, `<file>.sig` next to it, and the devices take
+a file only with a valid signature of the site key they have (`update-key.asc`, the same key as the updates of
+[a fleet on its own key](#a-fleet-on-its-own-key)).
+
+- Turning it on signs every file there is; the manager first lists the devices that do not have the site key yet
+  (give it to them first: *Vault > Send the site key*), since they would take nothing more.
+- A file without its signature, or changed after it, is not taken: the device keeps its last good settings and says
+  so in its events. A missing file does not release its settings either: deleting a file is no way around it.
+- With the vault closed, or without the site key, the manager saves nothing in `config\`.
+- Only a signed `common.conf` switches it off again.
+
 ### A fleet on its own key
 
 With `UPDATE_KEY=any` a device on the folder accepts the project key too: whoever held the project key could get a
@@ -396,7 +416,7 @@ Build a version without signing it (Linux or WSL), then sign it in the manager:
 
 ```
 management/publish/make-update.sh -v 2026.10.1
-OpenThinRDP-Manager.cmd -Sign <path>\out\update-2026.10.1\LATEST.txt
+OpenThinRDP-Manager.exe -Sign <path>\out\update-2026.10.1\LATEST.txt
 ```
 
 `-Sign` asks only the access code and writes `LATEST.txt.sig` next to `LATEST.txt` (also **Vault > Sign an
