@@ -803,6 +803,18 @@ WS=$(eval "$(sed -n '/^parse_scan(){/,/^}/p' $OTR/wifi.sh)"; printf '%s\n' "$SCA
 ok "wifi.sh: scan read right: strongest first, one line per name, psk/eap/open/wep, hidden names out" '[ "$(printf "%s\n" "$WS" | head -1)" = "$(printf "%s\t%s\t%s" -52 psk "Finco Work")" ] && [ $(printf "%s\n" "$WS" | grep -c "Finco Work") -eq 1 ] && printf "%s\n" "$WS" | grep -q "eap	Finco Corp" && printf "%s\n" "$WS" | grep -q "open	Guest" && printf "%s\n" "$WS" | grep -q "wep	Old Router" && [ $(printf "%s\n" "$WS" | grep -c .) -eq 4 ]'
 ok "wifi.sh: the kiosk may run it through sudo; a wrong password changes nothing (tried before save-config)" 'grep -q "/opt/openthinrdp/wifi.sh" /etc/sudoers.d/openthinrdp && [ $(grep -n "step test" $OTR/wifi.sh | cut -d: -f1) -lt $(grep -n "save-config.sh\" \"\$f\"" $OTR/wifi.sh | cut -d: -f1) ]'
 ok "ui.py: compiles, with the Wi-Fi page and the network on the sign-in screen" 'python3 -m py_compile $OTR/ui.py && grep -q "^if MODE == .wifi.:" $OTR/ui.py && grep -q "leave(8)" $OTR/ui.py'
+# the time zones of the settings dialog: tz_list() of ui.py run alone (UTC and every zone of tzdata, sorted)
+TZN=$(python3 - "$OTR/ui.py" <<'PY'
+import ast, os, sys
+t = ast.parse(open(sys.argv[1]).read())
+f = [n for n in t.body if isinstance(n, ast.FunctionDef) and n.name == 'tz_list'][0]
+ns = {}; exec(compile(ast.Module([f], []), sys.argv[1], 'exec'), ns)
+z = ns['tz_list']()
+need = 300 if os.path.exists('/usr/share/zoneinfo/zone1970.tab') else 1
+print('ok' if 'UTC' in z and len(z) >= need and z == sorted(z) else 'bad %d' % len(z))
+PY
+)
+ok "settings dialog: the time zone chosen from the list of tzdata, with a search" '[ "$TZN" = ok ] && grep -q "fld TIMEZONE tz " $OTR/kiosk.sh && grep -q "elif typ == .tz.:" $OTR/ui.py'
 
 # --- anonymous counts: on by default, what is sent, nothing when off (curl replaced: no test talks to GoatCounter)
 ok "anonymous counts: on by default, the setting kept by save-config" '[ "$(cfg ANON_STATS)" = on ] && printf "ANON_STATS=No\n" > "$T" && $OTR/save-config.sh "$T" --print 2>/dev/null | grep -qx "ANON_STATS=off"'

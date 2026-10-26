@@ -371,7 +371,7 @@ settings_spec(){
   fld DNS1 text "$L_F_DNS1" "$d1" "" "$L_H_DNS1"
   fld DNS2 text "$L_F_DNS2" "$d2" "" "$L_H_DNS2"
   fld NTP text "$L_F_NTP" "$ntp" "" "$L_H_NTP"
-  fld TIMEZONE text "$L_F_TZ" "$tz" "" "$L_H_TZ"
+  fld TIMEZONE tz "$L_F_TZ" "$tz" "" "$L_H_TZ"
   sec "$L_SEC_WIFI"
   fld WIFI choice "$L_F_WIFI" "$wf" "$(chs ONV ONL)" "$L_H_WIFI"
   fld WIFI_SSID text "$L_F_SSID" "$ws" "" "$L_H_SSID"
