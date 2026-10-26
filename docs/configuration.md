@@ -80,6 +80,7 @@ RDP_GATEWAY=rdgateway.example.com
 | `USB_LOCAL` | | `VID:PID` list never passed whole, in every mode: their storage appears in Windows as a drive (a stick that should be a drive while `USB_MODE=all`). Wins over `USB_REDIRECT`. The manager sets it from the peripherals of a device |
 | `CAMERA_H264` | `off` | `on` = the H.264 a webcam produces itself goes to Windows as it is (no work here, but no frame can be dropped: a late one holds the next); `off` = the webcam is read in MJPEG and encoded here, where a frame that comes late is dropped and the picture keeps up |
 | `CAMERA_HWACCEL` | `on` | the webcam encoded on the video engine of the processor (Intel Quick Sync, VA-API); `off` = on the processor itself. Without a video engine it falls back to the processor |
+| `CAMERA_MAX` | `auto` | the largest resolution of the webcam offered to Windows, which picks the largest it is offered: `auto` = 1080p when the video engine encodes H.264, else 720p; `720p`, `1080p`, `max` (the largest of the webcam, 2K and more) |
 
 A USB stick passed whole (`USB_MODE=all`) gets its drive letter from Windows inside the session of the user it is
 redirected to, as on a physical PC. That letter is not visible to services or to other sessions, so a tool running

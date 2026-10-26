@@ -96,6 +96,14 @@ DEF=$(cfg DEFAULT_USER)
 HASCAM=0
 _L=$(ldd "$(command -v xfreerdp3)" 2>/dev/null | sed -n 's/.*libfreerdp-client3[^ ]* => \([^ ]*\).*/\1/p')
 [ -n "$_L" ] && grep -aq v4l_freerdp_rdpecam_client_subsystem_entry "$_L" && HASCAM=1
+# The largest resolution of the webcam offered to Windows (CAMERA_MAX): an app picks the largest it is offered, a 2K
+# webcam more than a small processor reads and encodes in time. auto = 1080p when the video engine of the processor
+# encodes H.264 (VA-API) and CAMERA_HWACCEL is on, else 720p.
+cam_maxres(){
+  case "$(cfg CAMERA_MAX)" in 720p) echo 1280x720 ;; 1080p) echo 1920x1080 ;; max) echo 0 ;;
+    *) if [ "$(cfg CAMERA_HWACCEL)" = on ] && vainfo --display drm 2>/dev/null | grep -q 'H264.*EncSlice'; then echo 1920x1080; else echo 1280x720; fi ;;
+  esac
+}
 CAMID=""
 if [ $HASCAM = 0 ]; then
   _V=$(udevadm info -q property -n /dev/video0 2>/dev/null | sed -n 's/^ID_VENDOR_ID=//p')
@@ -296,8 +304,8 @@ connect(){
   if card=$(usb_sound_card c "$usb"); then o+=(/microphone:sys:alsa,dev:plughw:CARD="$card"); ev "microphone: USB ($card)"
   else o+=(/microphone:sys:alsa); fi
   card=$(usb_sound_card p "$usb") && snd=/sound:sys:alsa,dev:plughw:CARD="$card"
-  # the camera channel with its options (CAMERA_H264, CAMERA_HWACCEL): a FreeRDP without them ignores them
-  [ $HASCAM = 1 ] && o+=(/dvc:rdpecam,h264:$(cfg CAMERA_H264),hwaccel:$(cfg CAMERA_HWACCEL))
+  # the camera channel with its options (CAMERA_H264, CAMERA_HWACCEL, CAMERA_MAX): a FreeRDP without them ignores them
+  [ $HASCAM = 1 ] && o+=(/dvc:rdpecam,h264:$(cfg CAMERA_H264),hwaccel:$(cfg CAMERA_HWACCEL),maxres:$(cam_maxres))
   read -ra extra <<< "$(cfg RDP_EXTRA)"
   # the USB devices passed whole wait for the desktop (usb-hold.sh): a device that hangs while Windows starts it
   # must not hold up the session's display. The progress loop releases them 15 s after the window is up.

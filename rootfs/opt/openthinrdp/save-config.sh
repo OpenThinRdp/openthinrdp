@@ -189,6 +189,7 @@ case "$(low "$(get REMOTE_CONSENT)")" in ask|chiedi|vraag|on|yes) V[REMOTE_CONSE
 V[ANON_STATS]=$(onoff "$(get ANON_STATS)")
 V[CAMERA_H264]=$(onoff "$(get CAMERA_H264)")
 V[CAMERA_HWACCEL]=$(onoff "$(get CAMERA_HWACCEL)")
+case "$(low "$(get CAMERA_MAX)")" in 720*|hd) V[CAMERA_MAX]=720p ;; 1080*|fhd|fullhd) V[CAMERA_MAX]=1080p ;; max|massima|maximum) V[CAMERA_MAX]=max ;; *) V[CAMERA_MAX]=auto ;; esac
 
 # --- web button and kiosk page
 case "$(low "$(get WEB_BUTTON)")" in app|portale|portal) V[WEB_BUTTON]=app ;; browser|chrome|chromium) V[WEB_BUTTON]=browser ;; kiosk) V[WEB_BUTTON]=kiosk ;; *) V[WEB_BUTTON]=none ;; esac
