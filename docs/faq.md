@@ -5,7 +5,8 @@
 ### What is OpenThinRDP?
 
 An open source operating system for thin clients that connect to Windows with Remote Desktop: RDS session hosts,
-VDI collections behind an RD Connection Broker, or any Windows PC with Remote Desktop on. It is Debian 13 with a
+VDI collections behind an RD Connection Broker, or any Windows PC or VM with Remote Desktop on, on Hyper-V,
+Proxmox, VMware, Nutanix or any cloud. It is Debian 13 with a
 locked-down kiosk on FreeRDP, the RDP UDP transport built in, and a Windows manager that runs the whole fleet from a
 shared folder.
 
@@ -80,9 +81,19 @@ Not yet: they need a Microsoft Entra ID sign-in and Microsoft's own gateway, whi
 deployment or Windows virtual machines in Azure work, through an RD Gateway or a VPN
 ([desktops in the cloud](configuration.md#desktops-in-the-cloud)).
 
+### Does it work with Proxmox, VMware vSphere or Nutanix?
+
+Yes. RDP is spoken by Windows inside the VM, so the hypervisor underneath does not matter: Proxmox VE, VMware
+vSphere/ESXi, Nutanix AHV, XCP-ng, KVM or Hyper-V, each device to its own VM or to an RDS farm running there, with
+RDP over UDP, USB, webcams and the whole fleet managed centrally. Linux desktops connect through xrdp. Setup in
+[Proxmox and VMware](guides/proxmox-vmware-thin-client.md); and the
+[manager](https://openthinrdp.github.io/manager.html) checks the health of Proxmox and vSphere too.
+
 ### Citrix or VMware/Omnissa Horizon?
 
-No, OpenThinRDP is RDP only. For those, see [the alternatives](alternatives.md).
+Not yet: today OpenThinRDP speaks RDP, and native Proxmox sessions over SPICE and VNC come next. If Citrix or
+Horizon is what keeps you from trying it, [tell us](https://github.com/OpenThinRdp/openthinrdp/issues): what users
+ask for comes first. Meanwhile, [the alternatives](alternatives.md).
 
 ### Do webcams, headsets, USB keys and smart cards work?
 
