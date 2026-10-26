@@ -420,6 +420,18 @@ if MODE == 'message':
     elif buttons: list(buttons.values())[0].grab_focus()
     Gtk.main(); sys.exit(code)
 
+def tz_list():
+    # UTC and every zone of tzdata (zone1970.tab, the list timedatectl shows), sorted
+    zs = set(['UTC'])
+    try:
+        with open('/usr/share/zoneinfo/zone1970.tab', encoding='utf-8') as f:
+            for l in f:
+                p = l.split('\t')
+                if len(p) > 2 and not l.startswith('#'): zs.add(p[2].strip())
+    except OSError:
+        pass
+    return sorted(zs)
+
 def left_label(text, cls, chars=70):
     l = Gtk.Label(label=text, xalign=0); l.get_style_context().add_class(cls)
     l.set_line_wrap(True); l.set_max_width_chars(chars); l.set_justify(Gtk.Justification.LEFT)
@@ -436,7 +448,7 @@ if MODE in ('form', 'text') and sp:
 # --- settings of the device ------------------------------------------------------------------------------------
 # On stdin, one line per section and per field, tab separated:
 #   S  title
-#   F  KEY  type  label  value  choices  hint        type: text, password, choice (choices "value=label|..."), ro
+#   F  KEY  type  label  value  choices  hint        type: text, password, choice (choices "value=label|..."), tz, ro
 # Save prints KEY=value for every field but ro, in their order. --small = a status line under the heading.
 if MODE == 'form':
     card.set_size_request(min(1060, SW - 40), min(720, SH - 40)); card.set_spacing(14)
@@ -459,6 +471,17 @@ if MODE == 'form':
                 for c in ch.split('|'):
                     v, _, t = c.partition('='); w.append(v, t or v)
                 if not w.set_active_id(val): w.set_active(0)
+            elif typ == 'tz':
+                # the time zones of tzdata in a list, with a search while typing ("rome" finds Europe/Rome)
+                w = Gtk.ComboBoxText.new_with_entry()
+                zones = tz_list()
+                for z in zones: w.append(z, z)
+                w.get_child().set_text(val)
+                store = Gtk.ListStore(str)
+                for z in zones: store.append([z])
+                comp = Gtk.EntryCompletion(model=store, text_column=0, minimum_key_length=2)
+                comp.set_match_func(lambda c, k, it, _: k.lower() in c.get_model()[it][0].lower(), None)
+                w.get_child().set_completion(comp)
             else:
                 w = Gtk.Entry(); w.set_text(val)
                 if typ == 'password':
@@ -478,7 +501,7 @@ if MODE == 'form':
     def save(*_):
         out = []
         for key, typ, w in fields:
-            v = (w.get_active_id() or '') if typ == 'choice' else w.get_text()
+            v = (w.get_active_id() or '') if typ == 'choice' else w.get_child().get_text() if typ == 'tz' else w.get_text()
             out.append('%s=%s' % (key, v.replace('\n', ' ')))
         leave(0, '\n'.join(out))
     bar = Gtk.Box(spacing=10); bar.set_margin_top(4)
