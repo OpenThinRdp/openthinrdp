@@ -1,6 +1,6 @@
 <p align="center"><img src="docs/logo.png" alt="OpenThinRDP" width="480"></p>
 
-<p align="center"><b>The free thin client OS for Windows Remote Desktop, RDS and VDI.<br>
+<p align="center"><b>The free thin client OS for Windows Remote Desktop, RDS and VDI, on Hyper-V, Proxmox, VMware or any cloud.<br>
 RDP over UDP that keeps working where TCP freezes, and a whole fleet managed from one Windows window.</b></p>
 
 <p align="center">
@@ -22,6 +22,7 @@ agent, no cloud service to depend on: a shared folder and a small Windows manage
 
 | | |
 |---|---|
+| **Any hypervisor, any cloud** | Windows desktops and VMs on **Hyper-V, Proxmox VE, VMware vSphere/ESXi, Nutanix AHV, XCP-ng, KVM**, Azure, AWS or Google Cloud, physical PCs, and Linux desktops through xrdp: RDP is spoken by the machine you connect to, so what runs underneath does not matter ([Proxmox and VMware](docs/guides/proxmox-vmware-thin-client.md)) |
 | **Smooth on bad lines** | RDP over UDP: on a line losing half of the packets the desktop still runs at 19-21 frames per second, where TCP has already frozen ([numbers below](#rdp-over-udp-that-keeps-going-on-a-bad-line)) |
 | **Zero-touch setup** | a new device needs a domain account and nothing else: it finds its management folder in the domain by itself ([how](docs/manager.md#settings--manager-language-and-local-copy)) |
 | **The whole fleet in one window** | state of every device, central settings, signed updates with pilot devices and rollback, power on (Wake-on-LAN), restart, remote screen |
@@ -74,10 +75,14 @@ OpenThinRDP has it on, with `TRANSPORT=tcp` one setting away.
 ## Who it is for
 
 - You publish desktops with **Windows Remote Desktop Services**: RD Connection Broker with session hosts or a
-  Hyper-V VDI collection. Or there is no broker at all: each device connects to one Windows PC or server (set
+  Hyper-V VDI collection. Or there is no broker at all: each device connects to one Windows PC, server or VM (set
   its name instead of the broker), e.g. a reception desk that works on the PC in the office. Devices outside the
   office go through the **RD Gateway** over HTTPS ([`RDP_GATEWAY`](docs/configuration.md#rd-gateway)) or their own
   **VPN**, WireGuard or OpenVPN ([`VPN`](docs/configuration.md#vpn)).
+- Your VMs run on **Proxmox VE, VMware vSphere/ESXi, Nutanix AHV, XCP-ng or KVM**: each device opens its own
+  Windows VM, or an RDS farm whose session hosts run there; Linux desktops through xrdp. And the
+  [manager](https://openthinrdp.github.io/manager.html) watches Proxmox and vSphere too
+  ([Proxmox and VMware](docs/guides/proxmox-vmware-thin-client.md)).
 - Your desktops are **in the cloud**: an RDS deployment or Windows virtual machines in Azure, AWS, Google Cloud
   or with any provider, reached through the RD Gateway or a VPN, with UDP through a VPN
   ([details](docs/configuration.md#desktops-in-the-cloud)). Azure Virtual Desktop and Windows 365 are not supported
@@ -90,8 +95,10 @@ OpenThinRDP has it on, with `TRANSPORT=tcp` one setting away.
   system, no sign-in, the page chosen centrally ([see below](#screens-that-only-show-a-web-page)), so one image
   covers the whole fleet.
 
-Not for you (yet): Citrix, VMware/Omnissa Horizon and other protocols (OpenThinRDP does RDP only), 32-bit only
-PCs. ARM is experimental: an SD card image for the Raspberry Pi 4
+**Next on the roadmap:** native Proxmox sessions over SPICE (the VM chosen in Proxmox itself, Linux VMs included)
+and VNC. Running Citrix or Omnissa Horizon and want them here too?
+[Tell us](https://github.com/OpenThinRdp/openthinrdp/issues): what users ask for comes first. 32-bit only PCs are
+not supported. ARM is experimental: an SD card image for the Raspberry Pi 4
 ([pre-release](https://github.com/OpenThinRdp/openthinrdp/releases/tag/rpi-test-1)), tested in QEMU emulation only,
 not yet on a real board ([what to check](docs/arm.md)); the Pi 5 is not supported yet.
 
@@ -105,7 +112,7 @@ not yet on a real board ([what to check](docs/arm.md)); the Pi 5 is not supporte
 | Storage | 8 GB to install it (eMMC, SSD or disk); nothing to try it live from a USB stick |
 | Network | cable, Wi-Fi or a USB Ethernet adapter; WPA2/WPA3 personal or Enterprise, and 802.1X on the cable |
 | TPM 2.0 | optional: with one, the device's secrets (management folder password, Wi-Fi key, SSH host keys) are kept encrypted in it ([security](docs/security.md)); without one it works the same |
-| Windows side | an RD Connection Broker (RDS session hosts or a Hyper-V VDI collection), or any Windows PC or server that accepts Remote Desktop (Pro, Enterprise, Server), on premises or in any cloud |
+| Windows side | an RD Connection Broker (RDS session hosts or a Hyper-V VDI collection), or any Windows PC, server or VM that accepts Remote Desktop (Pro, Enterprise, Server), on any hypervisor (Hyper-V, Proxmox, VMware, Nutanix, XCP-ng, KVM), on premises or in any cloud; Linux desktops through xrdp |
 
 Tested hardware and firmware settings: [docs/hardware.md](docs/hardware.md).
 
@@ -267,14 +274,15 @@ that you can read: the whole client side is a few shell scripts in `rootfs/opt/o
 | Cost | free | comes with Dell thin clients | subscription per device | licence per device | free |
 | Source | client open (GPLv3), manager free but closed | closed | closed | closed | open |
 | Runs on | x86-64 PCs and thin clients, UEFI or BIOS; Raspberry Pi 4 (experimental) | Dell thin clients | many x86-64 devices | x86-64 PCs, Raspberry Pi | x86 PCs |
-| Protocols | RDP only | Citrix, Omnissa/VMware, Microsoft and more | Citrix, Omnissa/VMware, Microsoft and more | many | many (you build the image) |
+| Protocols | RDP to Windows on any hypervisor or cloud, and xrdp; SPICE and VNC next | Citrix, Omnissa/VMware, Microsoft and more | Citrix, Omnissa/VMware, Microsoft and more | many | many (you build the image) |
 | Management | shared folder + Windows tool, no server | Wyse Management Suite | UMS server | NoTouch Center | configuration files on a network server |
 | Updates | signed, from GitHub or your folder | vendor firmware | vendor | vendor | rebuild the image |
 | Install | ISO, live or automatic installation | preinstalled | installer or preinstalled | installer | build, then PXE or USB |
 
-If you need Citrix or Horizon, vendor support or certified hardware, the commercial systems are the right
-choice. OpenThinRDP is for networks built on Windows Remote Desktop that want a free, open client that is simple
-to manage, and for anyone who wants to put FreeRDP's UDP transport to work. Product names are trademarks of
+OpenThinRDP is for networks built on Windows Remote Desktop, on whatever hypervisor or cloud, that want a free, open
+client that is simple to manage, and for anyone who wants to put FreeRDP's UDP transport to work. Need Citrix or
+Horizon today, vendor support or certified hardware? The commercial systems do that; tell us what would make you
+switch. Product names are trademarks of
 their owners; the comparison reflects public information and our understanding, corrections are welcome.
 
 Each of them in more detail, and **Linux Mint or Ubuntu with Remmina**: [docs/alternatives.md](docs/alternatives.md).
