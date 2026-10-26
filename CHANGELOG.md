@@ -11,6 +11,9 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
   mode, its storage a drive in Windows; the manager sets it, or `USB_REDIRECT`, from the peripherals of a device, for
   that device, its group or all, and plugs a device in again from there.
 
+- **The time zone from a list** in the settings of the device: every zone of tzdata, with a search while typing
+  ("rome" finds Europe/Rome) instead of the exact name to type ([#154](https://github.com/OpenThinRdp/openthinrdp/issues/154)).
+
 - **Anonymous counts from the devices really leave now**: they were sent with curl, which is not in the image, so
   no device ever sent one; now python3, already in the image, sends them. Nothing else changes: the same counts, the
   same `ANON_STATS=off` to switch them off ([privacy](docs/privacy.md)).
