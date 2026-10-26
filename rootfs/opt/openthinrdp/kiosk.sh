@@ -773,6 +773,10 @@ session(){
       # the times of the sign-in (in tenths of a second): the broker, the VM made ready, Windows until the desktop
       local t0 t1="" t2="" t3 qn=0 qs=0 qm=0 qrx0=0 qrx qpk=0 qt0=0 qlr=0 qlt=0 r
       t0=$(date +%s%1N)
+      # the UTC offset the session started with: Windows takes the time zone of the device only when a session
+      # opens (time zone redirection), so a session open across a change of the clock (daylight saving time)
+      # stayed one hour off until it was opened again (26/10/2026, two sessions open since Friday)
+      local tzo; tzo=$(date +%z)
       while kill -0 $xp 2>/dev/null; do
         fp=$(pgrep -P $xp -x xfreerdp3 | head -1)
         # Cancel pressed before FreeRDP was there: it goes as soon as it is
@@ -796,6 +800,9 @@ session(){
         # and the session is reopened like after any drop.
         [ $((n % 12)) -eq 0 ] || continue
         fp=$(pgrep -P $xp -x xfreerdp3 | head -1); [ -n "$fp" ] || continue
+        # Watchdog 4: the clock changed (daylight saving time): the session is opened again at once, like after a
+        # drop (code 137, a few seconds, the programs stay open on the server), so Windows shows the new time
+        if [ $s3 -eq 1 ] && [ "$(date +%z)" != "$tzo" ]; then ev "session of $U: the time changed ($tzo to $(date +%z), daylight saving time), opened again so Windows shows the new time"; tzo=$(date +%z); kill -9 "$fp"; continue; fi
         # Stopped by the kernel (state T: it tried the console, or anything else that stops it) for 10 s: it never
         # goes on by itself. What it was doing kept, killed, the attempt ends with an error (not a drop to retry).
         if [ "$(awk '/^State/{print $2}' /proc/"$fp"/status 2>/dev/null)" = T ]; then stopped=$((stopped + 5))
