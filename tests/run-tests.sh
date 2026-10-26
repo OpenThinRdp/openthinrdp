@@ -137,6 +137,7 @@ ok "the USB disk of the system is found, a stick in /media is not" '[ "$(USB_DEV
 printf '%s\n' '22 1 8:34 / / rw - ext4 /dev/sdc2 rw' > $UT/mountinfo
 ok "a system on a disk that is not USB: no USB device to keep" '[ -z "$(USB_DEVBLOCK=$UT/devblock USB_MOUNTINFO=$UT/mountinfo usb_system_ids)" ]'
 ok "the kiosk never passes the disk of the system, also when listed in USB_REDIRECT" '( eval "$(sed -n "/^usb_opt(){/,/^}/p" $OTR/kiosk.sh)"; CAMID=""; USBFILTER=""; usb_all_ids(){ echo "1234:0006 abcd:0001"; }; usb_system_ids(){ echo 1234:0006; }; printf "USB_MODE=all\nUSB_REDIRECT=1234:0006\n" > $OTR_CONF; [ "$(usb_opt)" = "/usb:auto,id:abcd:0001" ] )'
+ok "USB_LOCAL keeps a device on the thin client, also listed in USB_REDIRECT, and is checked like it" '( eval "$(sed -n "/^usb_opt(){/,/^}/p" $OTR/kiosk.sh)"; CAMID=""; USBFILTER=""; usb_all_ids(){ echo "1234:0006 abcd:0001"; }; usb_system_ids(){ :; }; printf "USB_MODE=all\nUSB_REDIRECT=1234:0006 abcd:0001\nUSB_LOCAL=ABCD:0001\n" > $OTR_CONF; [ "$(usb_opt)" = "/usb:auto,id:1234:0006" ] ) && ! check x "USB_LOCAL=12:34" && check x "USB_LOCAL=ABCD:0001,1234:5678"'
 : > /etc/openthinrdp/openthinrdp.conf; rm -rf "$UT"
 printf 'NETMODE=Statico\nIPADDR=192.0.2.10\nNETMASK=255.255.255.0\nGATEWAY=192.0.2.1\nDNS1=192.0.2.53\n' > "$T"
 ok "static alias normalized" '$OTR/save-config.sh "$T" --print 2>&1 | grep -qx "NETMODE=static"'
@@ -650,7 +651,7 @@ ok "802.1X off: the supplicants stopped, the status says off" '! pgrep -f "dot1x
   eval "$(sed -n '/^settings_spec(){/,/^}/p; /^settings_read(){/,/^}/p' $OTR/kiosk.sh)"; otr_lang
   NETV=(dhcp static) NETL=(a b) USBV=(all) USBL=(a) ONV=(on off) ONL=(a b) TRV=(auto) TRL=(a) WEBV=(none) WEBL=(a) LNV=(en) LNL=(a)
   WSECV=(psk peap tls) WSECL=(a b c) D1XV=(off peap tls) D1XL=("$L_OFF" "$L_D1X_PEAP" "$L_D1X_TLS")
-  h= u= br= brf= dom= lbi= tr=auto thr= off= nm=dhcp ip= mask= gw= d1= d2= ntp= wf=on ws= wp= um=all ur= wb=none wu= ku= kr=
+  h= u= br= brf= dom= lbi= tr=auto thr= off= nm=dhcp ip= mask= gw= d1= d2= ntp= wf=on ws= wp= um=all ur= ul= wb=none wu= ku= kr=
   pon= poff= pdays= share= mu= mp= su=on an=on tz= ln=en ean= epw=
   wsec=peap d1x=tls d1xs="eth0: authenticated (EAP-TLS)" eid='EXAMPLE\thin' eca=system esn=nps.example.test
   settings_spec > /tmp/spec

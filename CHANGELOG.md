@@ -7,6 +7,10 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
 
 ## 0.2.24 (not released yet)
 
+- **A USB device as a drive, also when the others go whole**: `USB_LOCAL` (VID:PID) keeps it on the device in every
+  mode, its storage a drive in Windows; the manager sets it, or `USB_REDIRECT`, from the peripherals of a device, for
+  that device, its group or all, and plugs a device in again from there.
+
 - **Anonymous counts from the devices really leave now**: they were sent with curl, which is not in the image, so
   no device ever sent one; now python3, already in the image, sends them. Nothing else changes: the same counts, the
   same `ANON_STATS=off` to switch them off ([privacy](docs/privacy.md)).

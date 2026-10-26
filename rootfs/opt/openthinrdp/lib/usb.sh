@@ -40,6 +40,8 @@ usb_system_ids(){
 # with all (Windows gets the whole device), with auto when the device is only storage or never goes whole anyway
 # (a smart card reader with storage: the reader goes through /smartcard, its storage as a drive)
 usb_mount_here(){
+  # kept here by USB_LOCAL (VID:PID of the device): mounted in every mode
+  if [ -n "$1" ] && [ -f "$1/idVendor" ]; then case " $(cfg USB_LOCAL | tr 'A-F' 'a-f') " in *" $(cat "$1/idVendor"):$(cat "$1/idProduct") "*) return 0 ;; esac; fi
   case "$(cfg USB_MODE)" in
     disks) return 0 ;;
     auto) [ -n "$1" ] || return 1; usb_storage_only "$1" && return 0; case " $(usb_classes "$1")" in *" 0b "*) return 0 ;; esac; return 1 ;;
