@@ -39,15 +39,17 @@ and what is still missing. It is updated when something changes. What runs where
 ## Reliability in the field
 
 **Covered**: one production fleet since October 2026, 15 Dell OptiPlex 3000 Thin Clients (desks, tills, a
-laboratory, weighing stations, a wall screen on Wi-Fi). From the event logs the devices keep (11-20 October 2026):
+laboratory, weighing stations, a wall screen on Wi-Fi). From the event logs the devices keep, since the first release
+(11-26 October 2026):
 
 | | |
 |---|---|
-| software updates installed | 189 |
+| software updates installed | 299 |
 | software updates failed | 0 |
-| sessions opened | 175 |
-| automatic reconnections | 57 |
-| starts of the kiosk | 261 |
+| sessions opened | 235 |
+| hours in session | 970 |
+| sessions dropped by a lost network, reopened by themselves within 10 minutes | 46 of 51 |
+| starts of the kiosk | 388 |
 
 **Not yet**: months of data, and fleets other than ours; the hardware test of the live system (0.2.8) lets anyone
 send a hardware report from their own devices. The numbers will be updated here as they grow; a fleet
