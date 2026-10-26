@@ -5,6 +5,18 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.2.25 (2026-10-26)
+
+- **The manager is signed with Authenticode**: `OpenThinRDP-Manager.exe` carries the signature of the project
+  (`CN=OpenThinRDP Project`, with a timestamp). An EDR or antivirus that held the manager back (SentinelOne,
+  [#133](https://github.com/OpenThinRdp/openthinrdp/issues/133)) is told once to allow it by signer, and every next
+  release passes: [how](https://github.com/OpenThinRdp/openthinrdp-manager/blob/main/docs/code-signing.md). Your own
+  code signing certificate still works too (*Settings > Security > Code signing*).
+- **Rings in proportion**: memory, disks and the other rings of the manager were drawn full or empty, never in between.
+- **A narrow window** puts the cards of a row two by two, then one under the other, instead of a scroll to the side.
+- **Charts** keep their words straight (they were stretched with the drawing), the days of the scheduled jobs come in
+  the language of the manager, and the hints that still named the settings of 0.2.23 lead to the line of the server.
+
 ## 0.2.24 (2026-10-26)
 
 - **A new window for the manager**: every page and every dialog drawn on the WebView2 of Windows (the installer of
