@@ -1,6 +1,7 @@
 #!/bin/bash
 # Anonymous usage counts for the project (ANON_STATS=on, the default; off in the settings of the device or centrally).
-# From report.sh: at the first report after the device starts the first time (about a minute), then once a week.
+# From report.sh: at the first report after the device starts the first time (about a minute; a new device before it
+# takes the central settings, with its own), then once a week.
 # What is sent, and nothing else (docs/privacy.md says the same):
 #   the version of OpenThinRDP and of FreeRDP, the maker and model of the computer, its processor, its memory rounded
 #   to whole GB, the transport (auto/udp/tcp), the language, live system or installed, Wi-Fi adapter and TPM present
@@ -94,8 +95,11 @@ all(){
 }
 
 if [ "$1" = --print ]; then all; exit 0; fi
-[ "$(cfg ANON_STATS)" = off ] && exit 0
+# off: nothing. A new device decides with its own setting as it was before the central ones (OTR_STATS_ANON, report.sh)
+[ "${OTR_STATS_ANON:-$(cfg ANON_STATS)}" = off ] && exit 0
 # never sent (a device just switched on: at once), or a week since the last send
+# one send at a time (report.sh may start a second before the first is done)
+exec 9> "$OTR_LIB/stats.lock"; flock -n 9 || exit 0
 [ -f "$STAMP" ] && [ $(( $(date +%s) - $(stat -c %Y "$STAMP") )) -lt 604800 ] && exit 0
 ua="Mozilla/5.0 (X11; Linux x86_64) OpenThinRDP/$(cat "$OTR/VERSION" 2>/dev/null)"
 # python3 is in the image, curl is not: up to 0.2.23 the counts were sent with curl and no device ever sent one.

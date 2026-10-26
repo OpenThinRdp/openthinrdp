@@ -322,6 +322,10 @@ case "$(cfg UPDATE_FROM)" in
   github) "$OTR/auto-update.sh" check-github ;;
   off)    mkdir -p "$OTR_LIB/update"; echo "software updates off (UPDATE_FROM=off)" > "$OTR_LIB/update/status" ;;
 esac
+# a new device (it never sent its counts and never took the central settings): its first anonymous counts with its own
+# settings, before those of the site arrive; a device that already has the central settings follows them, also after
+# an update (docs/privacy.md says so)
+[ -f "$OTR_LIB/stats-sent" ] || [ -f "$OTR_LIB/central-common.conf" ] || OTR_STATS_ANON="$(cfg ANON_STATS)" setsid "$OTR/stats.sh" < /dev/null > /dev/null 2>&1 &
 # apply the central settings (also when the folder does not answer: the last good copy is used). Not while an
 # update is installing: with half the files new and half old, a valid setting was rejected (13/10/2026, "colour
 # not valid: BG_BOTTOM" three seconds into 0.1.6); the next run, at most 5 minutes later, applies it.

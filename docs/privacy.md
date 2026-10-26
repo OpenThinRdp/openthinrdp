@@ -7,7 +7,9 @@ on by default, it is easy to switch off, and this page lists everything it sends
 ## What a device sends
 
 About a minute after it starts the first time, then once a week (`stats.sh`, started by `report.sh`). A live system
-that keeps nothing between starts sends at each start.
+that keeps nothing between starts sends at each start. A new device sends its first counts with its own settings,
+before it takes the central settings of its site: so we learn which computers OpenThinRDP is tried on. From then on
+it follows the central settings.
 
 | Count | Example |
 |---|---|
@@ -80,8 +82,8 @@ device: each count carries no number or name that would tell two devices apart.
 - **Every device of a site**: the same setting in the manager, last in the *Settings* of the site (or of a group), or
   `ANON_STATS=off` in `common.conf`.
 - **Before the first start**: `ANON_STATS=off` in `image/site/site.conf` of your own image, and nothing is ever sent.
-  A managed device reads the central settings before its first send, so `ANON_STATS=off` in `common.conf` also
-  holds for a new device that reaches the management folder.
+  `ANON_STATS=off` in `common.conf` holds from the moment a device has taken the central settings: a new device
+  sends its first counts before that, a device that already has them sends nothing, also after an update.
 - **The manager**: *Settings > Manager > Anonymous counts for the project*, untick.
 
 When it is off, nothing is sent. A device with no internet sends nothing and tries again at its next report.
