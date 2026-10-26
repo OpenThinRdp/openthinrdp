@@ -5,6 +5,12 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.2.24 (not released yet)
+
+- **Anonymous counts from the devices really leave now**: they were sent with curl, which is not in the image, so
+  no device ever sent one; now python3, already in the image, sends them. Nothing else changes: the same counts, the
+  same `ANON_STATS=off` to switch them off ([privacy](docs/privacy.md)).
+
 ## 0.2.23 (2026-10-25)
 
 - **The manager is a project of its own**: [openthinrdp-manager](https://github.com/OpenThinRdp/openthinrdp-manager),
