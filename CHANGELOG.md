@@ -5,18 +5,33 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
-## 0.2.24 (not released yet)
+## 0.2.24 (2026-10-26)
 
+- **A new window for the manager**: every page and every dialog drawn on the WebView2 of Windows (the installer of
+  Microsoft comes with the manager when a PC lacks it). Columns you can widen and sort, filters, a right click menu
+  on each line, a page that stays as you left it when you come back, one copy open at a time, and a start in a
+  fraction of a second.
+- **Settings in one place**: *Site* first (time zone, language and keyboard of all the devices, language of the
+  manager), then *Infrastructure and servers*, where each iDRAC, Proxmox, vCenter or Veeam server has its own account
+  and a **Test** button that says in plain words what is wrong. No setting is written in two places any more.
+- **The hardware of the servers as the iDRAC shows it**: what the iDRAC says of each part (processors, memory, disks
+  and RAID, power supplies, fans, temperatures, voltages, batteries, chassis intrusion, licences, log), then every
+  disk with its remaining life and predicted failure, RAID volumes and the controller battery, memory module by
+  module, processors, network ports, temperatures with their thresholds, the hardware log of 30 days and every
+  firmware version. One line per server in Home.
+- **Ignore a notice for a while**, or until you restore it, with a note of why; it comes back by itself if it gets
+  worse.
+- **Who opens the manager**: personal access with the Windows account (a user or an AD group, at their level),
+  the access code kept for emergencies.
 - **A USB device as a drive, also when the others go whole**: `USB_LOCAL` (VID:PID) keeps it on the device in every
   mode, its storage a drive in Windows; the manager sets it, or `USB_REDIRECT`, from the peripherals of a device, for
   that device, its group or all, and plugs a device in again from there.
-
 - **The time zone from a list** in the settings of the device: every zone of tzdata, with a search while typing
   ("rome" finds Europe/Rome) instead of the exact name to type ([#154](https://github.com/OpenThinRdp/openthinrdp/issues/154)).
-
 - **Anonymous counts from the devices really leave now**: they were sent with curl, which is not in the image, so
-  no device ever sent one; now python3, already in the image, sends them. Nothing else changes: the same counts, the
-  same `ANON_STATS=off` to switch them off ([privacy](docs/privacy.md)).
+  no device ever sent one; now python3, already in the image, sends them. A new device sends its first counts with
+  its own settings, before it takes the central ones; `ANON_STATS=off` in the central settings holds from then on,
+  also after an update ([privacy](docs/privacy.md)).
 
 ## 0.2.23 (2026-10-25)
 
