@@ -187,6 +187,8 @@ V[SSH]=$(onoff "$(get SSH)")
 V[REMOTE_SCREEN]=$(onoff "$(get REMOTE_SCREEN)")
 case "$(low "$(get REMOTE_CONSENT)")" in ask|chiedi|vraag|on|yes) V[REMOTE_CONSENT]=ask ;; *) V[REMOTE_CONSENT]=off ;; esac
 V[ANON_STATS]=$(onoff "$(get ANON_STATS)")
+V[CAMERA_H264]=$(onoff "$(get CAMERA_H264)")
+V[CAMERA_HWACCEL]=$(onoff "$(get CAMERA_HWACCEL)")
 
 # --- web button and kiosk page
 case "$(low "$(get WEB_BUTTON)")" in app|portale|portal) V[WEB_BUTTON]=app ;; browser|chrome|chromium) V[WEB_BUTTON]=browser ;; kiosk) V[WEB_BUTTON]=kiosk ;; *) V[WEB_BUTTON]=none ;; esac

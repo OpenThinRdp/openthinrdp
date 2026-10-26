@@ -8,6 +8,8 @@ printf 'deb http://deb.debian.org/debian trixie-backports main\ndeb-src http://d
 apt-get update -qq
 apt-get install -y -qq --no-install-recommends ca-certificates git devscripts build-essential patch >/dev/null
 apt-get build-dep -y -qq -t trixie-backports freerdp3 >/dev/null
+# VA-API: the webcam encoded on the video engine of the processor (WITH_FFMPEG_HWACCEL)
+apt-get install -y -qq --no-install-recommends libva-dev libdrm-dev >/dev/null
 mkdir -p /b && cd /b
 apt-get source -qq -t trixie-backports freerdp3
 DEB=$(ls -d /b/freerdp3-*/ | head -1)
@@ -24,7 +26,7 @@ if [ -f debian/patches/series ]; then
   done
   : > debian/patches/series
 fi
-sed -i '0,/dh_auto_configure --/s//dh_auto_configure -- -DWITH_RDPEUDP=ON/' debian/rules
+sed -i '0,/dh_auto_configure --/s//dh_auto_configure -- -DWITH_RDPEUDP=ON -DWITH_FFMPEG_HWACCEL=ON/' debian/rules
 grep -q WITH_RDPEUDP=ON debian/rules || { echo "debian/rules: could not turn UDP on"; exit 1; }
 V="$FREERDP_VERSION_BASE.$DATE.$SHORT+otr$FREERDP_OTR_REVISION"
 dch -b -v "$V" -D trixie-backports "OpenThinRDP: FreeRDP $FREERDP_COMMIT with the UDP transport (RDPEUDP)" </dev/null

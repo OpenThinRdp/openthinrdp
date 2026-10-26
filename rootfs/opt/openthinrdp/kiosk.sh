@@ -296,7 +296,8 @@ connect(){
   if card=$(usb_sound_card c "$usb"); then o+=(/microphone:sys:alsa,dev:plughw:CARD="$card"); ev "microphone: USB ($card)"
   else o+=(/microphone:sys:alsa); fi
   card=$(usb_sound_card p "$usb") && snd=/sound:sys:alsa,dev:plughw:CARD="$card"
-  [ $HASCAM = 1 ] && o+=(/dvc:rdpecam)
+  # the camera channel with its options (CAMERA_H264, CAMERA_HWACCEL): a FreeRDP without them ignores them
+  [ $HASCAM = 1 ] && o+=(/dvc:rdpecam,h264:$(cfg CAMERA_H264),hwaccel:$(cfg CAMERA_HWACCEL))
   read -ra extra <<< "$(cfg RDP_EXTRA)"
   # the USB devices passed whole wait for the desktop (usb-hold.sh): a device that hangs while Windows starts it
   # must not hold up the session's display. The progress loop releases them 15 s after the window is up.
