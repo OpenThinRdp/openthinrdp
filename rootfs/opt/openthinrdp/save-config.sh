@@ -69,6 +69,8 @@ V[SHUTDOWN_SECS]=$(get SHUTDOWN_SECS)
 case "$(low "$(get USB_MODE)")" in disks|dischi) V[USB_MODE]=disks ;; auto) V[USB_MODE]=auto ;; *) V[USB_MODE]=all ;; esac
 V[USB_REDIRECT]=$(get USB_REDIRECT | tr -s ' ,;' ' ' | tr 'A-F' 'a-f' | sed 's/^ //; s/ $//')
 [[ ${V[USB_REDIRECT]} =~ ^([0-9a-f]{4}:[0-9a-f]{4}( [0-9a-f]{4}:[0-9a-f]{4})*)?$ ]] || err "$V_USBLIST"
+V[USB_LOCAL]=$(get USB_LOCAL | tr -s ' ,;' ' ' | tr 'A-F' 'a-f' | sed 's/^ //; s/ $//')
+[[ ${V[USB_LOCAL]} =~ ^([0-9a-f]{4}:[0-9a-f]{4}( [0-9a-f]{4}:[0-9a-f]{4})*)?$ ]] || err "$V_USBLIST"
 
 # --- network
 case "$(low "$(get NETMODE)")" in static|statico) V[NETMODE]=static ;; *) V[NETMODE]=dhcp ;; esac

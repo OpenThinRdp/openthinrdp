@@ -121,6 +121,7 @@ touch_ids(){
 # With USB_MODE=auto also the devices that are only storage: they stay here as drives (lib/usb.sh)
 usb_all_ids(){
   local d i skip dp n audio video touch=" $(touch_ids | tr '\n' ' ') " auto=0
+  local loc=" $(cfg USB_LOCAL | tr 'A-F' 'a-f') "
   [ "$(cfg USB_MODE)" = auto ] && auto=1
   for d in "$USB_SYS"/[0-9]*-[0-9]*; do
     [ -f "$d/idVendor" ] || continue
@@ -145,6 +146,8 @@ usb_all_ids(){
     # it stays with a driver error in Device Manager
     [ "$(cat "$d/product" 2>/dev/null)" = "Hub Controller" ] && skip=1
     [ $auto = 1 ] && usb_storage_only "$d" && skip=1
+    # kept here by USB_LOCAL: a stick seen as a drive also in the "all" mode
+    case "$loc" in *" $(cat "$d/idVendor"):$(cat "$d/idProduct") "*) skip=1 ;; esac
     [ $skip = 0 ] && echo "$(cat "$d/idVendor"):$(cat "$d/idProduct")"
   done | sort -u | tr '\n' ' '
 }
@@ -156,13 +159,13 @@ if xfreerdp3 /help 2>/dev/null | grep -q 'filter:<class>'; then
   USBFILTER=",filter:03#09#0b#e0#01"; [ $HASCAM = 1 ] && USBFILTER="$USBFILTER#0e"
 fi
 usb_opt(){
-  local ids="$CAMID $(cfg USB_REDIRECT)" l="" i x scard
+  local ids="$CAMID $(cfg USB_REDIRECT)" l="" i x scard loc=" $(cfg USB_LOCAL | tr 'A-F' 'a-f') "
   [ "$(cfg USB_MODE)" != disks ] && ids="$ids $(usb_all_ids)"
   # smart card readers never go as whole devices, even when listed in USB_REDIRECT (pcscd owns them); nor the disk
   # the system runs from (a Raspberry Pi booting from USB, the live system on a stick)
   scard=" $(for x in /sys/bus/usb/devices/*:*; do [ "$(cat "$x/bInterfaceClass" 2>/dev/null)" = 0b ] && echo "$(cat "${x%:*}/idVendor"):$(cat "${x%:*}/idProduct")"; done | sort -u | tr '\n' ' ') $(usb_system_ids | tr '\n' ' ') "
   for i in $(echo $ids | tr ' ' '\n' | tr 'A-F' 'a-f' | sort -u); do
-    [[ $i =~ ^[0-9a-f]{4}:[0-9a-f]{4}$ ]] && [[ "$scard" != *" $i "* ]] && l="$l${l:+#}$i"
+    [[ $i =~ ^[0-9a-f]{4}:[0-9a-f]{4}$ ]] && [[ "$scard" != *" $i "* ]] && [[ "$loc" != *" $i "* ]] && l="$l${l:+#}$i"
   done
   # auto = a device that disconnects and comes back (keys that restart in another mode once they see a PC) is
   # passed again instead of being lost. The channel is always open, also without devices at login.
@@ -388,6 +391,7 @@ settings_spec(){
   sec "$L_SEC_USB"
   fld USB_MODE choice "$L_F_USBMODE" "$um" "$(chs USBV USBL)" "$L_H_USBMODE"
   fld USB_REDIRECT text "$L_F_USBLIST" "$ur" "" "$L_H_USBLIST"
+  fld USB_LOCAL text "$L_F_USBLOCAL" "$ul" "" "$L_H_USBLOCAL"
   sec "$L_SEC_WEB"
   fld WEB_BUTTON choice "$L_F_WEB" "$wb" "$(chs WEBV WEBL)" "$L_H_WEB"
   fld WEB_URL text "$L_F_WEBURL" "$wu" "" "$L_H_WEBURL"
@@ -415,7 +419,7 @@ settings_read(){
       LOAD_BALANCE_INFO) lbi=$v ;; NETMODE) nm=$v ;; IPADDR) ip=$v ;; NETMASK) mask=$v ;; GATEWAY) gw=$v ;;
       DNS1) d1=$v ;; DNS2) d2=$v ;; NTP) ntp=$v ;; SHUTDOWN_SECS) off=$v ;; SESSION_THRESHOLD) thr=$v ;;
       TRANSPORT) tr=$v ;; LANGUAGE) ln=$v ;; MGMT_SHARE) share=$v ;; MGMT_USER) mu=$v ;; MGMT_PASSWORD) mp=$v ;;
-      USB_MODE) um=$v ;; USB_REDIRECT) ur=$v ;; SECURITY_UPDATES) su=$v ;; ANON_STATS) an=$v ;; TIMEZONE) tz=$v ;; WEB_BUTTON) wb=$v ;; WEB_URL) wu=$v ;;
+      USB_MODE) um=$v ;; USB_REDIRECT) ur=$v ;; USB_LOCAL) ul=$v ;; SECURITY_UPDATES) su=$v ;; ANON_STATS) an=$v ;; TIMEZONE) tz=$v ;; WEB_BUTTON) wb=$v ;; WEB_URL) wu=$v ;;
       KIOSK_URL) ku=$v ;; KIOSK_RELOAD_MIN) kr=$v ;; POWER_ON_TIME) pon=$v ;; POWER_OFF_TIME) poff=$v ;;
       POWER_ON_DAYS) pdays=$v ;; WIFI) wf=$v ;; WIFI_SSID) ws=$v ;; WIFI_PSK) wp=$v ;;
       WIFI_SECURITY) wsec=$v ;; DOT1X) d1x=$v ;; EAP_IDENTITY) eid=$v ;; EAP_ANONYMOUS) ean=$v ;; EAP_PASSWORD) epw=$v ;;
@@ -467,7 +471,7 @@ settings_dialog(){
   if [ "$nm" = static ]; then ip=$(cfg IPADDR); mask=$(cfg NETMASK); gw=$(cfg GATEWAY)
   else ip=$IPC; mask=$([ -n "$IPC" ] && pfx2mask "$PFX" || cfg NETMASK); gw=${GWC:-$(cfg GATEWAY)}; fi
   d1=$(cfg DNS1); d2=$(cfg DNS2); ntp=$(cfg NTP); off=$(cfg_num SHUTDOWN_SECS 10); thr=$(cfg_num SESSION_THRESHOLD 10)
-  share=$(cfg MGMT_SHARE); um=$(cfg USB_MODE); ur=$(cfg USB_REDIRECT); su=$(cfg SECURITY_UPDATES); an=$(cfg ANON_STATS); tz=$(cfg TIMEZONE); tr=$(cfg TRANSPORT)
+  share=$(cfg MGMT_SHARE); um=$(cfg USB_MODE); ur=$(cfg USB_REDIRECT); ul=$(cfg USB_LOCAL); su=$(cfg SECURITY_UPDATES); an=$(cfg ANON_STATS); tz=$(cfg TIMEZONE); tr=$(cfg TRANSPORT)
   wb=$(cfg WEB_BUTTON); wu=$(cfg WEB_URL); ku=$(cfg KIOSK_URL); kr=$(cfg_num KIOSK_RELOAD_MIN 10)
   pon=$(cfg POWER_ON_TIME); poff=$(cfg POWER_OFF_TIME); pdays=$(cfg POWER_ON_DAYS); wf=$(cfg WIFI); ws=$(cfg WIFI_SSID); ln=$(cfg LANGUAGE)
   # two columns: on one column the dialog does not fit a 1440x900 screen and Save disappears. Below 900 px
@@ -530,7 +534,7 @@ settings_dialog(){
     printf '%s\n' "HOSTNAME=$h" "DEFAULT_USER=$u" "BROKER=$br" "BROKER_FALLBACK=$brf" "DOMAIN=$dom" \
       "LOAD_BALANCE_INFO=$lbi" "NETMODE=$nm" "IPADDR=$ip" "NETMASK=$mask" "GATEWAY=$gw" "DNS1=$d1" "DNS2=$d2" \
       "NTP=$ntp" "SHUTDOWN_SECS=$off" "SESSION_THRESHOLD=$thr" "MGMT_SHARE=$share" "MGMT_USER=$mu" "USB_MODE=$um" \
-      "USB_REDIRECT=$ur" "SECURITY_UPDATES=$su" "ANON_STATS=$an" "TIMEZONE=$tz" "TRANSPORT=$tr" "WEB_BUTTON=$wb" "WEB_URL=$wu" "KIOSK_URL=$ku" \
+      "USB_REDIRECT=$ur" "USB_LOCAL=$ul" "SECURITY_UPDATES=$su" "ANON_STATS=$an" "TIMEZONE=$tz" "TRANSPORT=$tr" "WEB_BUTTON=$wb" "WEB_URL=$wu" "KIOSK_URL=$ku" \
       "KIOSK_RELOAD_MIN=$kr" "POWER_ON_TIME=$pon" "POWER_OFF_TIME=$poff" "POWER_ON_DAYS=$pdays" "LANGUAGE=$ln" \
       "WIFI=$wf" "WIFI_SSID=$ws" "WIFI_SECURITY=$wsec" "DOT1X=$d1x" "EAP_IDENTITY=$eid" "EAP_ANONYMOUS=$ean" \
       "EAP_CA=$eca" "EAP_SERVER_NAME=$esn" > "$tmp"

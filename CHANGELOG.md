@@ -7,6 +7,10 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
 
 ## 0.2.24 (not released yet)
 
+- **A USB device as a drive, also when the others go whole**: `USB_LOCAL` (VID:PID) keeps it on the device in every
+  mode, its storage a drive in Windows; the manager sets it, or `USB_REDIRECT`, from the peripherals of a device, for
+  that device, its group or all, and plugs a device in again from there.
+
 - **The time zone from a list** in the settings of the device: every zone of tzdata, with a search while typing
   ("rome" finds Europe/Rome) instead of the exact name to type ([#154](https://github.com/OpenThinRdp/openthinrdp/issues/154)).
 
