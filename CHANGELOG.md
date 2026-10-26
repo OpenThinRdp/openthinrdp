@@ -5,6 +5,20 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.2.26 (2026-10-26)
+
+- **Webcams that keep up** ([#165](https://github.com/OpenThinRdp/openthinrdp/issues/165)): a webcam that compresses
+  to H.264 by itself sent that H.264 to Windows as it was, and those frames cannot be dropped: a late one held the
+  next and the picture fell behind. The webcam is now read in MJPEG and encoded by the device, which drops a late
+  frame and keeps up, on the **video engine of the processor** (Intel Quick Sync, VA-API) so the processor stays
+  free: 30 fps at 1080p on an OptiPlex 3000 Thin Client, the processor 89% idle. And Windows is offered at most
+  **1080p** (720p on a device without such a video engine), where it picked the largest a 2K webcam had. Three
+  settings change it: `CAMERA_H264`, `CAMERA_HWACCEL`, `CAMERA_MAX`, in the manager too.
+- FreeRDP [fb0198dbe](https://github.com/OpenThinRdp/openthinrdp/releases/tag/freerdp-fb0198dbe): the options of the
+  camera channel (`h264`, `hwaccel`, `maxres`), built with VA-API.
+- Tip: in a dark room many webcams lengthen their exposure and give half the frames (10 fps instead of 20-30). More
+  light, or a webcam with a fixed frame rate, helps more than any setting.
+
 ## 0.2.25 (2026-10-26)
 
 - **The manager is signed with Authenticode**: `OpenThinRDP-Manager.exe` carries the signature of the project
