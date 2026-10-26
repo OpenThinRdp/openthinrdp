@@ -1,8 +1,11 @@
 #!/bin/bash
 # Build and sign an update package for the thin clients, and publish it in the management folder.
-#   make-update.sh -v <version> -m <manager folder> [-k <gpg key id>] [-f] [-d <debs folder>] [-s <site folder>] [-o <management folder>]
+#   make-update.sh -v <version> -m <manager folder> [-k <gpg key id>] [-a <code signing folder>] [-f] [-d <debs folder>] [-s <site folder>] [-o <management folder>]
 #     -m  the manager as released, built on Windows by build-release.ps1 of the manager (its own repository): it
 #         goes into the zip of the manager with MANIFEST.txt, signed with -k
+#     -a  the launchers of the manager (.exe, .launcher) signed with Authenticode: the folder holds cert.pem and key.pem of
+#         the code signing certificate (the project one: docs/code-signing.md of the manager). Windows and the EDRs
+#         then see who made them, and an administrator allows them once by signer. Needs osslsigncode
 #     -v  version, must grow (e.g. 0.1.1): devices never install an older one
 #     -k  OpenPGP key that signs, in the gpg of this machine: the project key for a release (its public half is
 #         rootfs/opt/openthinrdp/keys/openthinrdp-release.asc), or your own key for your own packages (its public
@@ -28,9 +31,9 @@
 # Needs: bash, tar, gzip, sha256sum, python3 (the zip), gpg (Linux, WSL, or Git Bash with Gpg4win).
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd)
-V=""; KEY=""; DEBS=""; SITE=""; DEST=""; FRDP=""; MDIR=""
-while getopts "v:m:k:fd:s:o:" o; do
-  case $o in v) V=$OPTARG ;; m) MDIR=$OPTARG ;; k) KEY=$OPTARG ;; f) FRDP=1 ;; d) DEBS=$OPTARG ;; s) SITE=$OPTARG ;; o) DEST=$OPTARG ;; *) exit 2 ;; esac
+V=""; KEY=""; DEBS=""; SITE=""; DEST=""; FRDP=""; MDIR=""; ACERT=""
+while getopts "v:m:k:a:fd:s:o:" o; do
+  case $o in v) V=$OPTARG ;; m) MDIR=$OPTARG ;; k) KEY=$OPTARG ;; a) ACERT=$OPTARG ;; f) FRDP=1 ;; d) DEBS=$OPTARG ;; s) SITE=$OPTARG ;; o) DEST=$OPTARG ;; *) exit 2 ;; esac
 done
 if [ -n "$FRDP" ]; then
   . "$ROOT/image/freerdp/freerdp.conf"
@@ -48,6 +51,19 @@ fi
 [[ $V =~ ^[0-9A-Za-z._-]+$ ]] || { echo "version missing or not valid (-v)"; exit 2; }
 [ -n "$MDIR" ] && [ -f "$MDIR/OpenThinRDP-Manager.core" ] || { echo "the manager as released is missing (-m <folder of build-release.ps1>)"; exit 2; }
 [ "$(tr -d '\r\n' < "$MDIR/VERSION")" = "$V" ] || { echo "the manager in $MDIR is not version $V"; exit 2; }
+# -a: the launchers signed with Authenticode before MANIFEST.txt, which holds the hash of .launcher; a file already
+# signed stays as it is
+if [ -n "$ACERT" ]; then
+  command -v osslsigncode > /dev/null || { echo "osslsigncode is missing (apt install osslsigncode)"; exit 2; }
+  [ -f "$ACERT/cert.pem" ] && [ -f "$ACERT/key.pem" ] || { echo "no cert.pem and key.pem in $ACERT (-a)"; exit 2; }
+  for x in "$MDIR"/*.exe "$MDIR"/*.launcher; do
+    [ -f "$x" ] || continue
+    osslsigncode extract-signature -in "$x" -out "$x.sig-check" > /dev/null 2>&1 && { rm -f "$x.sig-check"; continue; }; rm -f "$x.sig-check"
+    osslsigncode sign -certs "$ACERT/cert.pem" -key "$ACERT/key.pem" -n "OpenThinRDP Manager" -i https://github.com/OpenThinRdp/openthinrdp-manager \
+      -h sha256 -ts http://timestamp.digicert.com -in "$x" -out "$x.signed" > /dev/null && mv "$x.signed" "$x" || { rm -f "$x.signed"; echo "Authenticode signature failed: $x"; exit 2; }
+    echo "signed (Authenticode): $(basename "$x")"
+  done
+fi
 # without a key here the package cannot go to a management folder: it would be published unsigned
 [ -n "$KEY" ] || [ -z "$DEST" ] || { echo "-o needs -k: without -k, sign out/update-$V/LATEST.txt in the manager, then copy the 3 files"; exit 2; }
 for f in "$ROOT"/rootfs/opt/openthinrdp/*.sh "$ROOT"/rootfs/opt/openthinrdp/lib/*.sh; do bash -n "$f"; done
