@@ -16,6 +16,12 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
   opens, so a session open across the change to or from daylight saving time showed the time one hour off until it
   was opened again. The device now opens it again by itself when the clock changes: a few seconds, the programs stay
   open.
+- **A new release is said where you look**: Home lists *New version for the devices* (or of the manager) with
+  what the folder publishes now, and the menu counts it on *Updates*. In 0.2.24 the window checked GitHub but showed
+  it nowhere.
+- **Readings that end**: the iDRACs are read in parallel, firmware, memory modules and processors only every 6
+  hours, and the next reading starts 3 minutes after the end of the last one (a reading longer than 3 minutes ran
+  back to back). Each step and each part of a controller keeps how long it took.
 - **Rings in proportion**: memory, disks and the other rings of the manager were drawn full or empty, never in between.
 - **A narrow window** puts the cards of a row two by two, then one under the other, instead of a scroll to the side.
 - **Charts** keep their words straight (they were stretched with the drawing), the days of the scheduled jobs come in
