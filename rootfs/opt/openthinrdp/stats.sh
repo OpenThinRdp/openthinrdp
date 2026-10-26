@@ -98,10 +98,20 @@ if [ "$1" = --print ]; then all; exit 0; fi
 # never sent (a device just switched on: at once), or a week since the last send
 [ -f "$STAMP" ] && [ $(( $(date +%s) - $(stat -c %Y "$STAMP") )) -lt 604800 ] && exit 0
 ua="Mozilla/5.0 (X11; Linux x86_64) OpenThinRDP/$(cat "$OTR/VERSION" 2>/dev/null)"
-ok=0
-while IFS= read -r p; do
-  curl -fsS -m 10 -G -A "$ua" --data-urlencode "p=$p" --data-urlencode "e=true" --data-urlencode "rnd=$RANDOM$RANDOM" "$URL" -o /dev/null 2>/dev/null && ok=1
-done < <(all)
-# at least one count arrived: the next in a week. None (no internet, a proxy): tried again at the next report
-[ $ok = 1 ] && touch "$STAMP"
+# python3 is in the image, curl is not: up to 0.2.23 the counts were sent with curl and no device ever sent one.
+# One python3 for all the counts; it stops at the first that gets no answer at all (no internet, a proxy).
+# At least one count arrived: the next in a week. None: tried again at the next report
+all | python3 -c '
+import sys, random, urllib.error, urllib.parse, urllib.request
+url, ua, ok = sys.argv[1], sys.argv[2], False
+for p in sys.stdin.read().splitlines():
+    q = urllib.parse.urlencode({"p": p, "e": "true", "rnd": random.randrange(10 ** 9)})
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url + "?" + q, headers={"User-Agent": ua}), timeout=10) as r:
+            ok = ok or r.status < 300
+    except urllib.error.HTTPError:
+        pass
+    except Exception:
+        break
+sys.exit(0 if ok else 1)' "$URL" "$ua" 2>/dev/null && touch "$STAMP"
 exit 0

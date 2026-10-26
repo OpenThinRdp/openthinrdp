@@ -820,11 +820,25 @@ n=$(date '+%Y-%m-%d %H:%M:%S')
 SP=$($OTR/stats.sh --print | grep "^otr/error")
 ok "anonymous counts: problems by kind, code, version and model; nothing of the messages" 'printf "%s\n" "$SP" | grep -qx "otr/error/session-frozen/1" && printf "%s\n" "$SP" | grep -qx "otr/error/session-dropped/2-5" && printf "%s\n" "$SP" | grep -qx "otr/error-detail/session-dropped/145" && printf "%s\n" "$SP" | grep -qx "otr/error-detail/session-dropped/147" && printf "%s\n" "$SP" | grep -qx "otr/error-detail/connect-failed/131" && printf "%s\n" "$SP" | grep -qx "otr/error/connect-timeout/1" && printf "%s\n" "$SP" | grep -qx "otr/error-version/session-frozen/$(cat $OTR/VERSION)" && printf "%s\n" "$SP" | grep -q "^otr/error-model/session-frozen/" && ! printf "%s\n" "$SP" | grep -q "update-failed\|otr/error/none" && ! printf "%s\n" "$SP" | grep -qi "mario\|srv-secret\|ERRCONNECT\|refused"'
 : > $OTR_EVENTS
-SB=$(mktemp -d); printf '#!/bin/bash\necho "$*" >> %s/sent\n' "$SB" > "$SB/curl"; chmod +x "$SB/curl"; rm -f /var/lib/openthinrdp/stats-sent
-printf 'ANON_STATS=off\n' > /etc/openthinrdp/openthinrdp.conf; PATH="$SB:$PATH" $OTR/stats.sh
+# a local server in place of GoatCounter records what really arrives (a fake curl hid that the image has no curl)
+SB=$(mktemp -d); rm -f /var/lib/openthinrdp/stats-sent; GU=http://127.0.0.1:18099/count
+python3 -c '
+import http.server, sys, urllib.parse
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(s):
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(s.path).query)
+        open(sys.argv[1], "a").write(q["p"][0] + " | " + q["e"][0] + " | " + s.headers.get("User-Agent", "") + "\n")
+        s.send_response(200); s.end_headers()
+    def log_message(s, *a): pass
+http.server.HTTPServer(("127.0.0.1", 18099), H).serve_forever()' "$SB/sent" & GS=$!
+for i in $(seq 20); do python3 -c 'import socket; socket.create_connection(("127.0.0.1", 18099), 1)' 2>/dev/null && break; sleep 0.5; done
+printf 'ANON_STATS=off\n' > /etc/openthinrdp/openthinrdp.conf; OTR_STATS_URL=$GU $OTR/stats.sh
 ok "anonymous counts: off = nothing sent" '[ ! -e "$SB/sent" ] && [ ! -e /var/lib/openthinrdp/stats-sent ]'
-: > /etc/openthinrdp/openthinrdp.conf; PATH="$SB:$PATH" $OTR/stats.sh; n1=$(grep -c . "$SB/sent" 2>/dev/null); PATH="$SB:$PATH" $OTR/stats.sh
-ok "anonymous counts: on = sent at once the first time, then not again within the week" '[ "$n1" = 12 ] && [ $(grep -c . "$SB/sent") -eq 12 ] && [ -e /var/lib/openthinrdp/stats-sent ]'
+: > /etc/openthinrdp/openthinrdp.conf; OTR_STATS_URL=$GU $OTR/stats.sh; n1=$(grep -c . "$SB/sent" 2>/dev/null); OTR_STATS_URL=$GU $OTR/stats.sh
+ok "anonymous counts: on = sent at once the first time, as events with the OpenThinRDP agent, then not again within the week" '[ "$n1" = 12 ] && [ $(grep -c . "$SB/sent") -eq 12 ] && grep -q "^otr/version/$(cat $OTR/VERSION) | true | Mozilla/5.0 (X11; Linux x86_64) OpenThinRDP/" "$SB/sent" && [ -e /var/lib/openthinrdp/stats-sent ]'
+kill $GS 2>/dev/null; wait $GS 2>/dev/null; rm -f /var/lib/openthinrdp/stats-sent; $OTR/stats.sh
+ok "anonymous counts: no answer = not marked as sent, tried again at the next report" '[ ! -e /var/lib/openthinrdp/stats-sent ]'
+ok "no client script calls curl (not in the image)" '! grep -nE "^[^#]*\bcurl " $OTR/*.sh $OTR/lib/*.sh'
 rm -rf "$SB" /var/lib/openthinrdp/stats-sent; mv /tmp/events.keep $OTR_EVENTS
 n=$(date '+%Y-%m-%d %H:%M:%S'); cp $OTR_EVENTS /tmp/events.keep
 { echo "$n watchdog: FreeRDP received nothing over UDP for 75 s while it sent 40 datagrams, killed: TCP until the device restarts (session-hang.log)"
