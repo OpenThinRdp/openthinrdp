@@ -855,8 +855,9 @@ ok "anonymous counts: on = sent at once the first time, as events with the OpenT
 rm -f /var/lib/openthinrdp/stats-sent; : > "$SB/sent"; printf 'ANON_STATS=off\n' > /etc/openthinrdp/openthinrdp.conf; OTR_STATS_ANON=on OTR_STATS_URL=$GU $OTR/stats.sh
 ok "anonymous counts: a new device sends its first counts with its own setting, before the central off arrives" '[ $(grep -c . "$SB/sent") -eq 12 ]'
 rm -f /var/lib/openthinrdp/stats-sent; : > "$SB/sent"; OTR_STATS_ANON=off OTR_STATS_URL=$GU $OTR/stats.sh; : > /etc/openthinrdp/openthinrdp.conf
-ra=$(grep -n 'OTR_STATS_ANON="$(cfg ANON_STATS)" setsid' $OTR/report.sh | cut -d: -f1); rb=$(grep -n 'central-apply.sh"$' $OTR/report.sh | cut -d: -f1)
+ra=$(grep -n '|| stats_start "$(cfg ANON_STATS)"' $OTR/report.sh | cut -d: -f1); rb=$(grep -n 'central-apply.sh"$' $OTR/report.sh | cut -d: -f1)
 ok "report.sh: a new device (no counts sent, no central settings taken) counts before the central settings; off on the device = nothing" '[ ! -s "$SB/sent" ] && [ -n "$ra" ] && [ -n "$rb" ] && [ "$ra" -lt "$rb" ]'
+ok "report.sh: the anonymous counts in a unit of their own (systemd-run): the oneshot service stops what it leaves in the background" 'grep -qF "systemd-run --no-block --quiet --collect" $OTR/report.sh && [ $(grep -c "stats_start" $OTR/report.sh) -eq 3 ]'
 kill $GS 2>/dev/null; wait $GS 2>/dev/null; rm -f /var/lib/openthinrdp/stats-sent; $OTR/stats.sh
 ok "anonymous counts: no answer = not marked as sent, tried again at the next report" '[ ! -e /var/lib/openthinrdp/stats-sent ]'
 ok "no client script calls curl (not in the image)" '! grep -nE "^[^#]*\bcurl " $OTR/*.sh $OTR/lib/*.sh'

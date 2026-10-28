@@ -322,16 +322,26 @@ case "$(cfg UPDATE_FROM)" in
   github) "$OTR/auto-update.sh" check-github ;;
   off)    mkdir -p "$OTR_LIB/update"; echo "software updates off (UPDATE_FROM=off)" > "$OTR_LIB/update/status" ;;
 esac
+# The anonymous counts in a unit of their own: this script runs as a oneshot service, and when it ends systemd stops
+# every process it started (KillMode=control-group), so counts started in the background never got out, on any
+# device (28/10/2026). Without systemd (tests, a container) in the background as before. $1: the setting decided now
+stats_start(){
+  if [ -d /run/systemd/system ] && command -v systemd-run >/dev/null 2>&1 &&
+     systemd-run --no-block --quiet --collect --unit="openthinrdp-stats-$$-$RANDOM" ${1:+--setenv=OTR_STATS_ANON=$1} "$OTR/stats.sh" >/dev/null 2>&1; then
+    return 0
+  fi
+  OTR_STATS_ANON=$1 setsid "$OTR/stats.sh" < /dev/null > /dev/null 2>&1 &
+}
 # a new device (it never sent its counts and never took the central settings): its first anonymous counts with its own
 # settings, before those of the site arrive; a device that already has the central settings follows them, also after
 # an update (docs/privacy.md says so)
-[ -f "$OTR_LIB/stats-sent" ] || [ -f "$OTR_LIB/central-common.conf" ] || OTR_STATS_ANON="$(cfg ANON_STATS)" setsid "$OTR/stats.sh" < /dev/null > /dev/null 2>&1 &
+[ -f "$OTR_LIB/stats-sent" ] || [ -f "$OTR_LIB/central-common.conf" ] || stats_start "$(cfg ANON_STATS)"
 # apply the central settings (also when the folder does not answer: the last good copy is used). Not while an
 # update is installing: with half the files new and half old, a valid setting was rejected (13/10/2026, "colour
 # not valid: BG_BOTTOM" three seconds into 0.1.6); the next run, at most 5 minutes later, applies it.
 systemctl is-active -q openthinrdp-update.service 2>/dev/null || "$OTR/central-apply.sh"
 # boot splash: always the image's own (a device that took the folder's picture there with 0.1.1 gets it back)
 "$OTR/branding.sh" splash
-# anonymous usage counts, once a week (ANON_STATS=on): in the background, a slow internet never holds the report
-setsid "$OTR/stats.sh" < /dev/null > /dev/null 2>&1 &
+# anonymous usage counts, once a week (ANON_STATS=on): apart, a slow internet never holds the report
+stats_start ""
 exit 0
