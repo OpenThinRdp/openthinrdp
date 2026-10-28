@@ -7,6 +7,7 @@ RDP over UDP that keeps working where TCP freezes, and a whole fleet managed fro
 <a href="https://github.com/OpenThinRdp/openthinrdp/releases/latest"><b>⬇ Download the ISO (latest release)</b></a>
 &nbsp;·&nbsp; <a href="#try-it-in-five-minutes">Try it live, nothing installed</a>
 &nbsp;·&nbsp; <a href="https://openthinrdp.github.io/">Website</a>
+&nbsp;·&nbsp; <a href="README.it.md">Italiano</a>
 </p>
 
 <p align="center">
