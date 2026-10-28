@@ -15,8 +15,13 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
   until it ran out were too many for the reading, and nothing was shown, not even the last reading); the last reading
   at once when it opens, then the new one part by part, with its progress in Home too; no long .NET error when the
   window closes after **Update the manager**; an error nobody caught is written to
-  `%LOCALAPPDATA%\OpenThinRDP\manager-errors.log` and said in a few words.
-- The devices: nothing changes.
+  `%LOCALAPPDATA%\OpenThinRDP\manager-errors.log` and said in a few words. The servers, the iDRACs and the rest are
+  read at the same time, the iDRACs with one session each (a reading of a whole site went from 3 minutes to under one),
+  and the progress moves part by part.
+- **Anonymous counts, one per device**: the counter tells visitors apart by internet address and program, so the
+  devices of a site, all behind one address, counted as one (7 devices sent, 1 counted). Each send now carries a
+  random number made for that send only, kept nowhere and taken from nothing of the device
+  ([privacy](docs/privacy.md)). The manager sends once a day instead of once a week.
 
 ## 0.2.27 (2026-10-28)
 
