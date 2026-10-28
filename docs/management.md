@@ -235,7 +235,7 @@ was used revokes those keys and brings back the image ones.
 
 Two keys give power over the whole fleet: the SSH key that opens the screen of any device, and the OpenPGP key
 that signs the update packages every device installs. The manager keeps both in `vault.otr`, next to
-`OpenThinRDP-Manager.ps1`, encrypted with an **access code**:
+`OpenThinRDP-Manager.exe`, encrypted with an **access code**:
 
 - At the first start the manager asks for the code (at least 8 characters) and creates the vault, with a new SSH
   key inside (`openthinrdp-manager`) that it adds to the **SSH keys of the devices** on the Vault page: Save there,

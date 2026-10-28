@@ -19,7 +19,7 @@ RDP over UDP that keeps working where TCP freezes, and a whole fleet managed fro
 **Turn any PC or old thin client into a locked-down Remote Desktop kiosk in five minutes.** It boots straight into
 a sign-in form and connects to Windows: through an RD Connection Broker to the user's desktop or VM, or straight to
 a session host or any Windows PC, **on premises or in the cloud**. No licence per device, no management server, no
-agent, no cloud service to depend on: a shared folder and a small Windows manager are all it takes.
+agent, no cloud service to depend on: a shared folder and the free [OpenThinRDP Manager](https://openthinrdp.github.io/manager.html) for Windows are all it takes.
 
 | | |
 |---|---|
@@ -185,12 +185,12 @@ What the device needs: [Requirements](#requirements). The whole path, from the U
 <img src="docs/screenshots/update.png" alt="Software update in progress" width="32%">
 </p>
 
-## The manager: the whole fleet from one window
+## The manager: the fleet and the servers behind it, from one window
 
 The [OpenThinRDP Manager](https://github.com/OpenThinRdp/openthinrdp-manager) is a free program for Windows 10/11 and
 Windows Server (English and Italian, nothing to install) that works on the shared folder the devices report to. No
 server, no agent, no database: what you see is the files in the folder. It also works alone, without devices, as a
-health center for Hyper-V, clusters, Remote Desktop, SQL and backups.
+health center for Hyper-V, clusters, Remote Desktop, SQL and backups. It is not a script that edits configuration files: it is a Windows application with [releases of its own](https://github.com/OpenThinRdp/openthinrdp-manager/releases) (1.0.0 from 28 October 2026) that updates itself, signed with the project key ([its page](https://openthinrdp.github.io/manager.html)).
 
 <p align="center">
 <img src="docs/screenshots/manager-devices.png" alt="Manager: every device, its state, user and version, and its settings" width="49%">

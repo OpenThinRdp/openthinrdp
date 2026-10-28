@@ -46,9 +46,9 @@ installs on the first internal disk, never on a USB disk. For many devices, *Una
 ## 5. The manager (on your Windows PC)
 
 1. Download `openthinrdp-manager-<version>.zip` from the
-   [latest release](https://github.com/OpenThinRdp/openthinrdp/releases/latest) and unpack it where only
+   [latest release of the manager](https://github.com/OpenThinRdp/openthinrdp-manager/releases/latest) and unpack it where only
    administrators can write (a share works: everybody starts the same copy). It updates itself from then on.
-2. Extract `openthinrdp-manager-<version>.zip` of the release into a folder (a share all administrators reach), start
+2. Start
    `OpenThinRDP-Manager.exe` and choose the management folder. `OpenThinRDP-Manager.exe -Install` on each PC puts a
    shortcut with the icon on its desktop.
 3. **Check permissions** (top bar): it lists what is wrong for the devices' account and offers to correct it.
