@@ -438,7 +438,7 @@ ok "debs of an update package on arm64: never an amd64 one" '[ "$(OTR_ARCH=arm64
 ok "install.sh takes the package list and the .deb files by architecture" 'grep -q "pkg_list \"\$ARCH\" packages.list" /src/management/publish/install.sh && grep -q "DEBS=\$(pkg_debs .)" /src/management/publish/install.sh && bash -n /src/management/publish/install.sh'
 rm -rf $PD /tmp/pl
 ok "UPDATE_GITHUB must be owner/repository" '! check x "UPDATE_GITHUB=not a repo"'
-[ -d /src/management/windows ] && ok "the manager carries the same project key as the devices" 'cmp -s /src/management/windows/openthinrdp-release.asc /src/rootfs/opt/openthinrdp/keys/openthinrdp-release.asc'
+[ -f /src/management/windows/openthinrdp-release.asc ] && ok "the manager carries the same project key as the devices" 'cmp -s /src/management/windows/openthinrdp-release.asc /src/rootfs/opt/openthinrdp/keys/openthinrdp-release.asc'
 # make-update.sh without -k: the package and LATEST.txt for the manager to sign (vault), never published unsigned
 rm -rf /tmp/mu; cp -a /src /tmp/mu; rm -rf /tmp/mu/out
 # the manager as build-release.ps1 leaves it (-m): a stand-in of each part
