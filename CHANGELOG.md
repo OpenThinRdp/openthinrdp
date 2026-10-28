@@ -5,6 +5,24 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.2.27 (2026-10-28)
+
+- **The anonymous counts get out** ([#167](https://github.com/OpenThinRdp/openthinrdp/issues/167)): a device started
+  them in the background of its report, which runs as a oneshot service, and systemd stopped them when the report
+  ended, before anything was sent, on every device. They now run in a unit of their own (`systemd-run`): seen on an
+  OptiPlex 3000 Thin Client, they reach the counter within a minute. What is sent does not change
+  ([privacy](docs/privacy.md)), and `ANON_STATS=off` still turns them off.
+- **Manager: no more `-EncodedCommand`**: the launcher started Windows PowerShell with the manager as a Base64 command
+  line, which EDRs such as SentinelOne report as suspicious. It now starts `OpenThinRDP-Manager.start.ps1`, a fixed
+  script of a few lines signed with the release, and hands it the manager on its standard input: nothing of the
+  manager goes on a command line or to the disk. After the update the manager starts once more through the launcher
+  of before; from the next start on, through the new one.
+- **Manager: the site key reaches every device by itself**: a device that was off when the site key was sent, or was
+  installed again, took no update from the folder any more (`UPDATE_KEY=site`: "invalid signature"). The manager, open
+  with the vault, now sends the key to such a device as soon as it is on (SSH), and notes it in `changes.log`.
+- **Manager: it opens again after updating itself**: after an update of 0.2.24-0.2.26 it could close instead of
+  starting again (the new start found the one still closing and gave way to it). It now waits for it.
+
 ## 0.2.26 (2026-10-26)
 
 - **Webcams that keep up** ([#165](https://github.com/OpenThinRdp/openthinrdp/issues/165)): a webcam that compresses
