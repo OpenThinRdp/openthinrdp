@@ -1,8 +1,9 @@
 #!/bin/bash
 # Build and sign an update package for the thin clients, and publish it in the management folder.
-#   make-update.sh -v <version> -m <manager folder> [-k <gpg key id>] [-a <code signing folder>] [-f] [-d <debs folder>] [-s <site folder>] [-o <management folder>]
-#     -m  the manager as released, built on Windows by build-release.ps1 of the manager (its own repository): it
-#         goes into the zip of the manager with MANIFEST.txt, signed with -k
+#   make-update.sh -v <version> [-m <manager folder>] [-k <gpg key id>] [-a <code signing folder>] [-f] [-d <debs folder>] [-s <site folder>] [-o <management folder>]
+#     -m  optional: the manager as released (build-release.ps1 of its own repository), in a zip of this version with
+#         MANIFEST.txt signed with -k, for the managers up to 0.2.27, which update themselves from the release of the
+#         devices. Since 1.0.0 the manager has releases of its own (publish-manager.sh of its repository)
 #     -a  the launchers of the manager (.exe, .launcher) signed with Authenticode: the folder holds cert.pem and key.pem of
 #         the code signing certificate (the project one: docs/code-signing.md of the manager). Windows and the EDRs
 #         then see who made them, and an administrator allows them once by signer. Needs osslsigncode
@@ -49,11 +50,13 @@ if [ -n "$FRDP" ]; then
   done
 fi
 [[ $V =~ ^[0-9A-Za-z._-]+$ ]] || { echo "version missing or not valid (-v)"; exit 2; }
-[ -n "$MDIR" ] && [ -f "$MDIR/OpenThinRDP-Manager.core" ] || { echo "the manager as released is missing (-m <folder of build-release.ps1>)"; exit 2; }
-[ "$(tr -d '\r\n' < "$MDIR/VERSION")" = "$V" ] || { echo "the manager in $MDIR is not version $V"; exit 2; }
+if [ -n "$MDIR" ]; then
+  [ -f "$MDIR/OpenThinRDP-Manager.core" ] || { echo "the manager as released is missing in $MDIR (-m <folder of build-release.ps1>)"; exit 2; }
+  [ "$(tr -d '\r\n' < "$MDIR/VERSION")" = "$V" ] || { echo "the manager in $MDIR is not version $V"; exit 2; }
+fi
 # -a: the launchers signed with Authenticode before MANIFEST.txt, which holds the hash of .launcher; a file already
 # signed stays as it is
-if [ -n "$ACERT" ]; then
+if [ -n "$ACERT" ] && [ -n "$MDIR" ]; then
   command -v osslsigncode > /dev/null || { echo "osslsigncode is missing (apt install osslsigncode)"; exit 2; }
   [ -f "$ACERT/cert.pem" ] && [ -f "$ACERT/key.pem" ] || { echo "no cert.pem and key.pem in $ACERT (-a)"; exit 2; }
   for x in "$MDIR"/*.exe "$MDIR"/*.launcher; do
@@ -94,6 +97,7 @@ chmod 755 "$STAGE/install.sh" "$STAGE"/rootfs/opt/openthinrdp/*.sh
 F="openthinrdp-update-$V.tar.gz"
 tar -czf "$OUT/$F" --owner=0 --group=0 -C "$STAGE" .
 H=$(sha256sum "$OUT/$F" | cut -c1-64)
+if [ -n "$MDIR" ]; then
 # The manager of the same version, for its own update (Update the manager): the files of management/windows and a
 # VERSION, not the launcher .exe (built on each PC by build-launcher.ps1) nor anything an administrator made there.
 # Its name and hash go into LATEST.txt, so the one signature covers it too.
@@ -133,7 +137,9 @@ with zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED) as z:
 PY
 rm -f "$MF" "$MF.sig"
 MH=$(sha256sum "$OUT/$MZ" | cut -c1-64)
-printf 'version=%s\nfile=%s\nsha256=%s\nmanager=%s\nmanager_sha256=%s\n' "$V" "$F" "$H" "$MZ" "$MH" > "$OUT/LATEST.txt"
+fi
+printf 'version=%s\nfile=%s\nsha256=%s\n' "$V" "$F" "$H" > "$OUT/LATEST.txt"
+[ -z "$MDIR" ] || printf 'manager=%s\nmanager_sha256=%s\n' "$MZ" "$MH" >> "$OUT/LATEST.txt"
 # The newest major update (a change to how a session connects or runs), from the file MAJOR of the repository: a
 # managed device crosses it only once the manager released it (UPDATE_MAJOR), one without a management folder only
 # with a yes on its screen. Under the signature, so it cannot be taken away.

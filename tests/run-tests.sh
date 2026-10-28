@@ -850,7 +850,7 @@ for i in $(seq 20); do python3 -c 'import socket; socket.create_connection(("127
 printf 'ANON_STATS=off\n' > /etc/openthinrdp/openthinrdp.conf; OTR_STATS_URL=$GU $OTR/stats.sh
 ok "anonymous counts: off = nothing sent" '[ ! -e "$SB/sent" ] && [ ! -e /var/lib/openthinrdp/stats-sent ]'
 : > /etc/openthinrdp/openthinrdp.conf; OTR_STATS_URL=$GU $OTR/stats.sh; n1=$(grep -c . "$SB/sent" 2>/dev/null); OTR_STATS_URL=$GU $OTR/stats.sh
-ok "anonymous counts: on = sent at once the first time, as events with the OpenThinRDP agent, then not again within the week" '[ "$n1" = 12 ] && [ $(grep -c . "$SB/sent") -eq 12 ] && grep -q "^otr/version/$(cat $OTR/VERSION) | true | Mozilla/5.0 (X11; Linux x86_64) OpenThinRDP/" "$SB/sent" && [ -e /var/lib/openthinrdp/stats-sent ]'
+ok "anonymous counts: on = sent at once the first time, as events with the OpenThinRDP agent, then not again within the week" '[ "$n1" = 12 ] && [ $(grep -c . "$SB/sent") -eq 12 ] && grep -qE "^otr/version/$(cat $OTR/VERSION) \| true \| Mozilla/5\.0 \(X11; Linux x86_64\) OpenThinRDP/$(cat $OTR/VERSION) \(s [0-9a-f]{8}\)$" "$SB/sent" && [ $(sed -n "s/.*(s \([0-9a-f]*\))$/\1/p" "$SB/sent" | sort -u | wc -l) -eq 1 ] && [ -e /var/lib/openthinrdp/stats-sent ]'
 # a new device: its first counts with its own setting, before the central settings (ANON_STATS=off there) are applied
 rm -f /var/lib/openthinrdp/stats-sent; : > "$SB/sent"; printf 'ANON_STATS=off\n' > /etc/openthinrdp/openthinrdp.conf; OTR_STATS_ANON=on OTR_STATS_URL=$GU $OTR/stats.sh
 ok "anonymous counts: a new device sends its first counts with its own setting, before the central off arrives" '[ $(grep -c . "$SB/sent") -eq 12 ]'

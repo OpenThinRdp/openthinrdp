@@ -158,15 +158,18 @@ Nothing goes to the project unless you send it.
 
 ### The manager updates itself
 
-Every release carries `openthinrdp-manager-<version>.zip`: the manager (`OpenThinRDP-Manager.exe`, the manager itself
-sealed in `OpenThinRDP-Manager.core`, the commands it runs on servers in `commands\` and `rds\`, its languages),
-`VERSION` and `MANIFEST.txt`, the SHA-256 of each file signed with the project key, which the launcher checks before
-the manager starts. Its name and SHA-256 are in the release's `LATEST.txt` (`manager=`, `manager_sha256=`), under the
-same project signature as the update package.
+Since 1.0.0 the manager has releases of its own on [its repository](https://github.com/OpenThinRdp/openthinrdp-manager/releases),
+numbered apart from the devices (up to 0.2.27 it came with each release of the devices, with their number). Each one
+carries `openthinrdp-manager-<version>.zip`: the manager (`OpenThinRDP-Manager.exe`, the manager itself sealed in
+`OpenThinRDP-Manager.core`, the commands it runs on servers in `commands\` and `rds\`, its languages), `VERSION` and
+`MANIFEST.txt`, the SHA-256 of each file signed with the project key, which the launcher checks before the manager
+starts. Its name and SHA-256 are in the `LATEST.txt` of that release (`version=`, `manager=`, `manager_sha256=`),
+signed with the project key.
 
 - At every start the manager reads `VERSION` next to it, and in the background (the window does not wait) the
-  `LATEST.txt` of the latest GitHub release of `UPDATE_GITHUB`, checked against the project key next to it
-  (`openthinrdp-release.asc`). When that release has a newer manager, the top bar shows *Manager X available*.
+  `LATEST.txt` of the latest release of the manager, checked against the project key next to it
+  (`openthinrdp-release.asc`). When it is a newer manager, the top bar shows *Manager X available*. The latest release
+  of the devices (`UPDATE_GITHUB`) is read apart, for **Release from GitHub**.
 - **By itself** (on by default; **Updates > This manager**, *Update the manager by itself*): the check runs at the
   start and every 6 hours, and a newer manager goes in at once with the steps below, when nothing is being edited
   and no other window is open (otherwise it tries again every 10 minutes). It starts again on the same folder with

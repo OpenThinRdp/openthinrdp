@@ -101,7 +101,10 @@ if [ "$1" = --print ]; then all; exit 0; fi
 # one send at a time (report.sh may start a second before the first is done)
 exec 9> "$OTR_LIB/stats.lock"; flock -n 9 || exit 0
 [ -f "$STAMP" ] && [ $(( $(date +%s) - $(stat -c %Y "$STAMP") )) -lt 604800 ] && exit 0
-ua="Mozilla/5.0 (X11; Linux x86_64) OpenThinRDP/$(cat "$OTR/VERSION" 2>/dev/null)"
+# The counter tells visitors apart by internet address and program: the devices of a site leave from one address with
+# the same program and counted as one (28/10/2026: 7 devices, 1 count). A random number made for this send only, kept
+# nowhere and taken from nothing of the device, makes each send count on its own; the next send has another.
+ua="Mozilla/5.0 (X11; Linux x86_64) OpenThinRDP/$(cat "$OTR/VERSION" 2>/dev/null) (s $(od -An -N4 -tx4 /dev/urandom | tr -d ' \n'))"
 # python3 is in the image, curl is not: up to 0.2.23 the counts were sent with curl and no device ever sent one.
 # One python3 for all the counts; it stops at the first that gets no answer at all (no internet, a proxy).
 # At least one count arrived: the next in a week. None: tried again at the next report

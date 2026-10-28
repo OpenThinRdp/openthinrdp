@@ -40,7 +40,7 @@ release of OpenThinRDP). Free for any use, closed: [its license](https://github.
   to create it, its account and its permissions: [management.md](management.md#account).
 - A **Windows 10 or 11 PC** of an administrator, with PowerShell 5.1 (it is part of Windows). For the remote screen,
   also the OpenSSH client of Windows (`ssh.exe`, usually there) and a browser.
-- **The manager itself**: `openthinrdp-manager-<version>.zip` from the [latest release](https://github.com/OpenThinRdp/openthinrdp/releases/latest),
+- **The manager itself**: `openthinrdp-manager-<version>.zip` from the [latest release of the manager](https://github.com/OpenThinRdp/openthinrdp-manager/releases/latest),
   unpacked into a folder only the administrators can write (a share works, so that everybody starts the same copy).
   From then on it [updates itself](#the-manager-updates-itself).
 - The devices set to that folder: `MGMT_SHARE` in their settings dialog, or in the image you build.
@@ -755,8 +755,10 @@ again with your key: a stolen project key installs nothing on your fleet. Set it
 
 ## The manager updates itself
 
-Every release carries the manager of the same version, under the same signature as the update package. At start,
-in the background, the manager checks the latest release; when there is a newer manager, the top bar shows
+Since 1.0.0 the manager has [releases of its own](https://github.com/OpenThinRdp/openthinrdp-manager/releases),
+numbered apart from the devices and signed with the same project key (up to 0.2.27 it came with each release of the
+devices, with their number). At start, in the background, the manager checks its latest release; when there is a
+newer manager, the top bar shows
 ***Manager X available***. **Update the manager** downloads it, checks signature and hash, keeps the files it
 replaces in `previous\`, and starts again. Your `vault.otr`, the launcher and anything that is not part of the
 manager stay as they are; if anything fails, the previous files come back.

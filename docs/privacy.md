@@ -1,6 +1,6 @@
 # Privacy: the anonymous counts
 
-OpenThinRDP sends a few anonymous counts to the project once a week. They tell us which computers it runs on, which
+OpenThinRDP sends a few anonymous counts to the project: once a week from a device, once a day from the manager. They tell us which computers it runs on, which
 versions are in use and how many devices a manager looks after, so we know what to test and what to support. It is
 on by default, it is easy to switch off, and this page lists everything it sends.
 
@@ -44,10 +44,18 @@ code and the name of a program leave the device, never the text of a message: th
 
 `sudo /opt/openthinrdp/stats.sh --print` on a device prints exactly what it would send, and sends nothing.
 
+## One count per send
+
+The counter tells visitors apart by internet address and program, so the devices of a site, which all leave from the
+same address, would count as one. Each send therefore carries a random number made for that send only, at the end of
+its program name (for example `OpenThinRDP/0.2.28 (s 3f9a2c1d)`). It is kept nowhere, it is taken from nothing of the
+device or of you, and the next send has another: it tells sends apart, never devices over time.
+
 ## What the manager sends
 
 Its first start shows, once, what the manager and the devices send and where each is switched off. Half a minute
-after it starts the first time, then once a week:
+after it starts the first time, then once a day while it is used (its version, its Windows and how many devices it
+looks after change more often than a device does):
 
 | Count | Example |
 |---|---|

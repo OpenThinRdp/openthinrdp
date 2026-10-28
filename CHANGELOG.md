@@ -5,6 +5,24 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.2.28 (2026-10-28)
+
+- **The manager has releases of its own, from 1.0.0**: numbered apart from the devices, on
+  [its repository](https://github.com/OpenThinRdp/openthinrdp-manager/releases), signed with the same project key. This
+  release carries one last manager (0.2.28): it updates itself to the releases of the manager, and from there to
+  **1.0.0**, by itself. From the next release of the devices on, their release no longer carries the manager.
+- What manager 1.0.0 brings: the Health Center no longer stays empty when a number goes down very slowly (the days
+  until it ran out were too many for the reading, and nothing was shown, not even the last reading); the last reading
+  at once when it opens, then the new one part by part, with its progress in Home too; no long .NET error when the
+  window closes after **Update the manager**; an error nobody caught is written to
+  `%LOCALAPPDATA%\OpenThinRDP\manager-errors.log` and said in a few words. The servers, the iDRACs and the rest are
+  read at the same time, the iDRACs with one session each (a reading of a whole site went from 3 minutes to under one),
+  and the progress moves part by part.
+- **Anonymous counts, one per device**: the counter tells visitors apart by internet address and program, so the
+  devices of a site, all behind one address, counted as one (7 devices sent, 1 counted). Each send now carries a
+  random number made for that send only, kept nowhere and taken from nothing of the device
+  ([privacy](docs/privacy.md)). The manager sends once a day instead of once a week.
+
 ## 0.2.27 (2026-10-28)
 
 - **The anonymous counts get out** ([#167](https://github.com/OpenThinRdp/openthinrdp/issues/167)): a device started
