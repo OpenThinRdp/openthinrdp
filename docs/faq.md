@@ -10,6 +10,17 @@ Proxmox, VMware, Nutanix or any cloud. It is Debian 13 with a
 locked-down kiosk on FreeRDP, the RDP UDP transport built in, and a Windows manager that runs the whole fleet from a
 shared folder.
 
+### What is the OpenThinRDP Manager?
+
+A free Windows application (Windows 10/11 and Windows Server, English and Italian, nothing to install) with two parts
+in one window: a **health center for the Windows infrastructure**, also without any OpenThinRDP device (Hyper-V hosts
+and failover clusters, Remote Desktop, domain controllers and DNS, SQL Server AlwaysOn, backups, Dell iDRAC and other
+Redfish controllers, Proxmox, vSphere, Veeam, Citrix, certificates: what is wrong, in a sentence, and the repair after
+you confirm), and **the management of an OpenThinRDP fleet** from the shared folder the devices report to. It is not a
+PowerShell script that edits configuration files, as it was in its first weeks: since 1.0.0 (28 October 2026) it is a
+project of its own with [its own releases](https://github.com/OpenThinRdp/openthinrdp-manager/releases), signed with
+the project key, and it updates itself. Its page: [openthinrdp.github.io/manager.html](https://openthinrdp.github.io/manager.html).
+
 ### Is it free?
 
 Yes. The client is under the GPLv3 and the [Windows manager](https://github.com/OpenThinRdp/openthinrdp-manager) is free for any use (closed, with the commands it
@@ -109,7 +120,7 @@ Yes:
 
 ### Do I need a server to manage the devices?
 
-No. The devices report to a shared folder (SMB) and read their settings from it; a PowerShell manager for Windows
+No. The devices report to a shared folder (SMB) and read their settings from it; the free [OpenThinRDP Manager](https://openthinrdp.github.io/manager.html) for Windows
 shows the whole fleet, changes settings for all devices or one, and opens the screen of any device in your browser.
 No agent, no database, no management server ([the manager](manager.md)).
 
