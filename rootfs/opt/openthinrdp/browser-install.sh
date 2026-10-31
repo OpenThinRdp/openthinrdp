@@ -36,7 +36,7 @@ dpkg -s "$(pkg "$b")" >/dev/null 2>&1 && [ -s "$ST" ] && grep -q "^$b: installed
 echo "$b: installing" > "$ST"; ev "browser: installing $b"
 if [ -n "$(repo "$b")" ]; then
   IFS='|' read -r src key ext <<< "$(repo "$b")"
-  curl -fsSL --retry 3 "$key" -o "$K/otr-$b.$ext.new" && mv -f "$K/otr-$b.$ext.new" "$K/otr-$b.$ext" || { echo "$b: failed" > "$ST"; ev "browser: the key of $b could not be fetched"; exit 1; }
+  python3 -c "import sys, urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])" "$key" "$K/otr-$b.$ext.new" 2>/dev/null && mv -f "$K/otr-$b.$ext.new" "$K/otr-$b.$ext" || { echo "$b: failed" > "$ST"; ev "browser: the key of $b could not be fetched"; exit 1; }
   echo "deb [arch=$a signed-by=$K/otr-$b.$ext] $src" > "$L/$(list "$b").list"
   # Chrome and Edge rewrite their list from a daily job unless told not to
   printf 'repo_add_once="false"\nrepo_reenable_on_distupgrade="false"\n' > /etc/default/google-chrome

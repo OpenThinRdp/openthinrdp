@@ -18,12 +18,11 @@ esac
 # Tailscale (0.3.0, VPN=tailscale: the PC at home from outside): not in Debian, from its own signed repository;
 # installed, not started (vpn.sh starts it when the setting says so)
 ARCHC=$(dpkg --print-architecture)
-if command -v curl >/dev/null || apt-get install -y --no-install-recommends curl; then
-  curl -fsSL https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg -o /usr/share/keyrings/tailscale-archive-keyring.gpg &&
-  curl -fsSL https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list -o /etc/apt/sources.list.d/tailscale.list &&
+# python3 fetches the key and the list: no curl in the image
+  python3 -c "import sys, urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])" https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg /usr/share/keyrings/tailscale-archive-keyring.gpg &&
+  python3 -c "import sys, urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])" https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list /etc/apt/sources.list.d/tailscale.list &&
   apt-get update && apt-get install -y --no-install-recommends tailscale && systemctl disable tailscaled.service ||
   { echo "Tailscale ($ARCHC) not installed"; exit 1; }
-fi
 
 # accounts: "kiosk" runs the X session without a password; "otradmin" administers (the Debian installer reserves "admin") (SSH with a key, sudo)
 id kiosk >/dev/null 2>&1 || useradd -m -s /bin/bash kiosk
