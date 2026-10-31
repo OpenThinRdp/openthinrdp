@@ -4,7 +4,7 @@
 # root-only file. Runs as root (sudo from the kiosk):
 #   remember.sh store USER   the password on stdin; kept only with REMEMBER_PASSWORD=on and USER the default user
 #   remember.sh get          "user<TAB>password" for the default user of now; nothing (exit 1) otherwise
-#   remember.sh mac MAC      the MAC address of the PC, learnt for Wake-on-LAN (WAKE_MAC empty)
+#   remember.sh mac HOST MAC the MAC address of a computer, learnt for Wake-on-LAN (in /var/lib/openthinrdp/wake)
 #   remember.sh forget       the password goes (setting off, or a password Windows refused)
 . /opt/openthinrdp/lib/common.sh
 . /opt/openthinrdp/lib/secrets.sh
@@ -27,12 +27,13 @@ case "$1" in
     printf '%s\t%s\n' "$u" "$p" ;;
   mac)
     # the MAC address of the PC learnt after a connection (kiosk.sh), for Wake-on-LAN when WAKE_MAC is empty
-    m=$(echo "$2" | tr 'A-F' 'a-f'); [[ $m =~ ^([0-9a-f]{2}:){5}[0-9a-f]{2}$ ]] || exit 1
-    [ "$(cat "$OTR_LIB/wake-mac" 2>/dev/null)" = "$m" ] && exit 0
-    install -d "$OTR_LIB"; echo "$m" > "$OTR_LIB/wake-mac"; ev "Wake-on-LAN: MAC address $m learnt" ;;
+    h=$2; m=$(echo "$3" | tr 'A-F' 'a-f')
+    [[ $h =~ ^[A-Za-z0-9][A-Za-z0-9.:-]{0,252}$ ]] && [[ $m =~ ^([0-9a-f]{2}:){5}[0-9a-f]{2}$ ]] || exit 1
+    [ "$(cat "$OTR_LIB/wake/$h" 2>/dev/null)" = "$m" ] && exit 0
+    install -d "$OTR_LIB/wake"; echo "$m" > "$OTR_LIB/wake/$h"; ev "Wake-on-LAN: MAC address of $h learnt ($m)" ;;
   forget)
     f=${OTR_SECRET_FILES[rdp-login]}
     [ -e "$f" ] || [ -e "$OTR_SEALED/rdp-login.cred" ] || exit 0
     rm -f "$f" "$OTR_SEALED/rdp-login.cred" "$OTR_SECRETS/rdp-login"; ev "remembered password forgotten" ;;
-  *) echo "usage: remember.sh store USER | get | mac MAC | forget" >&2; exit 2 ;;
+  *) echo "usage: remember.sh store USER | get | mac HOST MAC | forget" >&2; exit 2 ;;
 esac

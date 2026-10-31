@@ -1,5 +1,5 @@
 #!/bin/bash
-# The VPN of the device (VPN=wireguard|openvpn|off), for devices outside the office: the broker, the management
+# The VPN of the device (VPN=wireguard|openvpn|tailscale|off), for devices outside the office: the broker, the management
 # folder and the DNS of the office through the tunnel. Runs as root.
 #   vpn.sh apply         the tunnel as the settings say (apply.sh, at boot and after every change)
 #   vpn.sh check         every 5 minutes (report.sh): WireGuard server name resolved again when the tunnel is silent
@@ -206,13 +206,38 @@ auth_in(){
   echo "OK=auth"
 }
 
+# --- Tailscale (VPN=tailscale, 0.3.0): the PC at home reached from outside. No server to set: the device signs in
+# to the Tailscale account once, with the link it shows in the settings (opened on a phone). The state for the
+# settings screen in /run/openthinrdp-tailscale (one line, readable by the kiosk: no secret in it)
+TSF=/run/openthinrdp-tailscale
+ts_state(){ tailscale status --json 2>/dev/null | sed -n "s/^[[:space:]]*\"$1\":[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -1; }
+ts_status(){
+  command -v tailscale >/dev/null || { echo "tailscale: not installed (image 0.3.0 or later)"; return; }
+  case "$(ts_state BackendState)" in
+    Running) echo "tailscale: up $(tailscale ip -4 2>/dev/null | head -1)" ;;
+    NeedsLogin) u=$(ts_state AuthURL); echo "tailscale: sign in at ${u:-(link not ready yet)}" ;;
+    "") echo "tailscale: down" ;;
+    *) echo "tailscale: $(ts_state BackendState)" ;;
+  esac; }
+ts_up(){
+  if command -v tailscale >/dev/null; then
+    systemctl enable --now tailscaled.service >/dev/null 2>&1
+    # not signed in yet: "up" asks the service for a sign-in link and waits; 10 s are enough for the link
+    [ "$(ts_state BackendState)" = Running ] || timeout 15 tailscale up --hostname="$(hostname)" --timeout=10s >/dev/null 2>&1
+  fi
+  ts_status > "$TSF"; chmod 644 "$TSF"; }
+ts_down(){ command -v tailscale >/dev/null || return 0
+  systemctl is-active -q tailscaled.service && { tailscale down >/dev/null 2>&1; systemctl disable --now tailscaled.service >/dev/null 2>&1; }
+  rm -f "$TSF"; }
+
 case "$1" in
   apply)
     exec 8>"$RUN/lock"; flock 8
     case "$(cfg VPN)" in
-      wireguard) ovpn_stop; wg_up ;;
-      openvpn) wg_down; ovpn_start ;;
-      *) wg_down; ovpn_stop; rm -f "$RUN/state" ;;
+      wireguard) ts_down; ovpn_stop; wg_up ;;
+      openvpn) ts_down; wg_down; ovpn_start ;;
+      tailscale) wg_down; ovpn_stop; ts_up ;;
+      *) wg_down; ovpn_stop; ts_down; rm -f "$RUN/state" ;;
     esac ;;
   check)
     exec 8>"$RUN/lock"; flock -n 8 || exit 0
@@ -228,6 +253,7 @@ case "$1" in
           dns_on $(cfg VPN_DNS)
         else wg_up; fi ;;
       openvpn) [ -f "$RUN/openvpn.up" ] && dns_on $(cat "$RUN/openvpn.dns" 2>/dev/null) ;;
+      tailscale) ts_up ;;
     esac ;;
   dns)
     case "$(cfg VPN)" in
@@ -238,6 +264,7 @@ case "$1" in
     case "$(cfg VPN)" in
       wireguard) wg_status ;;
       openvpn) if [ -f "$RUN/openvpn.up" ]; then echo "openvpn: up"; else cat "$RUN/state" 2>/dev/null || echo "openvpn: down"; fi ;;
+      tailscale) ts_status ;;
       *) echo off ;;
     esac ;;
   pubkey) p=$(secret_path vpn-wg.key); [ -s "$p" ] && command -v wg >/dev/null && wg pubkey < "$p" ;;

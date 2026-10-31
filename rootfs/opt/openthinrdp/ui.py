@@ -39,7 +39,7 @@ ap = argparse.ArgumentParser()
 for a in ('class', 'title', 'heading', 'text', 'small', 'info', 'note', 'user', 'logo', 'splash', 'top', 'bottom',
           'web', 'icon', 'timeout', 'primary', 'default', 'lang',
           't-user', 't-password', 't-signin', 't-shutdown', 't-restart', 't-settings', 't-diag', 't-power',
-          't-save', 't-close', 't-terminal', 't-net',
+          't-save', 't-close', 't-terminal', 't-net', 'hosts', 'host',
           'open-power'):     # open-power: tests only, the power menu open (for a screenshot)
     ap.add_argument('--' + a, default='')
 ap.add_argument('--button', action='append', default=[])
@@ -471,10 +471,11 @@ if MODE == 'form':
                 for c in ch.split('|'):
                     v, _, t = c.partition('='); w.append(v, t or v)
                 if not w.set_active_id(val): w.set_active(0)
-            elif typ == 'tz':
-                # the time zones of tzdata in a list, with a search while typing ("rome" finds Europe/Rome)
+            elif typ in ('tz', 'combo'):
+                # the time zones of tzdata in a list, with a search while typing ("rome" finds Europe/Rome); combo:
+                # free text with suggestions (the PCs found on the network)
                 w = Gtk.ComboBoxText.new_with_entry()
-                zones = tz_list()
+                zones = tz_list() if typ == 'tz' else [c for c in ch.split('|') if c]
                 for z in zones: w.append(z, z)
                 w.get_child().set_text(val)
                 store = Gtk.ListStore(str)
@@ -501,7 +502,7 @@ if MODE == 'form':
     def save(*_):
         out = []
         for key, typ, w in fields:
-            v = (w.get_active_id() or '') if typ == 'choice' else w.get_child().get_text() if typ == 'tz' else w.get_text()
+            v = (w.get_active_id() or '') if typ == 'choice' else w.get_child().get_text() if typ in ('tz', 'combo') else w.get_text()
             out.append('%s=%s' % (key, v.replace('\n', ' ')))
         leave(0, '\n'.join(out))
     bar = Gtk.Box(spacing=10); bar.set_margin_top(4)
@@ -667,6 +668,67 @@ if MODE == 'wifi':
     scan()
     Gtk.main(); sys.exit(code)
 
+# --- the Bluetooth page (bt.sh as root): the devices around, one paired or removed, the result on the page -------
+# Strings on stdin as for the Wi-Fi page: heading, scanning, nonefound, paired, pair, remove, refresh, close, ok, fail
+if MODE == 'bt':
+    import threading
+    T = {}
+    for line in sys.stdin.read().split('\n'):
+        k, _, v = line.partition('\t')
+        if k: T[k] = v.replace('\\n', '\n')
+    t = lambda k: T.get(k, k)
+    BT = ['sudo', '-n', '/opt/openthinrdp/bt.sh']
+    card.set_size_request(min(640, SW - 40), min(560, SH - 40)); card.set_spacing(12)
+    if sp: mid.remove(sp)
+    card.pack_start(left_label(t('heading'), 'heading'), False, False, 0)
+    lb = Gtk.ListBox(); lb.set_selection_mode(Gtk.SelectionMode.SINGLE)
+    sc = Gtk.ScrolledWindow(); sc.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC); sc.set_vexpand(True); sc.add(lb)
+    card.pack_start(sc, True, True, 0)
+    res = left_label('', 'text', 80); card.pack_start(res, False, False, 0)
+    def say(text, cls):
+        res.set_text(text)
+        for c in ('result-ok', 'result-err', 'result-busy', 'text'): res.get_style_context().remove_class(c)
+        res.get_style_context().add_class(cls)
+    bar = Gtk.Box(spacing=10)
+    brf = button(t('refresh'), 'secondary', lambda *_: scan()); bpair = button(t('pair'), 'primary', lambda *_: act('pair'))
+    brm = button(t('remove'), 'secondary', lambda *_: act('remove'))
+    bar.pack_start(brf, False, False, 0); bar.pack_end(button(t('close'), 'secondary', lambda *_: leave(11)), False, False, 0)
+    bar.pack_end(bpair, False, False, 0); bar.pack_end(brm, False, False, 0); card.pack_start(bar, False, False, 0)
+    def busy(on):
+        for b in (brf, bpair, brm): b.set_sensitive(not on)
+    def fill(out):
+        for r in lb.get_children(): lb.remove(r)
+        for line in out.splitlines():
+            p = line.split('\t')
+            if len(p) < 3: continue
+            row = Gtk.ListBoxRow(); row.mac = p[0]
+            row.add(left_label(p[1] + ('   · ' + t('paired') if p[2] == '1' else ''), 'text', 70)); lb.add(row)
+        lb.show_all(); busy(False)
+        if not lb.get_children(): say(t('nonefound'), 'text')
+        elif res.get_text() == t('scanning'): say('', 'text')
+    def scan():
+        busy(True); say(t('scanning'), 'result-busy')
+        def run():
+            r = subprocess.run(BT + ['scan'], capture_output=True, text=True)
+            GLib.idle_add(fill, r.stdout)
+        threading.Thread(target=run, daemon=True).start()
+    def act(what):
+        row = lb.get_selected_row()
+        if not row: return
+        busy(True); say(t('scanning') if what == 'pair' else '', 'result-busy')
+        def run():
+            r = subprocess.run(BT + [what, row.mac], capture_output=True, text=True)
+            def done():
+                if r.returncode == 0: scan(); say(t('ok'), 'result-ok')
+                else: busy(False); say(t('fail'), 'result-err')
+                return False
+            GLib.idle_add(done)
+        threading.Thread(target=run, daemon=True).start()
+    win.connect('key-press-event', lambda _w, e: e.keyval == Gdk.KEY_Escape and leave(11))
+    code = 11
+    win.show_all(); scan()
+    Gtk.main(); sys.exit(code)
+
 # --- a text read from stdin as it comes (diagnostics) ----------------------------------------------------------
 if MODE == 'text':
     card.set_size_request(min(900, SW - 40), min(600, SH - 40)); card.set_spacing(12)
@@ -712,6 +774,13 @@ card.set_size_request(min(400, SW - 40), -1)
 lg = picture(A.logo, 240, 90) if A.logo and not sp else None
 if lg: lg.set_margin_bottom(4); card.pack_start(lg, False, False, 0)
 card.pack_start(label(A.heading, 'heading'), False, False, 4)
+# several computers (a workgroup with CONNECTIONS): which one, above the user; the choice goes to /tmp/kiosk.host
+hosts = [h for h in A.hosts.split('|') if h]
+if len(hosts) > 1:
+    eh = Gtk.ComboBoxText()
+    for h in hosts: eh.append(h, h)
+    if not eh.set_active_id(A.host): eh.set_active(0)
+    card.pack_start(eh, False, False, 0)
 eu = Gtk.Entry(placeholder_text=A.t_user or 'User'); eu.set_text(A.user)
 ep = Gtk.Entry(placeholder_text=A.t_password or 'Password', visibility=False); ep.set_input_purpose(Gtk.InputPurpose.PASSWORD)
 card.pack_start(eu, False, False, 0); card.pack_start(ep, False, False, 0)
@@ -721,6 +790,8 @@ if A.note: card.pack_start(label(A.note, 'note', chars=46), False, False, 2)
 
 def sign_in(*_):
     if ep.get_text():
+        if len(hosts) > 1:
+            with open('/tmp/kiosk.host', 'w') as f: f.write(eh.get_active_id() or hosts[0])
         leave(10, eu.get_text().strip() + "|" + ep.get_text() + "|")   # trailing | as the yad form: kiosk.sh strips it
     else:
         ep.grab_focus()
