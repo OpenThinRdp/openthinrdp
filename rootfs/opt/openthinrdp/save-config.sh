@@ -46,6 +46,7 @@ V[DOMAIN]=$(get DOMAIN); [ -z "${V[DOMAIN]}" ] || nameok "${V[DOMAIN]}" || err "
 # the environment (empty = guessed, setup_kind in common.sh); the password remembered; waking the PC
 case "$(low "$(get SETUP)")" in domain|dominio) V[SETUP]=domain ;; workgroup|gruppo|nodomain) V[SETUP]=workgroup ;; *) V[SETUP]="" ;; esac
 V[REMEMBER_PASSWORD]=$(onoff "$(get REMEMBER_PASSWORD)")
+V[LIVE_PERSISTENCE]=$(onoff "$(get LIVE_PERSISTENCE)")
 V[WAKE_MAC]=$(get WAKE_MAC | tr 'A-F-' 'a-f:')
 [ -z "${V[WAKE_MAC]}" ] || [[ ${V[WAKE_MAC]} =~ ^([0-9a-f]{2}:){5}[0-9a-f]{2}$ ]] || err "$V_WAKE_MAC"
 V[CONNECTIONS]=$(get CONNECTIONS | tr -s " ,;" " " | sed "s/^ //; s/ $//")

@@ -26,7 +26,7 @@ CFG=(--distribution trixie --architectures amd64
   --apt-indices false
   --chroot-squashfs-compression-type zstd --chroot-squashfs-compression-level 15
   --iso-volume "OpenThinRDP $V" --iso-application OpenThinRDP --image-name openthinrdp
-  --bootappend-live "boot=live components quiet splash loglevel=3 systemd.show_status=false username=kiosk hostname=thinclient vt.global_cursor_default=0")
+  --bootappend-live "boot=live components persistence quiet splash loglevel=3 systemd.show_status=false username=kiosk hostname=thinclient vt.global_cursor_default=0")
 if [ "${AUTO_INSTALL:-yes}" = yes ]; then
   L=${LOCALE%%.*}
   CFG+=(--bootappend-install "auto=true priority=critical preseed/file=/cdrom/install/preseed.cfg language=${L%%_*} country=${L#*_} locale=$LOCALE keymap=$KEYBOARD")
