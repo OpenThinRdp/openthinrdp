@@ -31,8 +31,11 @@ disk=/dev/$(lsblk -no PKNAME "$src" 2>/dev/null)
 [ "$(lsblk -dno TRAN "$disk" 2>/dev/null)" = usb ] || { echo "not a live stick" > "$ST"; exit 0; }
 # made at an earlier start but not used (a boot entry without "persistence"): nothing more to do
 [ -n "$(part "$disk")" ] && { echo "made" > "$ST"; exit 0; }
-# the largest free space after the partitions of the image, in sectors of 512 bytes
-free=$(sfdisk -F "$disk" 2>/dev/null | awk '$1 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ {print $3}' | sort -n | tail -1)
+# the free space after the partitions of the image, in sectors of 512 bytes: from the end of the last one to the end
+# of the stick (the ISO is GPT, and its table ends where the image ends: "sfdisk -F" sees no free space at all; the
+# append below moves the backup table to the end of the stick)
+end=$(sfdisk -lq -o End "$disk" 2>/dev/null | awk '$1 ~ /^[0-9]+$/ && $1 > m {m = $1} END {print m + 0}')
+free=$(( $(blockdev --getsz "$disk" 2>/dev/null || echo 0) - end - 2048 ))
 [ -n "$free" ] && [ "$free" -ge 2097152 ] || { echo "no room" > "$ST"; exit 0; }
 n0=$(lsblk -nlo NAME "$disk" | wc -l)
 echo ',,L' | sfdisk --append --no-reread --force -q "$disk" >/dev/null 2>&1
