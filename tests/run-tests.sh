@@ -654,14 +654,19 @@ ok "802.1X off: the supplicants stopped, the status says off" '! pgrep -f "dot1x
   NETV=(dhcp static) NETL=(a b) USBV=(all) USBL=(a) ONV=(on off) ONL=(a b) TRV=(auto) TRL=(a) WEBV=(none) WEBL=(a) LNV=(en) LNL=(a)
   WSECV=(psk peap tls) WSECL=(a b c) D1XV=(off peap tls) D1XL=("$L_OFF" "$L_D1X_PEAP" "$L_D1X_TLS")
   h= u= br= brf= dom= lbi= tr=auto thr= off= nm=dhcp ip= mask= gw= d1= d2= ntp= wf=on ws= wp= um=all ur= ul= wb=none wu= ku= kr=
-  pon= poff= pdays= share= mu= mp= su=on an=on tz= ln=en ean= epw=
+  pon= poff= pdays= share= mu= mp= su=on an=on tz= ln=en ean= epw= SETV=(domain workgroup) SETL=(a b) kind=domain rem=off wmac=
   wsec=peap d1x=tls d1xs="eth0: authenticated (EAP-TLS)" eid='EXAMPLE\thin' eca=system esn=nps.example.test
   settings_spec > /tmp/spec
   settings_read "$(printf 'DOT1X=peap\nEAP_PASSWORD=p w=x\nEAP_IDENTITY=EX\\u\nWIFI_SECURITY=tls\nEAP_SERVER_NAME=a.example b.example\n')"
   echo "$d1x|$epw|$eid|$wsec|$esn" > /tmp/spec.read
+  kind=workgroup; settings_spec > /tmp/spec.wg
 )
 ok "settings screen: an 802.1X section with the state, the method, the identity, an empty password field" 'grep -qP "^S\t802.1X$" /tmp/spec && grep -qP "^F\tDOT1X_STATE\tro\t[^\t]+\teth0: authenticated \(EAP-TLS\)\t" /tmp/spec && grep -qP "^F\tDOT1X\tchoice\t[^\t]+\ttls\toff=Off\|peap=PEAP \(user and password\)\|tls=EAP-TLS \(certificate\)\t" /tmp/spec && grep -qP "^F\tEAP_IDENTITY\ttext\tIdentity\tEXAMPLE\\\\thin\t" /tmp/spec && grep -qP "^F\tEAP_PASSWORD\tpassword\t[^\t]+\t\t" /tmp/spec && grep -qP "^F\tWIFI_SECURITY\tchoice\t[^\t]+\tpeap\t" /tmp/spec'
 ok "settings screen: what it gives back" '[ "$(cat /tmp/spec.read)" = "peap|p w=x|EX\\u|tls|a.example b.example" ]'
+ok "settings screen in a workgroup: the PC, the password remembered, Wake-on-LAN; no 802.1X, domain or management folder" 'grep -qP "^F\tSETUP\tchoice\t[^\t]+\tworkgroup\t" /tmp/spec.wg && grep -qP "^F\tREMEMBER_PASSWORD\t" /tmp/spec.wg && grep -qP "^F\tWAKE_MAC\t" /tmp/spec.wg && ! grep -qP "^F\t(DOT1X|DOMAIN|MGMT_SHARE|BROKER_FALLBACK)\t" /tmp/spec.wg'
+printf 'SETUP=Dominio\nWAKE_MAC=AA-BB-CC-DD-EE-FF\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
+ok "environment and Wake-on-LAN normalized (dominio = domain, MAC in lower case with colons), a bad MAC refused" '[ "$(cfg SETUP)" = domain ] && [ "$(cfg WAKE_MAC)" = aa:bb:cc:dd:ee:ff ] && printf "WAKE_MAC=zz\n" > "$T" && ! $OTR/save-config.sh "$T" >/dev/null 2>&1'
+sed -i '/^SETUP=/d; /^WAKE_MAC=/d' $OTR_CONF
 rm -rf /usr/local/sbin/wpa_supplicant /usr/local/sbin/wpa_cli /usr/local/sbin/systemctl /tmp/sys /tmp/wpa.* /tmp/wpa_cli.log /tmp/spec* $X $OTR_ETC/dot1x /etc/openthinrdp/ca
 sed -i '/^WIFI/d; /^DOT1X/d; /^EAP_/d' $OTR_CONF; rm -f $W; unset OTR_DOT1X_SYS OTR_DOT1X_NOAUTH OTR_DOT1X_WAIT OTR_DOT1X_HOLD
 
