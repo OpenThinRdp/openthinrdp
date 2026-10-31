@@ -5,6 +5,32 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.3.0 (in preparation)
+
+- **Domain or workgroup** ([#174](https://github.com/OpenThinRdp/openthinrdp/issues/174)): the first start asks for
+  the environment of the device, *Active Directory domain* (brokers, collections, central management) or *Workgroup*
+  (one computer or virtual machine, a local or Microsoft account), and the settings show only what applies
+  (`SETUP`). Devices already set up keep what they have: the environment is inferred from their settings.
+- **Password remembered** (`REMEMBER_PASSWORD`): the password of the default user stays on the device, sealed in the
+  TPM when there is one; at power on the desktop opens by itself. Removed as soon as Windows rejects it.
+- **Wake-on-LAN of the remote computer**: its MAC address is learnt after the first connection (or set in
+  `WAKE_MAC`); a computer that does not answer is woken up, with a wait screen (`WAKE_WAIT`).
+- **Computers found on the network**: in a workgroup, the computer field offers the computers of the network with
+  Remote Desktop on. **Several computers** (`CONNECTIONS`): the sign-in screen offers the choice.
+- **Tailscale** (`VPN=tailscale`): the computer at home reached from outside, no server to set up; the device shows a
+  sign-in link to open on a phone.
+- **Bluetooth**: headsets, keyboards and mice paired from the settings of the device; audio through PipeWire.
+- **The browser of your choice** (`BROWSER`, [#133](https://github.com/OpenThinRdp/openthinrdp/issues/133)):
+  Chromium, Firefox ESR, Brave, Google Chrome or Microsoft Edge, installed only on the devices that choose it, from its
+  maker's signed repository, kept up to date with the security updates, with the same rules for all of them.
+- **The live system keeps its settings** (`LIVE_PERSISTENCE`): started from a USB stick with free space, it makes a
+  partition there at the first start; from the next start settings, updates and Wi-Fi stay, as on other live
+  distributions.
+- **Install alongside Windows**: a new entry of the installer uses the free space of the disk (shrink Windows first)
+  and leaves Windows and its partitions as they are; the boot menu offers both.
+- Help for Microsoft accounts: in a workgroup a refused password says that the account's email address and password
+  are needed, the Windows Hello PIN is not accepted by Remote Desktop.
+
 ## 0.2.28 (2026-10-28)
 
 - **The manager has releases of its own, from 1.0.0**: numbered apart from the devices, on
