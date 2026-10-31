@@ -22,6 +22,7 @@ declare -A OTR_SECRET_FILES=(
   [vpn-openvpn.auth]=$OTR_ETC/vpn/openvpn.auth
   [eap-password]=$OTR_ETC/dot1x/password
   [eap-client.key]=$OTR_ETC/dot1x/client.key
+  [rdp-login]=$OTR_ETC/rdp-login
 )
 # the key of the 802.1X certificate keeps its path too: the Wi-Fi configuration (itself a secret) names it
 OTR_SECRET_LINKED="smb.cred wifi.conf eap-client.key"

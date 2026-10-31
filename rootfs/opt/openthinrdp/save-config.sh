@@ -43,6 +43,13 @@ V[BROKER]=$(get BROKER); [ -z "${V[BROKER]}" ] || nameok "${V[BROKER]}" || err "
 V[BROKER_FALLBACK]=$(get BROKER_FALLBACK | tr -s ' ,;' ' ' | sed 's/^ //; s/ $//')
 for t in ${V[BROKER_FALLBACK]}; do ipok "$t" || nameok "$t" || err "$V_FALLBACK $t"; done
 V[DOMAIN]=$(get DOMAIN); [ -z "${V[DOMAIN]}" ] || nameok "${V[DOMAIN]}" || err "$V_DOMAIN"
+# the environment (empty = guessed, setup_kind in common.sh); the password remembered; waking the PC
+case "$(low "$(get SETUP)")" in domain|dominio) V[SETUP]=domain ;; workgroup|gruppo|nodomain) V[SETUP]=workgroup ;; *) V[SETUP]="" ;; esac
+V[REMEMBER_PASSWORD]=$(onoff "$(get REMEMBER_PASSWORD)")
+V[WAKE_MAC]=$(get WAKE_MAC | tr 'A-F-' 'a-f:')
+[ -z "${V[WAKE_MAC]}" ] || [[ ${V[WAKE_MAC]} =~ ^([0-9a-f]{2}:){5}[0-9a-f]{2}$ ]] || err "$V_WAKE_MAC"
+V[WAKE_WAIT]=$(get WAKE_WAIT)
+{ [[ ${V[WAKE_WAIT]} =~ ^[0-9]{1,3}$ ]] && [ $((10#${V[WAKE_WAIT]})) -ge 10 ] && [ $((10#${V[WAKE_WAIT]})) -le 600 ]; } || err "$V_WAKE_WAIT"
 # spaces are allowed: a session collection is tsv://MS Terminal Services Plugin.1.<collection> (#76)
 RE_LBI='^[A-Za-z0-9._:/#= -]*$'
 V[LOAD_BALANCE_INFO]=$(get LOAD_BALANCE_INFO); [[ ${V[LOAD_BALANCE_INFO]} =~ $RE_LBI ]] || err "$V_COLLECTION"
@@ -219,7 +226,7 @@ for k in BG_TOP BG_BOTTOM; do V[$k]=$(get $k); [[ ${V[$k]} =~ ^#[0-9a-fA-F]{6}$ 
 V[SETTINGS_PIN_SHA256]=$(low "$(get SETTINGS_PIN_SHA256)"); [[ ${V[SETTINGS_PIN_SHA256]} =~ ^([0-9a-f]{64}|pbkdf2-sha256:[0-9]{4,7}:[0-9a-f]{32}:[0-9a-f]{64})?$ ]] || err "$V_PIN"
 
 if [ -n "$E" ]; then printf '%b' "$E"; exit 1; fi
-for k in SESSION_THRESHOLD SHUTDOWN_SECS KIOSK_RELOAD_MIN; do V[$k]=$((10#${V[$k]})); done
+for k in SESSION_THRESHOLD SHUTDOWN_SECS KIOSK_RELOAD_MIN WAKE_WAIT; do V[$k]=$((10#${V[$k]})); done
 if [ "${2:-}" = --print ]; then
   for k in $(cfg_keys); do echo "$k=${V[$k]}"; done
   # secrets as a hash: central-apply.sh compares them, nobody can read them back (the kiosk user may run this)
