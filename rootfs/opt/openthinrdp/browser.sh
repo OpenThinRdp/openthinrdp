@@ -7,9 +7,20 @@
 . /opt/openthinrdp/lib/common.sh
 otr_lang
 export DISPLAY=${DISPLAY:-:0}
-B=$(command -v chromium || command -v chromium-browser || command -v google-chrome)
+# the browser chosen (BROWSER, browser-install.sh); Chromium while it is not installed (yet)
+FF=0
+case "$(cfg BROWSER)" in
+  firefox) B=$(command -v firefox-esr) && FF=1 ;;
+  brave)   B=$(command -v brave-browser) ;;
+  chrome)  B=$(command -v google-chrome-stable) ;;
+  edge)    B=$(command -v microsoft-edge-stable) ;;
+  *)       B="" ;;
+esac
+[ -n "$B" ] || B=$(command -v chromium || command -v chromium-browser || command -v google-chrome)
 [ -z "$B" ] && { yad --error --center --timeout=5 --text="$L_NO_BROWSER" 2>/dev/null; exit 1; }
 FLAGS=(--no-first-run --no-default-browser-check --password-store=basic --disable-features=Translate,MediaRouter)
+# Firefox: its own profile folder and options; the rules are its policies (browser-policy.sh)
+ff(){ local p=$1; shift; mkdir -p "$p"; "$B" --no-remote --profile "$p" "$@" >/dev/null 2>&1; }
 
 # Certificate authorities of the organization ($OTR_ETC/ca/*.crt, built into the image) in the NSS database
 # that Chromium uses on Linux: the thin client is not in the domain and would show "connection not private"
@@ -23,7 +34,7 @@ if ls "$OTR_ETC"/ca/*.crt >/dev/null 2>&1 && command -v certutil >/dev/null; the
 fi
 # after a hard power off Chromium would offer "Restore pages?": mark the profile as closed cleanly
 clean_exit(){ sed -i 's/"exit_type":"Crashed"/"exit_type":"Normal"/; s/"exited_cleanly":false/"exited_cleanly":true/' "$1/Default/Preferences" 2>/dev/null; }
-stop_profile(){ pkill -f -- "--user-data-dir=$1" 2>/dev/null; sleep 1; pkill -9 -f -- "--user-data-dir=$1" 2>/dev/null; }
+stop_profile(){ pkill -f -- "--user-data-dir=$1|--profile $1" 2>/dev/null; sleep 1; pkill -9 -f -- "--user-data-dir=$1|--profile $1" 2>/dev/null; }
 
 if [ "$1" = kiosk ]; then
   # Every 15 s the settings are read again: if WEB_BUTTON or KIOSK_URL change (dialog, central settings) the
@@ -31,8 +42,9 @@ if [ "$1" = kiosk ]; then
   # login form with its 5 s countdown. Reload every KIOSK_RELOAD_MIN minutes if nobody is using it.
   URL="$2"; PROF="$HOME/.config/otr-kiosk"
   stop_profile "$PROF"; clean_exit "$PROF"
-  "$B" --user-data-dir="$PROF" --class=OtrKiosk --kiosk "$URL" "${FLAGS[@]}" --noerrdialogs --disable-infobars \
-    --disable-session-crashed-bubble --overscroll-history-navigation=0 >/dev/null 2>&1 &
+  if [ $FF = 1 ]; then ff "$PROF-ff" --class OtrKiosk --kiosk "$URL" &
+  else "$B" --user-data-dir="$PROF" --class=OtrKiosk --kiosk "$URL" "${FLAGS[@]}" --noerrdialogs --disable-infobars \
+    --disable-session-crashed-bubble --overscroll-history-navigation=0 >/dev/null 2>&1 & fi
   CH=$!; n=0; last=0; REL=$(cfg_num KIOSK_RELOAD_MIN 10)
   while kill -0 $CH 2>/dev/null; do
     sleep 1; n=$((n + 1))
@@ -47,12 +59,16 @@ if [ "$1" = kiosk ]; then
     REL=$(cfg_num KIOSK_RELOAD_MIN 10)
     if [ "$(cfg WEB_BUTTON)" != kiosk ] || [ "$(cfg KIOSK_URL)" != "$URL" ]; then ev "kiosk page: settings changed, closed to reopen it"; break; fi
   done
-  stop_profile "$PROF"
+  stop_profile "$PROF"; stop_profile "$PROF-ff"
   exit 0
 fi
 
 URL=$(cfg WEB_URL); PROF="$HOME/.config/otr-web"
 stop_profile "$PROF"; clean_exit "$PROF"     # a browser left open would take the request and this launch would end at once
+if [ $FF = 1 ]; then
+  # Firefox has no app window: the page in a full window; in "app" mode its policies allow only the sites set
+  ev "$(cfg WEB_BUTTON) opened with Firefox: $URL"; ff "$PROF-ff" --class OtrWeb "$URL"; stop_profile "$PROF-ff"; exit 0
+fi
 case "$(cfg WEB_BUTTON)" in
   browser) ev "browser opened"; "$B" --user-data-dir="$PROF" --class=OtrWeb "$URL" --start-maximized "${FLAGS[@]}" >/dev/null 2>&1 ;;
   *)       ev "web app opened: $URL"; "$B" --user-data-dir="$PROF" --class=OtrWeb --app="$URL" --start-maximized "${FLAGS[@]}" >/dev/null 2>&1 ;;

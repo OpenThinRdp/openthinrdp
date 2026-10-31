@@ -430,6 +430,7 @@ settings_spec(){
   fld USB_LOCAL text "$L_F_USBLOCAL" "$ul" "" "$L_H_USBLOCAL"
   sec "$L_SEC_WEB"
   fld WEB_BUTTON choice "$L_F_WEB" "$wb" "$(chs WEBV WEBL)" "$L_H_WEB"
+  fld BROWSER choice "$L_F_BROWSER" "$bro" "$(chs BROV BROL)" "$L_H_BROWSER"
   fld WEB_URL text "$L_F_WEBURL" "$wu" "" "$L_H_WEBURL"
   fld KIOSK_URL text "$L_F_KIOSKURL" "$ku" "" "$L_H_KIOSKURL"
   fld KIOSK_RELOAD_MIN text "$L_F_RELOAD" "$kr" "" "$L_H_RELOAD"
@@ -460,7 +461,7 @@ settings_read(){
       POWER_ON_DAYS) pdays=$v ;; WIFI) wf=$v ;; WIFI_SSID) ws=$v ;; WIFI_PSK) wp=$v ;;
       WIFI_SECURITY) wsec=$v ;; DOT1X) d1x=$v ;; EAP_IDENTITY) eid=$v ;; EAP_ANONYMOUS) ean=$v ;; EAP_PASSWORD) epw=$v ;;
       EAP_CA) eca=$v ;; EAP_SERVER_NAME) esn=$v ;;
-      SETUP) kind=$v ;; REMEMBER_PASSWORD) rem=$v ;; WAKE_MAC) wmac=$v ;; CONNECTIONS) conns=$v ;; VPN) vpn=$v ;;
+      SETUP) kind=$v ;; REMEMBER_PASSWORD) rem=$v ;; WAKE_MAC) wmac=$v ;; CONNECTIONS) conns=$v ;; VPN) vpn=$v ;; BROWSER) bro=$v ;;
     esac
   done <<< "$1"
 }
@@ -518,7 +519,10 @@ settings_dialog(){
   local -a LNV=(en it) LNL=(English Italiano)
   local -a WSECV=(psk peap tls) WSECL=("$L_WSEC_PSK" "$L_WSEC_PEAP" "$L_WSEC_TLS") D1XV=(off peap tls) D1XL=("$L_OFF" "$L_D1X_PEAP" "$L_D1X_TLS")
   local h u br brf dom lbi nm ip mask gw d1 d2 ntp off thr share mu mp um ur su an tz tr wb wu ku kr pon poff pdays wf ws wp ln
-  local wsec d1x d1xs eid ean epw eca esn kind kind0 rem wmac conns vpn tss found=""
+  local wsec d1x d1xs eid ean epw eca esn kind kind0 rem wmac conns vpn tss found="" bro
+  local -a BROV=(chromium firefox brave chrome edge) BROL=(Chromium "Firefox ESR" Brave "Google Chrome" "Microsoft Edge")
+  [ "$(otr_arch)" = amd64 ] || { BROV=(chromium firefox brave); BROL=(Chromium "Firefox ESR" Brave); }
+  bro=$(cfg BROWSER)
   local -a SETV=(domain workgroup) SETL=("$L_SETUP_DOMAIN" "$L_SETUP_WORKGROUP") VPNV=(off tailscale) VPNL=("$L_OFF" "$L_ON")
   kind=$(setup_kind); [ -z "$kind" ] && kind=workgroup; kind0=$kind; rem=$(cfg REMEMBER_PASSWORD); wmac=$(cfg WAKE_MAC)
   conns=$(cfg CONNECTIONS); vpn=$(cfg VPN); tss=$(cat /run/openthinrdp-tailscale 2>/dev/null)
@@ -602,7 +606,7 @@ settings_dialog(){
       "KIOSK_RELOAD_MIN=$kr" "POWER_ON_TIME=$pon" "POWER_OFF_TIME=$poff" "POWER_ON_DAYS=$pdays" "LANGUAGE=$ln" \
       "WIFI=$wf" "WIFI_SSID=$ws" "WIFI_SECURITY=$wsec" "DOT1X=$d1x" "EAP_IDENTITY=$eid" "EAP_ANONYMOUS=$ean" \
       "EAP_CA=$eca" "EAP_SERVER_NAME=$esn" "SETUP=$kind" "REMEMBER_PASSWORD=$rem" "WAKE_MAC=$wmac" \
-      "CONNECTIONS=$conns" "VPN=$vpn" > "$tmp"
+      "CONNECTIONS=$conns" "VPN=$vpn" "BROWSER=$bro" > "$tmp"
     [ -n "$wp" ] && printf 'WIFI_PSK=%s\n' "$wp" >> "$tmp"
     [ -n "$mp" ] && printf 'MGMT_PASSWORD=%s\n' "$mp" >> "$tmp"
     [ -n "$epw" ] && printf 'EAP_PASSWORD=%s\n' "$epw" >> "$tmp"

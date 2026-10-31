@@ -209,6 +209,8 @@ V[WEB_ALLOW]=$(get WEB_ALLOW | tr -s ' ,;' ' ' | sed 's/^ //; s/ $//')
 for t in ${V[WEB_ALLOW]}; do urlok "$t" || err "$V_WEBALLOW $t"; done
 V[KIOSK_URL]=$(get KIOSK_URL); [ -z "${V[KIOSK_URL]}" ] || urlok "${V[KIOSK_URL]}" || err "$V_KIOSKURL"
 [ "${V[WEB_BUTTON]}" = kiosk ] && [ -z "${V[KIOSK_URL]}" ] && err "$V_KIOSKURL_NEEDED"
+case "$(low "$(get BROWSER)")" in firefox|firefox-esr) V[BROWSER]=firefox ;; brave) V[BROWSER]=brave ;; chrome|google-chrome) V[BROWSER]=chrome ;; edge|microsoft-edge) V[BROWSER]=edge ;; *) V[BROWSER]=chromium ;; esac
+case "${V[BROWSER]}" in chrome|edge) [ "$(otr_arch)" = amd64 ] || err "$V_BROWSER_ARCH" ;; esac
 V[KIOSK_RELOAD_MIN]=$(get KIOSK_RELOAD_MIN)
 { [[ ${V[KIOSK_RELOAD_MIN]} =~ ^[0-9]{1,4}$ ]] && [ $((10#${V[KIOSK_RELOAD_MIN]})) -le 1440 ]; } || err "$V_RELOAD"
 

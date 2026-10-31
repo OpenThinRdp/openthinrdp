@@ -654,7 +654,7 @@ ok "802.1X off: the supplicants stopped, the status says off" '! pgrep -f "dot1x
   NETV=(dhcp static) NETL=(a b) USBV=(all) USBL=(a) ONV=(on off) ONL=(a b) TRV=(auto) TRL=(a) WEBV=(none) WEBL=(a) LNV=(en) LNL=(a)
   WSECV=(psk peap tls) WSECL=(a b c) D1XV=(off peap tls) D1XL=("$L_OFF" "$L_D1X_PEAP" "$L_D1X_TLS")
   h= u= br= brf= dom= lbi= tr=auto thr= off= nm=dhcp ip= mask= gw= d1= d2= ntp= wf=on ws= wp= um=all ur= ul= wb=none wu= ku= kr=
-  pon= poff= pdays= share= mu= mp= su=on an=on tz= ln=en ean= epw= SETV=(domain workgroup) SETL=(a b) kind=domain rem=off wmac= found="pc1|192.168.1.20" conns= vpn=off tss= VPNV=(off tailscale) VPNL=(a b)
+  pon= poff= pdays= share= mu= mp= su=on an=on tz= ln=en ean= epw= SETV=(domain workgroup) SETL=(a b) kind=domain rem=off wmac= found="pc1|192.168.1.20" conns= vpn=off tss= VPNV=(off tailscale) VPNL=(a b) bro=chromium BROV=(chromium firefox) BROL=(a b)
   wsec=peap d1x=tls d1xs="eth0: authenticated (EAP-TLS)" eid='EXAMPLE\thin' eca=system esn=nps.example.test
   settings_spec > /tmp/spec
   settings_read "$(printf 'DOT1X=peap\nEAP_PASSWORD=p w=x\nEAP_IDENTITY=EX\\u\nWIFI_SECURITY=tls\nEAP_SERVER_NAME=a.example b.example\n')"
@@ -668,6 +668,10 @@ printf 'SETUP=Dominio\nWAKE_MAC=AA-BB-CC-DD-EE-FF\n' > "$T"; $OTR/save-config.sh
 ok "environment and Wake-on-LAN normalized (dominio = domain, MAC in lower case with colons), a bad MAC refused" '[ "$(cfg SETUP)" = domain ] && [ "$(cfg WAKE_MAC)" = aa:bb:cc:dd:ee:ff ] && printf "WAKE_MAC=zz\n" > "$T" && ! $OTR/save-config.sh "$T" >/dev/null 2>&1'
 printf 'CONNECTIONS=pc2 192.168.1.30:3390,laptop\nVPN=Tailscale\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
 ok "other computers and Tailscale saved; a bad computer refused" '[ "$(cfg CONNECTIONS)" = "pc2 192.168.1.30:3390 laptop" ] && [ "$(cfg VPN)" = tailscale ] && printf "CONNECTIONS=bad_name\n" > "$T" && ! $OTR/save-config.sh "$T" >/dev/null 2>&1'
+printf 'BROWSER=Firefox-ESR\nWEB_BUTTON=app\nWEB_URL=https://portal.example.test/home\nWEB_ALLOW=https://docs.example.test/\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
+ok "browser: Firefox ESR chosen, the same rules for every browser (valid JSON, only the sites allowed)" '[ "$(cfg BROWSER)" = firefox ] && for f in /etc/chromium/policies/managed/openthinrdp.json /etc/brave/policies/managed/openthinrdp.json /etc/opt/edge/policies/managed/openthinrdp.json /etc/firefox/policies/policies.json; do python3 -m json.tool "$f" >/dev/null || exit 1; done && grep -q "\"Exceptions\": \[\"https://portal.example.test/\*\", \"https://docs.example.test/\*\"\]" /etc/firefox/policies/policies.json'
+ok "browser: Chrome and Edge refused where they do not exist (arm64)" 'printf "BROWSER=edge\n" > "$T"; ! OTR_ARCH=arm64 $OTR/save-config.sh "$T" >/dev/null 2>&1'
+sed -i '/^BROWSER=/d; /^WEB_BUTTON=/d; /^WEB_URL=/d; /^WEB_ALLOW=/d' $OTR_CONF; $OTR/browser-policy.sh nostart
 sed -i '/^SETUP=/d; /^WAKE_MAC=/d; /^CONNECTIONS=/d; /^VPN=/d' $OTR_CONF
 rm -rf /usr/local/sbin/wpa_supplicant /usr/local/sbin/wpa_cli /usr/local/sbin/systemctl /tmp/sys /tmp/wpa.* /tmp/wpa_cli.log /tmp/spec* $X $OTR_ETC/dot1x /etc/openthinrdp/ca
 sed -i '/^WIFI/d; /^DOT1X/d; /^EAP_/d' $OTR_CONF; rm -f $W; unset OTR_DOT1X_SYS OTR_DOT1X_NOAUTH OTR_DOT1X_WAIT OTR_DOT1X_HOLD

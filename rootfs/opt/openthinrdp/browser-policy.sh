@@ -1,23 +1,29 @@
 #!/bin/bash
-# Chromium policies from the settings (root: from save-config.sh and at build time).
+# Browser policies from the settings (root: from save-config.sh, at build time, and after browser-install.sh).
 #   WEB_BUTTON=app      only WEB_URL and the sites in WEB_ALLOW can be opened
 #   browser, kiosk      free browsing (a kiosk page may load other sites)
-# Always: no sign-in, no sync, no extensions, no downloads, no developer tools, no guest or incognito.
-# The URLs are validated by save-config.sh (no quotes or backslashes), so they can go into JSON as they are.
+# Always: no sign-in, no sync, no extensions, no downloads, no developer tools, no guest or private windows.
+# The same rules for every browser that can be chosen (BROWSER): Chromium, Brave, Chrome and Edge read the same
+# JSON, each from its own folder; Firefox ESR has its own format. The URLs are validated by save-config.sh (no quotes
+# or backslashes), so they can go into JSON as they are.
+#   browser-policy.sh           the policies, and the browser chosen installed in the background (browser-install.sh)
+#   browser-policy.sh nostart   the policies only
 . /opt/openthinrdp/lib/common.sh
-D=/etc/chromium/policies/managed
-mkdir -p "$D"
 origin(){ echo "$1" | sed -E 's#^(https?://[^/]+).*#\1#'; }
+APP=0; [ "$(cfg WEB_BUTTON)" = app ] && [ -n "$(cfg WEB_URL)" ] && APP=1
+# put FILE: written only when it changed
+put(){ mkdir -p "$(dirname "$1")"
+  if cmp -s "$1.new" "$1"; then rm -f "$1.new"; else chmod 644 "$1.new"; mv -f "$1.new" "$1"; fi; }
 {
   echo '{'
-  if [ "$(cfg WEB_BUTTON)" = app ] && [ -n "$(cfg WEB_URL)" ]; then
+  if [ $APP = 1 ]; then
     echo '  "URLBlocklist": ["*"],'
     printf '  "URLAllowlist": ["%s"' "$(origin "$(cfg WEB_URL)")"
     for u in $(cfg WEB_ALLOW); do printf ', "%s"' "$u"; done
     echo ', "chrome://print"],'
   fi
   [ -n "$(cfg WEB_URL)" ] && printf '  "HomepageLocation": "%s",\n  "HomepageIsNewTabPage": false,\n' "$(cfg WEB_URL)"
-  cat <<'EOF'
+  cat <<'J'
   "BrowserSignin": 0,
   "SyncDisabled": true,
   "BrowserGuestModeEnabled": false,
@@ -32,10 +38,53 @@ origin(){ echo "$1" | sed -E 's#^(https?://[^/]+).*#\1#'; }
   "PromotionalTabsEnabled": false,
   "TranslateEnabled": false,
   "BackgroundModeEnabled": false,
-  "AutoplayAllowed": false
+  "AutoplayAllowed": false,
+  "BraveRewardsDisabled": true,
+  "BraveWalletDisabled": true,
+  "BraveVPNDisabled": true,
+  "BraveAIChatEnabled": false,
+  "HideFirstRunExperience": true,
+  "EdgeCollectionsEnabled": false,
+  "ShowRecommendationsEnabled": false
 }
-EOF
-} > "$D/openthinrdp.json.new"
-if cmp -s "$D/openthinrdp.json.new" "$D/openthinrdp.json"; then rm -f "$D/openthinrdp.json.new"
-else chmod 644 "$D/openthinrdp.json.new"; mv -f "$D/openthinrdp.json.new" "$D/openthinrdp.json"; fi
+J
+} > /tmp/otr-policy.json
+for d in /etc/chromium/policies/managed /etc/brave/policies/managed /etc/opt/chrome/policies/managed /etc/opt/edge/policies/managed; do
+  mkdir -p "$d"; cp /tmp/otr-policy.json "$d/openthinrdp.json.new"; put "$d/openthinrdp.json"
+done
+rm -f /tmp/otr-policy.json
+# Firefox ESR (Debian reads /etc/firefox/policies): the same rules in its words, the certificate authorities of the
+# organization too (Chromium takes them from NSS, browser.sh)
+F=/etc/firefox/policies/policies.json; mkdir -p "$(dirname "$F")"
+{
+  echo '{ "policies": {'
+  if [ $APP = 1 ]; then
+    printf '  "WebsiteFilter": { "Block": ["<all_urls>"], "Exceptions": ["%s/*"' "$(origin "$(cfg WEB_URL)")"
+    for u in $(cfg WEB_ALLOW); do printf ', "%s*"' "$u"; done
+    echo '] },'
+  fi
+  [ -n "$(cfg WEB_URL)" ] && printf '  "Homepage": { "URL": "%s", "StartPage": "homepage", "Locked": true },\n' "$(cfg WEB_URL)"
+  c=""; for f in "$OTR_ETC"/ca/*.crt; do [ -f "$f" ] && c+="${c:+, }\"$f\""; done
+  [ -n "$c" ] && printf '  "Certificates": { "Install": [%s] },\n' "$c"
+  cat <<'J'
+  "DisableFirefoxAccounts": true,
+  "DisableDeveloperTools": true,
+  "DisablePrivateBrowsing": true,
+  "DisableTelemetry": true,
+  "DisableFirefoxStudies": true,
+  "DisablePocket": true,
+  "DontCheckDefaultBrowser": true,
+  "OverrideFirstRunPage": "",
+  "OverridePostUpdatePage": "",
+  "ExtensionSettings": { "*": { "installation_mode": "blocked" } },
+  "PasswordManagerEnabled": true
+} }
+J
+} > "$F.new"; put "$F"
+# the browser chosen: installed (or the one of before removed) in the background, it can take minutes
+if [ "$1" != nostart ] && [ "$(cfg BROWSER)" != "$(sed -n 's/: installed$//p' "$OTR_LIB/browser-state" 2>/dev/null)" ]; then
+  # Chromium on a device that never had another browser: nothing to install or remove
+  { [ "$(cfg BROWSER)" = chromium ] || [ -z "$(cfg BROWSER)" ]; } && [ ! -s "$OTR_LIB/browser-state" ] || \
+    systemd-run --quiet --collect --unit=openthinrdp-browser-install "$OTR/browser-install.sh" >/dev/null 2>&1
+fi
 exit 0
