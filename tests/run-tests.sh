@@ -824,7 +824,7 @@ need = 300 if os.path.exists('/usr/share/zoneinfo/zone1970.tab') else 1
 print('ok' if 'UTC' in z and len(z) >= need and z == sorted(z) else 'bad %d' % len(z))
 PY
 )
-ok "settings dialog: the time zone chosen from the list of tzdata, with a search" '[ "$TZN" = ok ] && grep -q "fld TIMEZONE tz " $OTR/kiosk.sh && grep -q "elif typ == .tz.:" $OTR/ui.py'
+ok "settings dialog: the time zone chosen from the list of tzdata, with a search" '[ "$TZN" = ok ] && grep -q "fld TIMEZONE tz " $OTR/kiosk.sh && grep -q "elif typ in (.tz., .combo.):" $OTR/ui.py'
 
 # --- anonymous counts: on by default, what is sent, nothing when off (curl replaced: no test talks to GoatCounter)
 ok "anonymous counts: on by default, the setting kept by save-config" '[ "$(cfg ANON_STATS)" = on ] && printf "ANON_STATS=No\n" > "$T" && $OTR/save-config.sh "$T" --print 2>/dev/null | grep -qx "ANON_STATS=off"'
