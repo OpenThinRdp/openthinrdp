@@ -4,6 +4,8 @@ Step by step, in the order that works: try it on one device, install it, then se
 manager, and from then on every new device needs only a domain account. About an hour for the whole path, most of
 it on the Windows side.
 
+**One computer at home?** You do not need this path: [OpenThinRDP at home](home.md) takes two minutes and no domain.
+
 **What you need**: a Windows Remote Desktop target (an RD Connection Broker with session hosts or a Hyper-V VDI
 collection, or a single Windows PC or server), a domain account to sign in with, one 64-bit x86 PC or thin client
 with 2 GB of RAM, and a USB stick.

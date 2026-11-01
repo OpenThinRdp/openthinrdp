@@ -1,7 +1,7 @@
 <p align="center"><img src="docs/logo.png" alt="OpenThinRDP" width="480"></p>
 
-<p align="center"><b>The free thin client OS for Windows Remote Desktop, RDS and VDI, on Hyper-V, Proxmox, VMware or any cloud.<br>
-RDP over UDP that keeps working where TCP freezes, and a whole fleet managed from one Windows window.</b></p>
+<p align="center"><b>The free Remote Desktop thin client: one Windows PC at home, or a whole office on a domain.<br>
+RDP over UDP that keeps working where TCP freezes, on Hyper-V, Proxmox, VMware, any cloud or the PC in your study.</b></p>
 
 <p align="center">
 <a href="https://github.com/OpenThinRdp/openthinrdp/releases/latest"><b>⬇ Download the ISO (latest release)</b></a>
@@ -16,18 +16,27 @@ RDP over UDP that keeps working where TCP freezes, and a whole fleet managed fro
 <img src="docs/screenshots/settings.png" alt="Settings of the device" width="32%">
 </p>
 
-**Turn any PC or old thin client into a locked-down Remote Desktop kiosk in five minutes.** It boots straight into
-a sign-in form and connects to Windows: through an RD Connection Broker to the user's desktop or VM, or straight to
-a session host or any Windows PC, **on premises or in the cloud**. No licence per device, no management server, no
-agent, no cloud service to depend on: a shared folder and the free [OpenThinRDP Manager](https://openthinrdp.github.io/manager.html) for Windows are all it takes.
+**Turn any PC, old laptop or thin client into a Remote Desktop terminal in five minutes.** It boots straight into
+a sign-in form and connects to Windows. The first start asks one question:
+
+- **At home, or one computer** (*Workgroup*): your Windows PC or virtual machine, found on the network, signed in by
+  itself at power on and woken up if it is off; from anywhere with Tailscale. Try it from a USB stick that keeps your
+  settings, or install it next to Windows. **[OpenThinRDP at home](docs/guides/home.md)**
+- **In the office, on a domain**: RD Connection Brokers, session collections and VDI, devices that set themselves up
+  from the domain, a whole fleet managed from a shared folder. **[Getting started](docs/guides/getting-started.md)**
+
+No licence per device, no management server, no agent, no cloud service to depend on. Behind a fleet, the free
+[OpenThinRDP Manager](https://openthinrdp.github.io/manager.html) for Windows watches the infrastructure (Hyper-V,
+Remote Desktop, SQL Server, iDRAC and more) and manages the devices too.
 
 | | |
 |---|---|
+| **At home** | an old laptop, a mini PC or a Raspberry Pi as a terminal for your PC: password remembered, Wake-on-LAN, more than one computer, Bluetooth headsets, Tailscale from outside, a live USB stick that keeps its settings, install alongside Windows ([at home](docs/guides/home.md)) |
 | **Any hypervisor, any cloud** | Windows desktops and VMs on **Hyper-V, Proxmox VE, VMware vSphere/ESXi, Nutanix AHV, XCP-ng, KVM**, Azure, AWS or Google Cloud, physical PCs, and Linux desktops through xrdp: RDP is spoken by the machine you connect to, so what runs underneath does not matter ([Proxmox and VMware](docs/guides/proxmox-vmware-thin-client.md)) |
 | **Smooth on bad lines** | RDP over UDP: on a line losing half of the packets the desktop still runs at 19-21 frames per second, where TCP has already frozen ([numbers below](#rdp-over-udp-that-keeps-going-on-a-bad-line)) |
 | **Zero-touch setup** | a new device needs a domain account and nothing else: it finds its management folder in the domain by itself ([how](docs/manager.md#settings--manager-language-and-local-copy)) |
-| **The whole fleet in one window** | state of every device, central settings, signed updates with pilot devices and rollback, power on (Wake-on-LAN), restart, remote screen |
-| **The Windows side too** | Health Center: brokers, Hyper-V hosts and cluster, VMs, DCs, DNS, SQL AlwaysOn and backups, with a plain sentence and a fix for each problem |
+| **A free manager for the infrastructure** | the [OpenThinRDP Manager](https://openthinrdp.github.io/manager.html): a Health Center for Hyper-V hosts and clusters, Storage Spaces Direct, RD Connection Brokers, VMs, DCs, DNS, SQL Server Always On and backups, Dell iDRAC, Proxmox, vSphere, Veeam, Citrix and certificates, with a plain sentence and a repair you confirm for each problem; tools for everyday work (a new VM from an ISO, checkpoints, planned restarts) |
+| **And the whole fleet** | in the same manager: state of every device, central settings, signed updates with pilot devices and rollback, power on (Wake-on-LAN), restart, remote screen |
 | **Any x86-64 hardware** | UEFI with Secure Boot or legacy BIOS, complete Debian 13 kernel and firmware, from 2 GB of RAM |
 | **Free** | the client is GPLv3, every copy stays open source (Debian underneath, every client script readable in `rootfs/opt/openthinrdp`); the [Windows manager](https://github.com/OpenThinRdp/openthinrdp-manager) is free for any use, closed, with every command it runs on your servers readable |
 

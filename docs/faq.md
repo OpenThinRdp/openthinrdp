@@ -4,11 +4,16 @@
 
 ### What is OpenThinRDP?
 
-An open source operating system for thin clients that connect to Windows with Remote Desktop: RDS session hosts,
-VDI collections behind an RD Connection Broker, or any Windows PC or VM with Remote Desktop on, on Hyper-V,
-Proxmox, VMware, Nutanix or any cloud. It is Debian 13 with a
-locked-down kiosk on FreeRDP, the RDP UDP transport built in, and a Windows manager that runs the whole fleet from a
-shared folder.
+An open source operating system that turns a PC, an old laptop or a thin client into a Remote Desktop terminal, for
+one Windows PC at home or a whole office on a domain: any Windows PC or VM with Remote Desktop on, RDS session hosts,
+VDI collections behind an RD Connection Broker, on Hyper-V, Proxmox, VMware, Nutanix or any cloud. It is Debian 13
+with a locked-down kiosk on FreeRDP and the RDP UDP transport built in.
+
+### Can I use it at home, with one PC?
+
+Yes: at the first start choose *Workgroup*, pick your PC from the list and sign in. The password can be remembered,
+a PC that is off is woken up, Tailscale reaches it from outside, and a USB stick keeps your settings. No domain, no
+server, no manager needed: [OpenThinRDP at home](guides/home.md).
 
 ### What is the OpenThinRDP Manager?
 
@@ -19,7 +24,8 @@ Redfish controllers, Proxmox, vSphere, Veeam, Citrix, certificates: what is wron
 you confirm), and **the management of an OpenThinRDP fleet** from the shared folder the devices report to. It is not a
 PowerShell script that edits configuration files, as it was in its first weeks: since 1.0.0 (28 October 2026) it is a
 project of its own with [its own releases](https://github.com/OpenThinRdp/openthinrdp-manager/releases), signed with
-the project key, and it updates itself. Its page: [openthinrdp.github.io/manager.html](https://openthinrdp.github.io/manager.html).
+the project key, and it updates itself. One computer at home does not need it. Its page:
+[openthinrdp.github.io/manager.html](https://openthinrdp.github.io/manager.html).
 
 ### Is it free?
 
