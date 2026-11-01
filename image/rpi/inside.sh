@@ -20,7 +20,7 @@ pkgs_for(){ awk -v a="$1" '/^#if ARCHITECTURES /{s=1; for(i=3;i<=NF;i++) if($i==
   /^#nif ARCHITECTURES /{s=0; for(i=3;i<=NF;i++) if($i==a) s=1; next} /^#endif/{s=0; next}
   /^[[:space:]]*(#|$)/{next} !s{print $1}' "$2"; }
 PK="$(pkgs_for arm64 $B/image/lb/packages.list)"
-[ "${INCLUDE_BROWSER:-yes}" = no ] || PK="$PK chromium fonts-liberation2 fonts-noto-color-emoji"
+[ "${INCLUDE_BROWSER:-no}" = yes ] && PK="$PK chromium fonts-liberation2 fonts-noto-color-emoji"
 PK="$PK ${EXTRA_FIRMWARE:-}"
 
 # no documentation, manuals or translations a thin client never shows: the same dpkg filter as image/lb/inside.sh,

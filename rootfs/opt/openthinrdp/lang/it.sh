@@ -225,6 +225,9 @@ L_STATUS_LINE="IP %s   MAC %s   Ora %s %s   %s   Invio stato: %s"
 
 # pulsante web e orari
 L_NO_BROWSER="Nessun browser installato su questa postazione"
+L_BROWSER_INSTALL_T="Installazione del browser"
+L_BROWSER_INSTALL="Il browser viene installato la prima volta che serve. Occorre un minuto o due."
+L_BROWSER_INSTALL_FAIL="Installazione non riuscita: la prima volta il dispositivo deve essere collegato a Internet."
 L_SCHED_TITLE="Spegnimento a orario (%s)"
 L_SCHED_TEXT="La postazione si spegne tra 60 secondi."
 L_JOB_RESTART="Riavvio programmato"

@@ -1,0 +1,4 @@
+# A smart card reader (USB interface class 0b): pcscd and its drivers are not in the image (0.3.1), they are installed
+# the first time a reader is plugged in (openthinrdp-smartcard.service, need.sh); then the reader goes to Windows
+# through /smartcard as before
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_interface", ATTR{bInterfaceClass}=="0b", TAG+="systemd", ENV{SYSTEMD_WANTS}+="openthinrdp-smartcard.service"

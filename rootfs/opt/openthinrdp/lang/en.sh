@@ -228,6 +228,9 @@ L_STATUS_LINE="IP %s   MAC %s   Time %s %s   %s   Status sent: %s"
 
 # web button and power schedule
 L_NO_BROWSER="No browser installed on this device"
+L_BROWSER_INSTALL_T="Installing the browser"
+L_BROWSER_INSTALL="The browser is installed the first time it is needed. It takes a minute or two."
+L_BROWSER_INSTALL_FAIL="It could not be installed: the device needs an Internet connection the first time."
 L_SCHED_TITLE="Scheduled power off (%s)"
 L_SCHED_TEXT="This device switches off in 60 seconds."
 L_JOB_RESTART="Scheduled restart"

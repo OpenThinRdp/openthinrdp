@@ -7,9 +7,19 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
 
 ## 0.3.1 (2026-11-01)
 
-- **Tailscale only where it is used**: it is no longer in the image. Turned on in the settings it is installed from
-  its signed repository (Internet needed) and kept up to date with the security updates; turned off it is removed
-  with its repository. In 0.3.0 a device updated from an older version had no Tailscale at all.
+- **A lighter image: what only some devices use is installed where it is used, the first time** (Internet needed
+  then; on a live stick with its settings partition it stays on the stick). About 430 MB less on every device that
+  does not use it:
+  - **No browser** in the image. A device gets one only when its settings have a web page (web button or kiosk
+    page), and only the one chosen: Chromium, or Firefox ESR, Brave, Chrome, Edge (Chromium is then removed). No web
+    page: no browser at all, also on the devices that had one.
+  - **Tailscale**: installed when turned on, kept up to date with the security updates, removed with its repository
+    when turned off (signing in again is then needed). In 0.3.0 a device updated from an older version had none.
+  - **Bluetooth**: the first time the Bluetooth page is opened. **Smart cards** (pcscd and its drivers): when a reader
+    is first plugged in; sessions open as before without them. **WireGuard, OpenVPN**: when that VPN is chosen.
+  - Devices already installed keep what they have (but the browsers, as above).
+  - `INCLUDE_BROWSER=yes` in `build.conf` keeps Chromium in an image of your own, for devices that never reach the
+    Internet.
 
 ## 0.3.0 (2026-11-01)
 

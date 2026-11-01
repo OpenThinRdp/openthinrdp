@@ -82,7 +82,8 @@ wg_up(){
   server=$(cfg VPN_SERVER); key=$(cfg VPN_SERVER_KEY); addr=$(cfg VPN_ADDRESS); routes=$(cfg VPN_ROUTES)
   if [ -z "$server" ] || [ -z "$key" ] || [ -z "$addr" ]; then
     echo "wireguard: VPN_SERVER, VPN_SERVER_KEY and VPN_ADDRESS are needed" > "$RUN/state"; wg_down; return 0; fi
-  command -v wg >/dev/null || { echo "wireguard: wireguard-tools missing (next update)" > "$RUN/state"; return 0; }
+  # not in the image (0.3.1): installed the first time this VPN is chosen
+  command -v wg >/dev/null || "$OTR/need.sh" wireguard || { echo "wireguard: wireguard-tools could not be installed (no Internet?)" > "$RUN/state"; return 0; }
   k=$(wg_key) || { echo "wireguard: key not made" > "$RUN/state"; return 0; }
   ep=$(wg_endpoint "$server")
   [ -n "$ep" ] || { echo "wireguard: $server not resolved (DNS)" > "$RUN/state"; return 0; }
@@ -129,7 +130,7 @@ ovpn_stop(){
 }
 ovpn_start(){
   local sig
-  command -v openvpn >/dev/null || { echo "openvpn: openvpn missing (next update)" > "$RUN/state"; return 0; }
+  command -v openvpn >/dev/null || "$OTR/need.sh" openvpn || { echo "openvpn: openvpn could not be installed (no Internet?)" > "$RUN/state"; return 0; }
   [ -s "$(secret_path vpn-openvpn.conf)" ] || { echo "openvpn: no profile (send it from the manager: VPN profile...)" > "$RUN/state"; return 0; }
   # routes and DNS are options of the openvpn command: changed, the tunnel is made again
   sig="$(cfg VPN_ROUTES)|$(cfg VPN_DNS)"

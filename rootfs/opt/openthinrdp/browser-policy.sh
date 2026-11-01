@@ -81,10 +81,13 @@ F=/etc/firefox/policies/policies.json; mkdir -p "$(dirname "$F")"
 } }
 J
 } > "$F.new"; put "$F"
-# the browser chosen: installed (or the one of before removed) in the background, it can take minutes
-if [ "$1" != nostart ] && [ "$(cfg BROWSER)" != "$(sed -n 's/: installed$//p' "$OTR_LIB/browser-state" 2>/dev/null)" ]; then
-  # Chromium on a device that never had another browser: nothing to install or remove
-  { [ "$(cfg BROWSER)" = chromium ] || [ -z "$(cfg BROWSER)" ]; } && [ ! -s "$OTR_LIB/browser-state" ] || \
+# the browser of this device in the background (it can take minutes): the one chosen, only with a web page in the
+# settings; none at all without one (browser-install.sh)
+W=none; web_used && { W=$(cfg BROWSER); [ -n "$W" ] || W=chromium; }
+S=$(cat "$OTR_LIB/browser-state" 2>/dev/null)
+if [ "$1" != nostart ] && [ "$S" != "$W: installed" ] && ! { [ "$W" = none ] && [ "${S%%:*}" = none ]; }; then
+  # a device that never had a browser and needs none: nothing to do
+  [ "$W" = none ] && [ -z "$S" ] && ! dpkg -s chromium >/dev/null 2>&1 || \
     systemd-run --quiet --collect --unit=openthinrdp-browser-install "$OTR/browser-install.sh" >/dev/null 2>&1
 fi
 exit 0

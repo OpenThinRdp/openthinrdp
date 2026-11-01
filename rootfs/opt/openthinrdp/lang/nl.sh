@@ -228,6 +228,9 @@ L_STATUS_LINE="IP %s   MAC %s   Tijd %s %s   %s   Status verzonden: %s"
 
 # web button and power schedule
 L_NO_BROWSER="Geen browser geinstalleer op dit apparaat"
+L_BROWSER_INSTALL_T="Browser installeren"
+L_BROWSER_INSTALL="De browser wordt geïnstalleerd de eerste keer dat hij nodig is. Dit duurt een minuut of twee."
+L_BROWSER_INSTALL_FAIL="Installeren is niet gelukt: de eerste keer heeft het apparaat een internetverbinding nodig."
 L_SCHED_TITLE="Uischakelen volgens schema (%s)"
 L_SCHED_TEXT="Dit apparaat wordt over 60 seconden uitgeschakeld."
 L_JOB_RESTART="Geplande herstart"

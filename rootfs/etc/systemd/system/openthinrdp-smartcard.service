@@ -1,0 +1,13 @@
+[Unit]
+Description=OpenThinRDP: smart card support, installed when a reader is first plugged in
+After=network-online.target
+# no Internet yet (a reader plugged in at boot): tried again every minute, for a while
+StartLimitIntervalSec=1h
+StartLimitBurst=20
+
+[Service]
+Type=oneshot
+ExecStart=/opt/openthinrdp/need.sh smartcard
+ExecStartPost=-/bin/systemctl start pcscd.socket
+Restart=on-failure
+RestartSec=60
