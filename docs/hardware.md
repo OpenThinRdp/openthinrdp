@@ -1,4 +1,7 @@
-# Hardware
+# Which PCs and thin clients run OpenThinRDP?
+
+Any 64-bit x86 PC or thin client with 2 GB of RAM: an old office PC or laptop, a mini PC, a used Dell Wyse 5070,
+HP t630 or t640, Fujitsu Futro S740. Model by model: [which OS for a used thin client](guides/used-thin-client.md).
 
 ## Drivers: all of Debian's
 

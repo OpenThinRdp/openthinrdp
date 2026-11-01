@@ -329,7 +329,7 @@ The result is `out/openthinrdp-<version>.iso`. See [docs/building.md](docs/build
 - [docs/configuration.md](docs/configuration.md): every setting.
 - [docs/guides/getting-started.md](docs/guides/getting-started.md): step by step, from a USB stick to a managed fleet.
 - [docs/faq.md](docs/faq.md): frequently asked questions.
-- Guides: [replacing Dell ThinOS on Dell thin clients](docs/guides/replace-dell-thinos.md), [turning an old PC into a thin client](docs/guides/old-pc-thin-client.md).
+- Guides: [replacing Dell ThinOS on Dell thin clients](docs/guides/replace-dell-thinos.md), [turning an old PC into a thin client](docs/guides/old-pc-thin-client.md), [which OS for a used thin client (Wyse 5070, HP t630, Futro S740)](docs/guides/used-thin-client.md), [Windows 10 end of support: old PCs as terminals](docs/guides/windows-10-end-of-support.md), [Remote Desktop from Linux: FreeRDP, Remmina or a thin client OS](docs/guides/linux-rdp-client.md), [Raspberry Pi as a thin client](docs/guides/raspberry-pi-thin-client.md).
 - [docs/alternatives.md](docs/alternatives.md): compared with Linux Mint + Remmina, IGEL OS, Dell ThinOS, Stratodesk, ThinStation, openthinclient.
 - [docs/manager.md](docs/manager.md): the Windows manager, page by page: devices, settings, pilot devices and going back.
 - [docs/management.md](docs/management.md): the management folder, central settings, SSH keys, signed updates.
