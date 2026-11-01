@@ -5,6 +5,12 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.3.1 (2026-11-01)
+
+- **Tailscale only where it is used**: it is no longer in the image. Turned on in the settings it is installed from
+  its signed repository (Internet needed) and kept up to date with the security updates; turned off it is removed
+  with its repository. In 0.3.0 a device updated from an older version had no Tailscale at all.
+
 ## 0.3.0 (2026-11-01)
 
 - **Domain or workgroup** ([#174](https://github.com/OpenThinRdp/openthinrdp/issues/174)): the first start asks for
