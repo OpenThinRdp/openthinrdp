@@ -1,7 +1,7 @@
 <p align="center"><img src="docs/logo.png" alt="OpenThinRDP" width="480"></p>
 
-<p align="center"><b>Sistema operativo per thin client gratuito e open source, con l'RDP su UDP,<br>
-per Desktop remoto Windows, RDS e VDI. E un gestore Windows gratuito per l'infrastruttura e la flotta.</b></p>
+<p align="center"><b>Il thin client per Desktop remoto gratuito e open source: un PC Windows a casa, o un ufficio intero in dominio.<br>
+RDP su UDP, e un gestore Windows gratuito che controlla l'infrastruttura (Hyper-V, Desktop remoto, SQL, iDRAC...) e gestisce anche la flotta.</b></p>
 
 <p align="center">
 <a href="https://github.com/OpenThinRdp/openthinrdp/releases/latest"><b>Scarica l'ultima versione</b></a>
