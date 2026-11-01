@@ -1,4 +1,8 @@
-# OpenThinRDP and the alternatives
+# Free alternative to IGEL OS, Dell ThinOS and Stratodesk: OpenThinRDP compared
+
+**Looking for a free alternative to IGEL OS or Dell ThinOS for Windows Remote Desktop?** OpenThinRDP is free for any
+number of devices, with no licence, subscription or account, and open source; it runs on the same used thin clients
+([which ones](guides/used-thin-client.md)). It speaks RDP only: for Citrix or Horizon, the products below still win.
 
 What OpenThinRDP does differently from the other ways of turning PCs into Remote Desktop clients, and when another
 choice is better. The facts about other products are public information as we understand it; corrections are

@@ -1,7 +1,8 @@
 # Turning an old PC into a thin client for Windows Remote Desktop
 
-An office PC that is too slow for Windows 11, or a used thin client bought for little, makes a good Remote Desktop
-client. OpenThinRDP turns it into a kiosk that starts straight into a sign-in form and opens the user's Windows
+An office PC that cannot run Windows 11 now that Windows 10 support has ended
+([what to do with it](windows-10-end-of-support.md)), or a used thin client bought for little
+([which one](used-thin-client.md)), makes a good Remote Desktop client. OpenThinRDP turns it into a kiosk that starts straight into a sign-in form and opens the user's Windows
 desktop in full screen. Nothing is installed on the Windows side and there is no licence per device.
 
 - [What the PC needs](#what-the-pc-needs)

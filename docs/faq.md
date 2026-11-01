@@ -15,6 +15,19 @@ Yes: at the first start choose *Workgroup*, pick your PC from the list and sign 
 a PC that is off is woken up, Tailscale reaches it from outside, and a USB stick keeps your settings. No domain, no
 server, no manager needed: [OpenThinRDP at home](guides/home.md).
 
+### Is there a free alternative to IGEL OS or Dell ThinOS?
+
+Yes: OpenThinRDP is free for any number of devices, with no licence, subscription or account, and open source. For
+Windows Remote Desktop it does what they do (a locked-down sign-in, USB and smart cards, central management, updates
+with pilot devices and a way back) and adds RDP over UDP. It does not speak Citrix or Horizon yet. Side by side:
+[the alternatives](alternatives.md).
+
+### Thin client, zero client or mini PC: what is the difference?
+
+A **thin client** runs a small operating system whose only job is to open a remote desktop; a **zero client** has no
+general operating system at all, only firmware for one protocol; a **mini PC** is a full computer. OpenThinRDP turns
+either a thin client or a mini PC (or an old PC) into a thin client for Windows Remote Desktop.
+
 ### What is the OpenThinRDP Manager?
 
 A free Windows application (Windows 10/11 and Windows Server, English and Italian, nothing to install) with two parts
@@ -60,17 +73,29 @@ clients such as Dell Wyse 5070, HP t630 or Fujitsu Futro S740 meet the requireme
 and the guides [replacing Dell ThinOS](guides/replace-dell-thinos.md) and
 [turning an old PC into a thin client](guides/old-pc-thin-client.md).
 
+### What OS can I put on a used Dell Wyse 5070, HP t630 or Fujitsu Futro S740?
+
+OpenThinRDP: a free thin client OS for Windows Remote Desktop, installed from a USB stick. They meet the
+requirements (64-bit x86, 2 GB of RAM, 8 GB of storage); the Wyse 3040 is at the minimum. Model by model and how
+to install: [which OS for a used thin client](guides/used-thin-client.md).
+
+### What can I do with a PC that cannot run Windows 11?
+
+Turn it into a terminal for a Windows that is up to date: your newer PC at home, or a server or virtual machine at
+work. The old PC gets a small system that updates itself and shows the Windows desktop; programs and data stay on
+the up-to-date computer. [Windows 10 end of support](guides/windows-10-end-of-support.md).
+
 ### Did it leave drivers out to be light?
 
 No. The ISO has the complete Debian 13 kernel (Linux 6.12) with every driver, and every firmware package of Debian.
 Whatever works with Debian 13, or with Ubuntu and Linux Mint of the same period, works here. It is light because it
 runs no desktop.
 
-### Does it run on Raspberry Pi or ARM?
+### Can I use a Raspberry Pi as an RDP thin client?
 
 Experimentally. There is an SD card image for the Raspberry Pi 4, tested in emulation but not yet on a real board
-([the image](https://github.com/OpenThinRdp/openthinrdp/releases/tag/rpi-test-1), [what to check](arm.md)). The
-Pi 5 is not supported yet.
+([Raspberry Pi as a thin client](guides/raspberry-pi-thin-client.md), [what to check](arm.md)). The Pi 5 is not
+supported yet. For an office today, a used x86 thin client is the safer choice.
 
 ### Does it run on old 32-bit thin clients?
 
@@ -86,11 +111,49 @@ OpenThinRDP ships FreeRDP built with it on. With `TRANSPORT=auto` the
 session uses UDP, and TCP when UDP is blocked. On a line losing 50% of its packets it kept 19-21 frames per second,
 where TCP was down to 0.6 at 20% ([udp.md](udp.md)).
 
+### Why is Remote Desktop slow or laggy?
+
+Most often because the session runs over TCP on a line that loses packets: Wi-Fi, a VPN, a busy link. Windows' own
+client switches to UDP; Linux clients based on a released FreeRDP do not. OpenThinRDP does, and falls back to TCP
+when UDP is blocked. Other causes and how to tell them apart:
+[Remote Desktop from Linux](guides/linux-rdp-client.md#why-is-remote-desktop-slow-from-linux).
+
 ### Which Windows can it connect to?
 
 Windows RDS session hosts and VDI collections through an RD Connection Broker, or a single Windows PC or server with
 Remote Desktop on (Pro, Enterprise, Server), on premises or in Azure, AWS or any cloud. Kerberos with NTLM as fallback,
 RD Gateway, and its own WireGuard or OpenVPN for devices outside the office.
+
+### Can I Remote Desktop into Windows Home?
+
+No, from any client: Windows Home cannot be connected to with Remote Desktop. Windows Pro, Enterprise, Education
+and Windows Server can, and so can most Windows virtual machines. Home can be upgraded to Pro from *Settings >
+System > Activation*.
+
+### Remmina or FreeRDP: which one?
+
+They are the same engine: Remmina is a desktop application built on FreeRDP. On a Linux PC used for other things
+too, Remmina is the simple choice. On a computer that should only open Windows, OpenThinRDP gives the same FreeRDP
+with UDP, a locked-down sign-in and central management:
+[FreeRDP, Remmina or a thin client OS](guides/linux-rdp-client.md).
+
+### Can it open my Windows desktop by itself at power on?
+
+Yes, on a computer used by one person: turn on *Remember password* in the settings, sign in once, and from then on
+the desktop opens by itself at power on, with the password sealed in the TPM when the computer has one. A PC that is off is woken up first
+([at home](guides/home.md#it-feels-like-a-computer-of-your-own)).
+
+### Do I need RDS CALs or other Microsoft licences?
+
+The same as for any Remote Desktop client: RDS CALs to connect to Remote Desktop Services session hosts, and for
+Windows virtual desktops (VDI) the Windows licence that covers access to them (VDA or a per-user Windows Enterprise
+subscription). OpenThinRDP adds no licence of its own. A single Windows Pro PC at home needs nothing more. Your
+Microsoft reseller has the last word on your contracts.
+
+### Does it work with two or three monitors? And printers?
+
+Yes: several monitors become one Windows desktop across all of them (`MULTIMON`). A network printer is used by
+Windows directly; a USB printer is passed whole to Windows, like the other USB devices.
 
 ### Does it work with Azure Virtual Desktop or Windows 365?
 

@@ -1,4 +1,7 @@
-# UDP transport
+# RDP over UDP: why Remote Desktop freezes on Wi-Fi and VPN, and the fix
+
+**Remote Desktop slow, laggy or freezing on Wi-Fi, a VPN or a busy line?** Most often the session is running over
+TCP. Windows' own client switches to UDP; the Linux clients based on a released FreeRDP do not. OpenThinRDP does.
 
 Windows sends Remote Desktop graphics over UDP when the client supports MS-RDPEMT/RDPEUDP. Over TCP a busy
 server or a lossy line makes the screen fall behind: every lost packet holds up everything after it. Over UDP

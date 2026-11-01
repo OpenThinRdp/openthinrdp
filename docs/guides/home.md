@@ -59,4 +59,7 @@ Tailscale is free for personal use, and it is installed on the terminal only whe
   terminal needs the Internet that first time.
 - Chrome and Edge exist for PCs only; on a Raspberry Pi choose Chromium, Firefox or Brave.
 
+More: [Remote Desktop from Linux, and Windows Home](linux-rdp-client.md),
+[a Raspberry Pi as the terminal](raspberry-pi-thin-client.md).
+
 Questions and ideas: [Discussions](https://github.com/OpenThinRdp/openthinrdp/discussions).
