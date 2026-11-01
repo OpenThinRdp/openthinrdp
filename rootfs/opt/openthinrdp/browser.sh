@@ -7,17 +7,25 @@
 . /opt/openthinrdp/lib/common.sh
 otr_lang
 export DISPLAY=${DISPLAY:-:0}
-# the browser chosen (BROWSER, browser-install.sh); Chromium while it is not installed (yet)
-FF=0
-case "$(cfg BROWSER)" in
-  firefox) B=$(command -v firefox-esr) && FF=1 ;;
-  brave)   B=$(command -v brave-browser) ;;
-  chrome)  B=$(command -v google-chrome-stable) ;;
-  edge)    B=$(command -v microsoft-edge-stable) ;;
-  *)       B="" ;;
-esac
-[ -n "$B" ] || B=$(command -v chromium || command -v chromium-browser || command -v google-chrome)
-[ -z "$B" ] && { yad --error --center --timeout=5 --text="$L_NO_BROWSER" 2>/dev/null; exit 1; }
+# the browser chosen (BROWSER) and only that one: no browser is in the image (0.3.1). Chromium is installed the first
+# time a page needs it (need.sh); another browser by browser-install.sh, started as root when the setting is saved or
+# at boot: here its install is waited for, with a progress screen, never Chromium instead
+b=$(cfg BROWSER); [ -n "$b" ] || b=chromium
+bin(){ case "$1" in firefox) command -v firefox-esr ;; brave) command -v brave-browser ;; chrome) command -v google-chrome-stable ;;
+  edge) command -v microsoft-edge-stable ;; *) command -v chromium || command -v chromium-browser ;; esac; }
+B=$(bin "$b")
+if [ -z "$B" ]; then
+  { echo 10
+    if [ "$b" = chromium ]; then sudo -n "$OTR/need.sh" chromium >/dev/null 2>&1
+    else for _ in $(seq 300); do systemctl is-active -q openthinrdp-browser-install || break; sleep 2; done; fi
+    echo 100; } |
+    python3 "$OTR/ui.py" message --progress --icon=busy --lang="$(cfg LANGUAGE)" --top="$(cfg BG_TOP)" --bottom="$(cfg BG_BOTTOM)" \
+      --heading="$L_BROWSER_INSTALL_T" --text="$L_BROWSER_INSTALL" 2>/dev/null
+  B=$(bin "$b")
+fi
+FF=0; [ "$b" = firefox ] && FF=1
+[ -z "$B" ] && { python3 "$OTR/ui.py" message --icon=error --lang="$(cfg LANGUAGE)" --heading="$L_NO_BROWSER" --text="$L_BROWSER_INSTALL_FAIL" \
+  --timeout=8 2>/dev/null || yad --error --center --timeout=5 --text="$L_NO_BROWSER" 2>/dev/null; exit 1; }
 FLAGS=(--no-first-run --no-default-browser-check --password-store=basic --disable-features=Translate,MediaRouter)
 # Firefox: its own profile folder and options; the rules are its policies (browser-policy.sh)
 ff(){ local p=$1; shift; mkdir -p "$p"; "$B" --no-remote --profile "$p" "$@" >/dev/null 2>&1; }

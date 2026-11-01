@@ -15,15 +15,6 @@ case "$FREERDP_FROM" in
   *)         apt-get install -y --no-install-recommends freerdp3-x11 ;;
 esac
 
-# Tailscale (0.3.0, VPN=tailscale: the PC at home from outside): not in Debian, from its own signed repository;
-# installed, not started (vpn.sh starts it when the setting says so)
-ARCHC=$(dpkg --print-architecture)
-# python3 fetches the key and the list: no curl in the image
-  python3 -c "import sys, urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])" https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg /usr/share/keyrings/tailscale-archive-keyring.gpg &&
-  python3 -c "import sys, urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])" https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list /etc/apt/sources.list.d/tailscale.list &&
-  apt-get update && apt-get install -y --no-install-recommends tailscale && systemctl disable tailscaled.service ||
-  { echo "Tailscale ($ARCHC) not installed"; exit 1; }
-
 # accounts: "kiosk" runs the X session without a password; "otradmin" administers (the Debian installer reserves "admin") (SSH with a key, sudo)
 id kiosk >/dev/null 2>&1 || useradd -m -s /bin/bash kiosk
 usermod -aG plugdev,video,audio,dialout,input kiosk
@@ -54,7 +45,7 @@ printf 'XKBMODEL="pc105"\nXKBLAYOUT="%s"\nXKBVARIANT=""\nXKBOPTIONS=""\n' "$KEYB
 
 # services
 systemctl enable openthinrdp-secrets.service openthinrdp-boot.service openthinrdp-wol.service openthinrdp-report.timer \
-  openthinrdp-report.path openthinrdp-schedule.timer openthinrdp-keep-log.service systemd-timesyncd pcscd.socket
+  openthinrdp-report.path openthinrdp-schedule.timer openthinrdp-keep-log.service systemd-timesyncd
 systemctl disable ssh 2>/dev/null || true          # apply.sh turns it on with SSH=on and a key
 systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 for s in ModemManager bluetooth cups avahi-daemon; do systemctl disable "$s" 2>/dev/null || true; done

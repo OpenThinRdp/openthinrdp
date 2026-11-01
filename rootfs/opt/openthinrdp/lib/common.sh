@@ -24,6 +24,8 @@ cfg_num(){ local v; v=$(cfg "$1"); [[ $v =~ ^[0-9]{1,6}$ ]] && echo $((10#$v)) |
 # (computers not in a domain: one PC or virtual machine). SETUP when set, else guessed from what is there: a device
 # with a domain keeps every setting in view, one in a workgroup sees only what applies. Empty = nothing set yet (the
 # first start asks).
+# a web page in the settings (web button or kiosk page): the only reason a device has a browser (0.3.1)
+web_used(){ local w; w=$(cfg WEB_BUTTON); [ -n "$(cfg KIOSK_URL)" ] || { [ -n "$w" ] && [ "$w" != none ]; }; }
 setup_kind(){
   case "$(cfg SETUP)" in domain|workgroup) cfg SETUP; return ;; esac
   if [ -n "$(cfg DOMAIN)$(cfg LOAD_BALANCE_INFO)$(cfg BROKER_FALLBACK)$(cfg MGMT_SHARE)" ] || [ "$(cfg DOT1X)" = peap ] || [ "$(cfg DOT1X)" = tls ]; then echo domain

@@ -6,7 +6,14 @@
 #   bt.sh remove MAC   forgotten
 # A device that asks for a code typed on it (some keyboards) cannot be paired from here: no agent shows it.
 . /opt/openthinrdp/lib/common.sh
-command -v bluetoothctl >/dev/null && ls /sys/class/bluetooth/hci* >/dev/null 2>&1 || exit 3
+ls /sys/class/bluetooth/hci* >/dev/null 2>&1 || exit 3
+# not in the image (0.3.1): installed the first time this page is used; the audio of the session restarted so that it
+# sees the Bluetooth part of PipeWire (headsets)
+if ! command -v bluetoothctl >/dev/null; then
+  "$OTR/need.sh" bluetooth || exit 4
+  u=$(id -u "$OTR_KIOSK_USER" 2>/dev/null) && runuser -u "$OTR_KIOSK_USER" -- env XDG_RUNTIME_DIR="/run/user/$u" \
+    systemctl --user restart wireplumber >/dev/null 2>&1
+fi
 # the image keeps the Bluetooth service off (hook.chroot): started when this page is used, and enabled once a device
 # is paired, so that at every start the adapter brings it up and the paired devices come back by themselves
 systemctl is-active -q bluetooth || { systemctl start bluetooth 2>/dev/null; sleep 1; }

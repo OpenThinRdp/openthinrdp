@@ -82,7 +82,8 @@ wg_up(){
   server=$(cfg VPN_SERVER); key=$(cfg VPN_SERVER_KEY); addr=$(cfg VPN_ADDRESS); routes=$(cfg VPN_ROUTES)
   if [ -z "$server" ] || [ -z "$key" ] || [ -z "$addr" ]; then
     echo "wireguard: VPN_SERVER, VPN_SERVER_KEY and VPN_ADDRESS are needed" > "$RUN/state"; wg_down; return 0; fi
-  command -v wg >/dev/null || { echo "wireguard: wireguard-tools missing (next update)" > "$RUN/state"; return 0; }
+  # not in the image (0.3.1): installed the first time this VPN is chosen
+  command -v wg >/dev/null || "$OTR/need.sh" wireguard || { echo "wireguard: wireguard-tools could not be installed (no Internet?)" > "$RUN/state"; return 0; }
   k=$(wg_key) || { echo "wireguard: key not made" > "$RUN/state"; return 0; }
   ep=$(wg_endpoint "$server")
   [ -n "$ep" ] || { echo "wireguard: $server not resolved (DNS)" > "$RUN/state"; return 0; }
@@ -129,7 +130,7 @@ ovpn_stop(){
 }
 ovpn_start(){
   local sig
-  command -v openvpn >/dev/null || { echo "openvpn: openvpn missing (next update)" > "$RUN/state"; return 0; }
+  command -v openvpn >/dev/null || "$OTR/need.sh" openvpn || { echo "openvpn: openvpn could not be installed (no Internet?)" > "$RUN/state"; return 0; }
   [ -s "$(secret_path vpn-openvpn.conf)" ] || { echo "openvpn: no profile (send it from the manager: VPN profile...)" > "$RUN/state"; return 0; }
   # routes and DNS are options of the openvpn command: changed, the tunnel is made again
   sig="$(cfg VPN_ROUTES)|$(cfg VPN_DNS)"
@@ -212,22 +213,37 @@ auth_in(){
 TSF=/run/openthinrdp-tailscale
 ts_state(){ tailscale status --json 2>/dev/null | sed -n "s/^[[:space:]]*\"$1\":[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -1; }
 ts_status(){
-  command -v tailscale >/dev/null || { echo "tailscale: not installed (image 0.3.0 or later)"; return; }
+  command -v tailscale >/dev/null || { echo "tailscale: not installed (no Internet when it was turned on: it installs at the next try)"; return; }
   case "$(ts_state BackendState)" in
     Running) echo "tailscale: up $(tailscale ip -4 2>/dev/null | head -1)" ;;
     NeedsLogin) u=$(ts_state AuthURL); echo "tailscale: sign in at ${u:-(link not ready yet)}" ;;
     "") echo "tailscale: down" ;;
     *) echo "tailscale: $(ts_state BackendState)" ;;
   esac; }
+# Tailscale is not in the image (it would weigh on every device for the few that use it): installed here when it is
+# turned on, from its signed repository (python3 fetches the key and the list: no curl), and kept up to date with the
+# security updates; removed with its repository when it is turned off (signing in again is then needed)
+ts_install(){ command -v tailscale >/dev/null && return 0
+  echo "tailscale: installing" > "$TSF"; chmod 644 "$TSF"
+  python3 -c "import sys, urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])" https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg /usr/share/keyrings/tailscale-archive-keyring.gpg &&
+  python3 -c "import sys, urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])" https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list /etc/apt/sources.list.d/tailscale.list &&
+  apt-get -o DPkg::Lock::Timeout=300 update -q >/dev/null 2>&1 &&
+  DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 install -y -q --no-install-recommends tailscale >/dev/null 2>&1 &&
+  printf 'Unattended-Upgrade::Origins-Pattern {\n        "site=pkgs.tailscale.com";\n};\n' > /etc/apt/apt.conf.d/54openthinrdp-tailscale &&
+  { ev "Tailscale installed"; return 0; }
+  ev "Tailscale could not be installed (no Internet, or no package for $(dpkg --print-architecture))"; return 1; }
 ts_up(){
+  ts_install
   if command -v tailscale >/dev/null; then
     systemctl enable --now tailscaled.service >/dev/null 2>&1
     # not signed in yet: "up" asks the service for a sign-in link and waits; 10 s are enough for the link
     [ "$(ts_state BackendState)" = Running ] || timeout 15 tailscale up --hostname="$(hostname)" --timeout=10s >/dev/null 2>&1
   fi
   ts_status > "$TSF"; chmod 644 "$TSF"; }
-ts_down(){ command -v tailscale >/dev/null || return 0
+ts_down(){ command -v tailscale >/dev/null || { rm -f "$TSF"; return 0; }
   systemctl is-active -q tailscaled.service && { tailscale down >/dev/null 2>&1; systemctl disable --now tailscaled.service >/dev/null 2>&1; }
+  DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=120 purge -y -q tailscale >/dev/null 2>&1 &&
+    { rm -f /etc/apt/sources.list.d/tailscale.list /usr/share/keyrings/tailscale-archive-keyring.gpg /etc/apt/apt.conf.d/54openthinrdp-tailscale; ev "Tailscale removed (turned off)"; }
   rm -f "$TSF"; }
 
 case "$1" in

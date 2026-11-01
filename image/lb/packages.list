@@ -32,17 +32,12 @@ pipewire-pulse
 pipewire-alsa
 wireplumber
 dbus-user-session
-# Bluetooth (0.3.0): headsets, keyboards, mice paired from the device (bt.sh); audio through PipeWire
-bluez
-libspa-0.2-bluetooth
+# Installed only where they are used, the first time (need.sh, 0.3.1): Chromium (a web page in the settings),
+# Bluetooth (bluez, libspa-0.2-bluetooth: the Bluetooth page), smart cards (pcscd, libccid, opensc, pcsc-tools: a
+# reader plugged in), WireGuard and OpenVPN (the VPN chosen); Tailscale and the other browsers from their makers
 # Windows in the boot menu of a device installed alongside it (boot.sh, .dualboot)
 os-prober
 
-# smart cards
-pcscd
-libccid
-opensc
-pcsc-tools
 
 # video decoding on Intel
 #if ARCHITECTURES amd64
@@ -53,9 +48,6 @@ vainfo
 # network, management, updates
 ifupdown
 dhcpcd-base
-# VPN for devices outside the office (VPN=wireguard|openvpn, vpn.sh)
-wireguard-tools
-openvpn
 # Wi-Fi (personal and enterprise) and 802.1X on the cable (dot1x.sh, wpa_supplicant -D wired); openssl checks and
 # converts the 802.1X client certificate sent by the manager (PEM or PKCS#12)
 wpasupplicant

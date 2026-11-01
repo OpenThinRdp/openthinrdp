@@ -46,7 +46,7 @@ mkdir -p config/package-lists config/hooks/normal config/packages.chroot config/
   $C/etc/openthinrdp/ca $C/opt/openthinrdp/branding $C/usr/share/plymouth/themes/openthinrdp
 cp $B/image/lb/packages.list config/package-lists/openthinrdp.list.chroot
 # optional parts (build.conf): Chromium for the web button, extra firmware
-{ [ "${INCLUDE_BROWSER:-yes}" = no ] || printf 'chromium\nfonts-liberation2\nfonts-noto-color-emoji\n'
+{ [ "${INCLUDE_BROWSER:-no}" = yes ] && printf 'chromium\nfonts-liberation2\nfonts-noto-color-emoji\n'
   for f in ${EXTRA_FIRMWARE:-}; do echo "$f"; done; } > config/package-lists/openthinrdp-site.list.chroot
 # no documentation, manuals or translations a thin client never shows (licenses and the build languages
 # kept). In place before the packages are installed, and kept in the system for later updates.
