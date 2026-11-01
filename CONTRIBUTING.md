@@ -36,6 +36,27 @@ Translations are welcome: one file in `rootfs/opt/openthinrdp/lang/` and one in 
 By contributing you agree that your contribution is licensed under the GNU GPL version 3 or later, like the project.
 Please follow the [code of conduct](CODE_OF_CONDUCT.md).
 
+## How the repository is laid out
+
+| Folder | Content |
+|---|---|
+| `rootfs/` | everything installed on the thin client (`/opt/openthinrdp`, udev rules, systemd units) |
+| `image/` | the ISO build (live-build in a container), the FreeRDP build and the example site folder |
+| `management/publish/` | building and signing update packages |
+| `tests/` | tests that run in a Debian container |
+| `docs/` | the documentation, also published as the [website](https://openthinrdp.github.io/) |
+
+The Windows manager is a separate project: [openthinrdp-manager](https://github.com/OpenThinRdp/openthinrdp-manager).
+
+Your own image, with your logo, broker, settings and keys built in (Linux with Docker or Podman):
+
+```
+cp -r image/site.example image/site      # then edit image/site/site.conf and build.conf, add your logo
+image/build.sh
+```
+
+The result is `out/openthinrdp-<version>.iso`. See [docs/building.md](docs/building.md).
+
 ## Who maintains it, and how releases are made
 
 [MAINTAINERS.md](MAINTAINERS.md) says who maintains OpenThinRDP and what happens if they can no longer act; every release
