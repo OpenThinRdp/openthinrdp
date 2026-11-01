@@ -1166,8 +1166,9 @@ start_update_check(){
   update_question
 }
 start_update_check
-# the live system (from the USB stick) tests the hardware at its first start: what anyone trying it wants to know
-otr_installed || [ -f /tmp/openthinrdp-selftest-shown ] || { : > /tmp/openthinrdp-selftest-shown; selftest_dialog; }
+# the live system (from the USB stick) tests the hardware at its first start: what anyone trying it wants to know.
+# The mark in the home folder: on a stick that keeps its settings it stays, and the test is not shown at every start
+otr_installed || [ -f "$HOME/.openthinrdp-selftest-shown" ] || { : > "$HOME/.openthinrdp-selftest-shown"; selftest_dialog; }
 
 # --- main loop ----------------------------------------------------------------------------------
 # first start: no broker yet -> the settings dialog opens by itself (it is the setup of a new device).

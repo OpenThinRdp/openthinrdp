@@ -27,7 +27,8 @@ a=$(otr_arch)
 # the browsers of the makers chosen before (not Chromium, not the one chosen now): removed with their repository
 for o in firefox brave chrome edge; do
   [ "$o" = "$b" ] && continue
-  dpkg -s "$(pkg $o)" >/dev/null 2>&1 && { apt-get purge -y -qq "$(pkg $o)" >/dev/null 2>&1; ev "browser: $o removed"; }
+  # Brave brings its key as a package of its own (brave-keyring): it goes with it
+  dpkg -s "$(pkg $o)" >/dev/null 2>&1 && { apt-get purge -y -qq "$(pkg $o)" $([ $o = brave ] && dpkg -s brave-keyring >/dev/null 2>&1 && echo brave-keyring) >/dev/null 2>&1; ev "browser: $o removed"; }
   [ -n "$(list $o)" ] && rm -f "$L/$(list $o).list" "$K/otr-$o".*
 done
 [ "$b" = chromium ] && { rm -f "$U"; echo "chromium: installed" > "$ST"; exit 0; }

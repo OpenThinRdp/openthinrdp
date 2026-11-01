@@ -7,6 +7,9 @@
 # A device that asks for a code typed on it (some keyboards) cannot be paired from here: no agent shows it.
 . /opt/openthinrdp/lib/common.sh
 command -v bluetoothctl >/dev/null && ls /sys/class/bluetooth/hci* >/dev/null 2>&1 || exit 3
+# the image keeps the Bluetooth service off (hook.chroot): started when this page is used, and enabled once a device
+# is paired, so that at every start the adapter brings it up and the paired devices come back by themselves
+systemctl is-active -q bluetooth || { systemctl start bluetooth 2>/dev/null; sleep 1; }
 macok(){ [[ $1 =~ ^([0-9A-F]{2}:){5}[0-9A-F]{2}$ ]]; }
 m=$(echo "${2:-}" | tr 'a-f' 'A-F')
 case "$1" in
@@ -24,11 +27,14 @@ case "$1" in
     n=$(bluetoothctl info "$m" 2>/dev/null | sed -n 's/^[[:space:]]*Name: //p')
     if bluetoothctl --agent NoInputNoOutput --timeout 25 pair "$m" 2>&1 | grep -qiE 'Pairing successful|AlreadyExists'; then
       bluetoothctl trust "$m" >/dev/null 2>&1; bluetoothctl --timeout 10 connect "$m" >/dev/null 2>&1
+      systemctl enable bluetooth >/dev/null 2>&1
       ev "Bluetooth: $n ($m) paired"; exit 0
     fi
     ev "Bluetooth: pairing $n ($m) failed"; exit 1 ;;
   remove)
     macok "$m" || exit 2
-    bluetoothctl remove "$m" >/dev/null 2>&1 && ev "Bluetooth: $m removed" ;;
+    bluetoothctl remove "$m" >/dev/null 2>&1 && ev "Bluetooth: $m removed"
+    # the last paired device gone: the service off again at the next starts
+    [ -z "$(bluetoothctl devices Paired 2>/dev/null)" ] && systemctl disable bluetooth >/dev/null 2>&1; exit 0 ;;
   *) echo "usage: bt.sh scan | pair MAC | remove MAC" >&2; exit 2 ;;
 esac

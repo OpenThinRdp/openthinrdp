@@ -5,7 +5,7 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
-## 0.3.0 (in preparation)
+## 0.3.0 (2026-11-01)
 
 - **Domain or workgroup** ([#174](https://github.com/OpenThinRdp/openthinrdp/issues/174)): the first start asks for
   the environment of the device, *Active Directory domain* (brokers, collections, central management) or *Workgroup*
@@ -36,6 +36,9 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
   the partitions it is going to make and asks before writing, as before.
 - Help for Microsoft accounts: in a workgroup a refused password says that the account's email address and password
   are needed, the Windows Hello PIN is not accepted by Remote Desktop.
+- The hardware test of the live system shows once per stick that keeps its settings, not at every start.
+- The ISO of this release is needed only for a new stick or an install: a stick in use gets everything with the
+  update, the settings partition included.
 
 ## 0.2.28 (2026-10-28)
 
