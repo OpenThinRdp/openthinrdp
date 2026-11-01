@@ -101,6 +101,8 @@ udevadm control --reload; udevadm trigger --subsystem-match=input --action=chang
 $OTR/security-updates.sh >/dev/null
 $OTR/browser-policy.sh
 $OTR/apply.sh now
+# the live system on a stick written with an older image: the settings partition from this update on (persist.sh)
+otr_installed || $OTR/persist.sh
 pgrep -x openbox >/dev/null && runuser -u kiosk -- env DISPLAY=:0 openbox --reconfigure >/dev/null 2>&1
 
 prog 98

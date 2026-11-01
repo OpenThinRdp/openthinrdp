@@ -25,9 +25,15 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
   maker's signed repository, kept up to date with the security updates, with the same rules for all of them.
 - **The live system keeps its settings** (`LIVE_PERSISTENCE`): started from a USB stick with free space, it makes a
   partition there at the first start; from the next start settings, updates and Wi-Fi stay, as on other live
-  distributions.
+  distributions. A stick written with an older image gets there with this update, without writing it again: the
+  update changes its partition table (nothing of the image moves, BIOS and UEFI start as before), the settings
+  partition is made at the next start and used from the one after. The image is now laid out as Debian's own (an
+  MBR, the image mountable from partition 1, the EFI partition after it): the old layout let live-boot mount only
+  the whole stick, and then no partition of it could be used.
 - **Install alongside Windows**: a new entry of the installer uses the free space of the disk (shrink Windows first)
-  and leaves Windows and its partitions as they are; the boot menu offers both.
+  and leaves Windows and its partitions as they are; the boot menu offers both (OpenThinRDP first, 5 seconds).
+  The installer asks which way to partition with "the largest continuous free space" already chosen, then shows
+  the partitions it is going to make and asks before writing, as before.
 - Help for Microsoft accounts: in a workgroup a refused password says that the account's email address and password
   are needed, the Windows Hello PIN is not accepted by Remote Desktop.
 

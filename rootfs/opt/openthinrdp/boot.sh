@@ -70,7 +70,7 @@ if [ -f /etc/default/grub ] && [ -d /boot/grub ]; then
   fi
   # installed alongside Windows (the installer's "alongside Windows" entry): the menu stays, 5 s, with Windows in it
   if [ -f "$OTR_LIB/.dualboot" ] && [ ! -f "$OTR_LIB/.grub-dualboot" ]; then
-    sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/; s/^GRUB_TIMEOUT_STYLE=.*/GRUB_TIMEOUT_STYLE=menu/; /^#*GRUB_DISABLE_OS_PROBER=/d' /etc/default/grub
+    sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/; s/^GRUB_TIMEOUT_STYLE=.*/GRUB_TIMEOUT_STYLE=menu/; s/^GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR=OpenThinRDP/; /^#*GRUB_DISABLE_OS_PROBER=/d' /etc/default/grub
     echo 'GRUB_DISABLE_OS_PROBER=false' >> /etc/default/grub
     update-grub 2>/dev/null && touch "$OTR_LIB/.grub-dualboot"
   fi
