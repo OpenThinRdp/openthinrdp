@@ -43,6 +43,16 @@ V[BROKER]=$(get BROKER); [ -z "${V[BROKER]}" ] || nameok "${V[BROKER]}" || err "
 V[BROKER_FALLBACK]=$(get BROKER_FALLBACK | tr -s ' ,;' ' ' | sed 's/^ //; s/ $//')
 for t in ${V[BROKER_FALLBACK]}; do ipok "$t" || nameok "$t" || err "$V_FALLBACK $t"; done
 V[DOMAIN]=$(get DOMAIN); [ -z "${V[DOMAIN]}" ] || nameok "${V[DOMAIN]}" || err "$V_DOMAIN"
+# the environment (empty = guessed, setup_kind in common.sh); the password remembered; waking the PC
+case "$(low "$(get SETUP)")" in domain|dominio) V[SETUP]=domain ;; workgroup|gruppo|nodomain) V[SETUP]=workgroup ;; *) V[SETUP]="" ;; esac
+V[REMEMBER_PASSWORD]=$(onoff "$(get REMEMBER_PASSWORD)")
+V[LIVE_PERSISTENCE]=$(onoff "$(get LIVE_PERSISTENCE)")
+V[WAKE_MAC]=$(get WAKE_MAC | tr 'A-F-' 'a-f:')
+[ -z "${V[WAKE_MAC]}" ] || [[ ${V[WAKE_MAC]} =~ ^([0-9a-f]{2}:){5}[0-9a-f]{2}$ ]] || err "$V_WAKE_MAC"
+V[CONNECTIONS]=$(get CONNECTIONS | tr -s " ,;" " " | sed "s/^ //; s/ $//")
+for t in ${V[CONNECTIONS]}; do { { ipok "${t%:*}" || nameok "${t%:*}"; } && { [ "${t%:*}" = "$t" ] || [[ ${t##*:} =~ ^[0-9]{1,5}$ ]]; }; } || err "$V_CONNECTIONS $t"; done
+V[WAKE_WAIT]=$(get WAKE_WAIT)
+{ [[ ${V[WAKE_WAIT]} =~ ^[0-9]{1,3}$ ]] && [ $((10#${V[WAKE_WAIT]})) -ge 10 ] && [ $((10#${V[WAKE_WAIT]})) -le 600 ]; } || err "$V_WAKE_WAIT"
 # spaces are allowed: a session collection is tsv://MS Terminal Services Plugin.1.<collection> (#76)
 RE_LBI='^[A-Za-z0-9._:/#= -]*$'
 V[LOAD_BALANCE_INFO]=$(get LOAD_BALANCE_INFO); [[ ${V[LOAD_BALANCE_INFO]} =~ $RE_LBI ]] || err "$V_COLLECTION"
@@ -103,7 +113,7 @@ V[REPORT_INTERVAL]=$(get REPORT_INTERVAL | tr -d ' '); [ -z "${V[REPORT_INTERVAL
 # manager sends over SSH (it is not a setting). Missing WireGuard settings are no error: VPN_ADDRESS is set per
 # device, and a device without it reports "settings incomplete" instead of refusing the whole central configuration
 cidrok(){ local a=${1%/*} p=${1#*/}; [ "$p" != "$1" ] && ipok "$a" && [[ $p =~ ^[0-9]{1,2}$ ]] && [ "$p" -le 32 ]; }
-case "$(low "$(get VPN)")" in wireguard|wg) V[VPN]=wireguard ;; openvpn|ovpn) V[VPN]=openvpn ;; *) V[VPN]=off ;; esac
+case "$(low "$(get VPN)")" in wireguard|wg) V[VPN]=wireguard ;; openvpn|ovpn) V[VPN]=openvpn ;; tailscale|ts) V[VPN]=tailscale ;; *) V[VPN]=off ;; esac
 V[VPN_SERVER]=$(get VPN_SERVER | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
 if [ -n "${V[VPN_SERVER]}" ]; then
   vh=${V[VPN_SERVER]%:*}; vp=${V[VPN_SERVER]##*:}; [ "$vh" = "${V[VPN_SERVER]}" ] && vp=51820
@@ -200,6 +210,8 @@ V[WEB_ALLOW]=$(get WEB_ALLOW | tr -s ' ,;' ' ' | sed 's/^ //; s/ $//')
 for t in ${V[WEB_ALLOW]}; do urlok "$t" || err "$V_WEBALLOW $t"; done
 V[KIOSK_URL]=$(get KIOSK_URL); [ -z "${V[KIOSK_URL]}" ] || urlok "${V[KIOSK_URL]}" || err "$V_KIOSKURL"
 [ "${V[WEB_BUTTON]}" = kiosk ] && [ -z "${V[KIOSK_URL]}" ] && err "$V_KIOSKURL_NEEDED"
+case "$(low "$(get BROWSER)")" in firefox|firefox-esr) V[BROWSER]=firefox ;; brave) V[BROWSER]=brave ;; chrome|google-chrome) V[BROWSER]=chrome ;; edge|microsoft-edge) V[BROWSER]=edge ;; *) V[BROWSER]=chromium ;; esac
+case "${V[BROWSER]}" in chrome|edge) [ "$(otr_arch)" = amd64 ] || err "$V_BROWSER_ARCH" ;; esac
 V[KIOSK_RELOAD_MIN]=$(get KIOSK_RELOAD_MIN)
 { [[ ${V[KIOSK_RELOAD_MIN]} =~ ^[0-9]{1,4}$ ]] && [ $((10#${V[KIOSK_RELOAD_MIN]})) -le 1440 ]; } || err "$V_RELOAD"
 
@@ -219,7 +231,7 @@ for k in BG_TOP BG_BOTTOM; do V[$k]=$(get $k); [[ ${V[$k]} =~ ^#[0-9a-fA-F]{6}$ 
 V[SETTINGS_PIN_SHA256]=$(low "$(get SETTINGS_PIN_SHA256)"); [[ ${V[SETTINGS_PIN_SHA256]} =~ ^([0-9a-f]{64}|pbkdf2-sha256:[0-9]{4,7}:[0-9a-f]{32}:[0-9a-f]{64})?$ ]] || err "$V_PIN"
 
 if [ -n "$E" ]; then printf '%b' "$E"; exit 1; fi
-for k in SESSION_THRESHOLD SHUTDOWN_SECS KIOSK_RELOAD_MIN; do V[$k]=$((10#${V[$k]})); done
+for k in SESSION_THRESHOLD SHUTDOWN_SECS KIOSK_RELOAD_MIN WAKE_WAIT; do V[$k]=$((10#${V[$k]})); done
 if [ "${2:-}" = --print ]; then
   for k in $(cfg_keys); do echo "$k=${V[$k]}"; done
   # secrets as a hash: central-apply.sh compares them, nobody can read them back (the kiosk user may run this)

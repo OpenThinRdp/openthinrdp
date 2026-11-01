@@ -30,6 +30,11 @@ d-i user-setup/encrypt-home boolean false
 
 # Partitioning: the first INTERNAL disk (nvme0n1 / mmcblk0 / sda on SATA / vda), wiped completely. USB and
 # removable disks are never chosen: the installation stick, or a USB key left plugged in, is often sda. eMMC
+# "Install alongside Windows" (otr.dualboot): only the largest free space of that disk is used, Windows and its
+# partitions stay; Windows must be shrunk first (Disk Management, Shrink volume). There partman-auto/method and
+# partman-auto/disk stay empty: with both set (and with one disk the disk counts as set) partman-auto partitions the
+# whole disk and never looks at biggest_free. The installation stick is not a candidate (partman leaves out disks
+# with something mounted).
 # boot and RPMB areas are not disks. No internal disk = no automatic choice: the installer asks.
 d-i partman/early_command string \
   DISK=""; \
@@ -41,10 +46,14 @@ d-i partman/early_command string \
     DISK=$d; break; \
   done; \
   if [ -n "$DISK" ]; then \
-    debconf-set partman-auto/disk "$DISK"; \
+    grep -q otr.dualboot /proc/cmdline || debconf-set partman-auto/disk "$DISK"; \
     debconf-set grub-installer/bootdev "$DISK"; \
   fi; \
-  [ -d /sys/firmware/efi ] || debconf-set grub-installer/skip true
+  [ -d /sys/firmware/efi ] || debconf-set grub-installer/skip true; \
+  if grep -q otr.dualboot /proc/cmdline; then \
+    debconf-set partman-auto/method ""; \
+    debconf-set partman-auto/init_automatically_partition biggest_free; \
+  fi
 d-i partman-auto/method string regular
 d-i partman-auto/choose_recipe select atomic
 d-i partman/alignment string optimal
@@ -66,6 +75,7 @@ popularity-contest/participate boolean false
 # BIOS grub-installer is skipped (partman/early_command above) and here the EFI packages, useless without UEFI, are
 # removed, grub-pc comes from the medium and goes onto the disk the partitioning used.
 d-i preseed/late_command string \
+  if grep -q otr.dualboot /proc/cmdline; then mkdir -p /target/var/lib/openthinrdp; touch /target/var/lib/openthinrdp/.dualboot; fi; \
   if [ ! -d /sys/firmware/efi ]; then \
     DISK=$(debconf-get partman-auto/disk); \
     [ -n "$DISK" ] || DISK=$(list-devices disk | head -n1); \

@@ -20,6 +20,16 @@ cfg(){
 }
 # cfg_num KEY DEFAULT: a number, or DEFAULT when the value is missing or not a number
 cfg_num(){ local v; v=$(cfg "$1"); [[ $v =~ ^[0-9]{1,6}$ ]] && echo $((10#$v)) || echo "$2"; }
+# The environment (0.3.0): domain (an Active Directory domain: brokers, collections, central management) or workgroup
+# (computers not in a domain: one PC or virtual machine). SETUP when set, else guessed from what is there: a device
+# with a domain keeps every setting in view, one in a workgroup sees only what applies. Empty = nothing set yet (the
+# first start asks).
+setup_kind(){
+  case "$(cfg SETUP)" in domain|workgroup) cfg SETUP; return ;; esac
+  if [ -n "$(cfg DOMAIN)$(cfg LOAD_BALANCE_INFO)$(cfg BROKER_FALLBACK)$(cfg MGMT_SHARE)" ] || [ "$(cfg DOT1X)" = peap ] || [ "$(cfg DOT1X)" = tls ]; then echo domain
+  elif [ -n "$(cfg BROKER)" ]; then echo workgroup
+  fi
+}
 # every key that a configuration file may contain (the ones documented in defaults.conf + HOSTNAME)
 cfg_keys(){ echo HOSTNAME; grep -oE '^[A-Z][A-Z0-9_]*=' "$OTR_DEFAULTS" | tr -d '='; }
 

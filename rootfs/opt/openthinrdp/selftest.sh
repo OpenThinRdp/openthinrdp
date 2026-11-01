@@ -13,7 +13,7 @@ r(){ case $1 in OK) OK=$((OK+1)); m='OK  ' ;; WARN) WARN=$((WARN+1)); m='WARN' ;
 rd(){ tr -d '\0' < "$1" 2>/dev/null | head -1 | sed 's/[[:space:]]*$//'; }
 body(){
   echo "### System"
-  r OK "OpenThinRDP" "$(cat "$OTR/VERSION" 2>/dev/null), $(otr_installed && echo installed || echo 'live system')"
+  r OK "OpenThinRDP" "$(cat "$OTR/VERSION" 2>/dev/null), $(otr_installed && echo installed || echo "live system, settings kept: $("$OTR/persist.sh" status)")"
   local frv; frv=$(dpkg-query -W -f '${Version}' libfreerdp-client3-3 2>/dev/null)
   if HOME=/root xfreerdp3 --buildconfig 2>/dev/null | grep -q 'WITH_RDPEUDP=ON'; then r OK "FreeRDP" "$frv, with the UDP transport"
   else r WARN "FreeRDP" "${frv:-not found}, without the UDP transport"; fi

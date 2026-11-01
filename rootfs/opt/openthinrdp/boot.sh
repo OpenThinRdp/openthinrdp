@@ -68,6 +68,12 @@ if [ -f /etc/default/grub ] && [ -d /boot/grub ]; then
     sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3 rd.udev.log_level=3 systemd.show_status=false vt.global_cursor_default=0"/' /etc/default/grub
     update-grub 2>/dev/null && touch "$OTR_LIB/.grub-silent"
   fi
+  # installed alongside Windows (the installer's "alongside Windows" entry): the menu stays, 5 s, with Windows in it
+  if [ -f "$OTR_LIB/.dualboot" ] && [ ! -f "$OTR_LIB/.grub-dualboot" ]; then
+    sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/; s/^GRUB_TIMEOUT_STYLE=.*/GRUB_TIMEOUT_STYLE=menu/; s/^GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR=OpenThinRDP/; /^#*GRUB_DISABLE_OS_PROBER=/d' /etc/default/grub
+    echo 'GRUB_DISABLE_OS_PROBER=false' >> /etc/default/grub
+    update-grub 2>/dev/null && touch "$OTR_LIB/.grub-dualboot"
+  fi
   # initramfs with the drivers of THIS machine only (on a thin client 137 MB -> 18 MB, a few seconds less of
   # boot from eMMC). It has to happen on the device, not in the image. The graphics and wired network drivers in
   # use go in explicitly so the splash and an early network keep working. Never a Wi-Fi driver: nothing uses it
@@ -92,4 +98,7 @@ if [ -f /etc/default/grub ] && [ -d /boot/grub ]; then
     fi
   fi
 fi
+
+# the live system on a USB stick: a partition to keep the settings, made at the first start (persist.sh)
+otr_installed || "$OTR/persist.sh"
 exit 0

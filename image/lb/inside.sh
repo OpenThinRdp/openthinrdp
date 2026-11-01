@@ -4,6 +4,15 @@ set -euo pipefail
 B=/build; S=$B/site
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq && apt-get install -y -qq live-build >/dev/null
+# The stick keeps its settings on a partition of its own (persist.sh), and that needs the image mounted from a
+# partition: live-build's GPT for GRUB splits the image around efi.img, no partition holds all of it, live-boot
+# mounts the whole disk and the kernel then lets no partition of it be formatted or mounted. With GRUB as BIOS
+# loader the layout becomes the one of Debian's own images: an MBR, partition 1 the whole image (mountable thanks
+# to -partition_offset 16), the EFI partition appended after it. Only where GRUB is the BIOS loader (not arm64).
+L=/usr/lib/live/build/binary_iso
+grep -q -- '-efi-boot-part --efi-boot-image' $L && grep -q -- ' -isohybrid-gpt-basdat -isohybrid-apm-hfsplus' $L || { echo "live-build: binary_iso changed, check the ISO layout"; exit 1; }
+sed -i -e 's|-efi-boot-part --efi-boot-image"|-partition_offset 16 -append_partition 2 0xef binary/boot/grub/efi.img"; OTR_MBR=1|' \
+  -e 's|^\(\t*\)\(XORRISO_OPTIONS="${XORRISO_OPTIONS} -isohybrid-gpt-basdat -isohybrid-apm-hfsplus"\)|\1[ -n "${OTR_MBR:-}" ] \|\| \2|' $L
 . "$S/build.conf"
 V=$(cat $B/VERSION)
 get(){ sed -n "s/^$1=//p" "$S/site.conf" "$B/rootfs/opt/openthinrdp/defaults.conf" 2>/dev/null | grep -v '^$' | head -1; }
@@ -26,7 +35,7 @@ CFG=(--distribution trixie --architectures amd64
   --apt-indices false
   --chroot-squashfs-compression-type zstd --chroot-squashfs-compression-level 15
   --iso-volume "OpenThinRDP $V" --iso-application OpenThinRDP --image-name openthinrdp
-  --bootappend-live "boot=live components quiet splash loglevel=3 systemd.show_status=false username=kiosk hostname=thinclient vt.global_cursor_default=0")
+  --bootappend-live "boot=live components persistence quiet splash loglevel=3 systemd.show_status=false username=kiosk hostname=thinclient vt.global_cursor_default=0")
 if [ "${AUTO_INSTALL:-yes}" = yes ]; then
   L=${LOCALE%%.*}
   CFG+=(--bootappend-install "auto=true priority=critical preseed/file=/cdrom/install/preseed.cfg language=${L%%_*} country=${L#*_} locale=$LOCALE keymap=$KEYBOARD")

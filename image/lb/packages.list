@@ -32,6 +32,11 @@ pipewire-pulse
 pipewire-alsa
 wireplumber
 dbus-user-session
+# Bluetooth (0.3.0): headsets, keyboards, mice paired from the device (bt.sh); audio through PipeWire
+bluez
+libspa-0.2-bluetooth
+# Windows in the boot menu of a device installed alongside it (boot.sh, .dualboot)
+os-prober
 
 # smart cards
 pcscd

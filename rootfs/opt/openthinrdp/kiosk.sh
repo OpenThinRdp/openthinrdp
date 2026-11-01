@@ -365,15 +365,26 @@ settings_spec(){
   sec(){ printf 'S\t%s\n' "$1"; }
   fld(){ printf 'F\t%s\t%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "${4//$t/ }" "$5" "$6"; }
   chs(){ local -n vs=$1 ls=$2; local i o=""; for i in "${!vs[@]}"; do o+="${o:+|}${vs[$i]}=${ls[$i]}"; done; printf '%s' "$o"; }
+  # domain or not first: without a domain (one PC or VM) only what that needs is shown, the rest keeps its value hidden
   sec "$L_SEC_REMOTE"
+  fld SETUP choice "$L_F_SETUP" "$kind" "$(chs SETV SETL)" "$L_H_SETUP"
   fld HOSTNAME text "$L_F_HOSTNAME" "$h" "" "$L_H_HOSTNAME"
-  fld DEFAULT_USER text "$L_F_USER" "$u" "" "$L_H_USER"
-  fld BROKER text "$L_F_BROKER" "$br" "" "$L_H_BROKER"
-  fld BROKER_FALLBACK text "$L_F_FALLBACK" "$brf" "" "$L_H_FALLBACK"
-  fld DOMAIN text "$L_F_DOMAIN" "$dom" "" "$L_H_DOMAIN"
-  fld LOAD_BALANCE_INFO text "$L_F_COLLECTION" "$lbi" "" "$L_H_COLLECTION"
-  fld TRANSPORT choice "$L_F_TRANSPORT" "$tr" "$(chs TRV TRL)" "$L_H_TRANSPORT"
-  fld SESSION_THRESHOLD text "$L_F_THRESHOLD" "$thr" "" "$L_H_THRESHOLD"
+  if [ "$kind" = workgroup ]; then
+    fld BROKER combo "$L_F_PC" "$br" "$found" "$L_H_PC"
+    fld CONNECTIONS text "$L_F_CONNS" "$conns" "" "$L_H_CONNS"
+    fld DEFAULT_USER text "$L_F_USER" "$u" "" "$L_H_USER_WORKGROUP"
+    fld REMEMBER_PASSWORD choice "$L_F_REMEMBER" "$rem" "$(chs ONV ONL)" "$L_H_REMEMBER"
+    fld WAKE_MAC text "$L_F_WAKEMAC" "$wmac" "" "$L_H_WAKEMAC"
+    fld TRANSPORT choice "$L_F_TRANSPORT" "$tr" "$(chs TRV TRL)" "$L_H_TRANSPORT"
+  else
+    fld DEFAULT_USER text "$L_F_USER" "$u" "" "$L_H_USER"
+    fld BROKER text "$L_F_BROKER" "$br" "" "$L_H_BROKER"
+    fld BROKER_FALLBACK text "$L_F_FALLBACK" "$brf" "" "$L_H_FALLBACK"
+    fld DOMAIN text "$L_F_DOMAIN" "$dom" "" "$L_H_DOMAIN"
+    fld LOAD_BALANCE_INFO text "$L_F_COLLECTION" "$lbi" "" "$L_H_COLLECTION"
+    fld TRANSPORT choice "$L_F_TRANSPORT" "$tr" "$(chs TRV TRL)" "$L_H_TRANSPORT"
+    fld SESSION_THRESHOLD text "$L_F_THRESHOLD" "$thr" "" "$L_H_THRESHOLD"
+  fi
   fld SHUTDOWN_SECS text "$L_F_SHUTDOWN" "$off" "" "$L_H_SHUTDOWN"
   sec "$L_SEC_NETWORK"
   fld NETMODE choice "$L_F_NETWORK" "$nm" "$(chs NETV NETL)" "$L_H_NETWORK"
@@ -389,6 +400,22 @@ settings_spec(){
   fld WIFI_SSID text "$L_F_SSID" "$ws" "" "$L_H_SSID"
   fld WIFI_SECURITY choice "$L_F_WIFISEC" "$wsec" "$(chs WSECV WSECL)" "$L_H_WIFISEC"
   fld WIFI_PSK password "$L_F_WIFIPSK" "" "" "$L_H_WIFIPSK"
+  if [ "$kind" = workgroup ]; then
+    sec "$L_SEC_TAILSCALE"
+    fld VPN choice "$L_F_TAILSCALE" "$vpn" "$(chs VPNV VPNL)" "$L_H_TAILSCALE"
+    fld TS_STATE ro "$L_F_STATUS" "$tss" "" ""
+    sec "$L_SEC_USB"
+    fld USB_MODE choice "$L_F_USBMODE" "$um" "$(chs USBV USBL)" "$L_H_USBMODE"
+    sec "$L_SEC_POWER"
+    fld POWER_ON_TIME text "$L_F_POWERON" "$pon" "" "$L_H_POWERON"
+    fld POWER_OFF_TIME text "$L_F_POWEROFF" "$poff" "" "$L_H_POWEROFF"
+    fld POWER_ON_DAYS text "$L_F_DAYS" "$pdays" "" "$L_H_DAYS"
+    sec "$L_SEC_SYSTEM"
+    fld SECURITY_UPDATES choice "$L_F_UPDATES" "$su" "$(chs ONV ONL)" "$L_H_UPDATES"
+    fld LANGUAGE choice "$L_F_LANGUAGE" "$ln" "$(chs LNV LNL)" "$L_H_LANGUAGE"
+    fld ANON_STATS choice "$L_F_ANON" "$an" "$(chs ONV ONL)" "$L_H_ANON"
+    return
+  fi
   sec "$L_SEC_DOT1X"
   fld DOT1X_STATE ro "$L_F_STATUS" "$d1xs" "" ""
   fld DOT1X choice "$L_F_DOT1X" "$d1x" "$(chs D1XV D1XL)" "$L_H_DOT1X"
@@ -403,6 +430,7 @@ settings_spec(){
   fld USB_LOCAL text "$L_F_USBLOCAL" "$ul" "" "$L_H_USBLOCAL"
   sec "$L_SEC_WEB"
   fld WEB_BUTTON choice "$L_F_WEB" "$wb" "$(chs WEBV WEBL)" "$L_H_WEB"
+  fld BROWSER choice "$L_F_BROWSER" "$bro" "$(chs BROV BROL)" "$L_H_BROWSER"
   fld WEB_URL text "$L_F_WEBURL" "$wu" "" "$L_H_WEBURL"
   fld KIOSK_URL text "$L_F_KIOSKURL" "$ku" "" "$L_H_KIOSKURL"
   fld KIOSK_RELOAD_MIN text "$L_F_RELOAD" "$kr" "" "$L_H_RELOAD"
@@ -433,6 +461,7 @@ settings_read(){
       POWER_ON_DAYS) pdays=$v ;; WIFI) wf=$v ;; WIFI_SSID) ws=$v ;; WIFI_PSK) wp=$v ;;
       WIFI_SECURITY) wsec=$v ;; DOT1X) d1x=$v ;; EAP_IDENTITY) eid=$v ;; EAP_ANONYMOUS) ean=$v ;; EAP_PASSWORD) epw=$v ;;
       EAP_CA) eca=$v ;; EAP_SERVER_NAME) esn=$v ;;
+      SETUP) kind=$v ;; REMEMBER_PASSWORD) rem=$v ;; WAKE_MAC) wmac=$v ;; CONNECTIONS) conns=$v ;; VPN) vpn=$v ;; BROWSER) bro=$v ;;
     esac
   done <<< "$1"
 }
@@ -449,6 +478,24 @@ wifi_page(){
     ok "$L_WP_OK" noip "$L_WP_NOIP" wrongkey "$L_WP_WRONGKEY" notfound "$L_WP_NOTFOUND" timeout "$L_WP_TIMEOUT" \
     invalid "$L_WP_INVALID" nowifi "$L_WP_NOWIFI" busy "$L_WP_BUSY" saveerror "$L_WP_SAVEERROR" central "$L_WP_CENTRAL" \
     | ui wifi --heading="$(plain "$L_WP_HEADING")"
+}
+
+# The Bluetooth page (ui.py bt, bt.sh as root): headsets, keyboards, mice
+bt_page(){
+  printf '%s\t%s\n' heading "$L_BT_HEADING" scanning "$L_BT_SCANNING" nonefound "$L_BT_NONEFOUND" paired "$L_BT_PAIRED" \
+    pair "$L_BT_PAIR" remove "$L_BT_REMOVE" refresh "$L_WP_REFRESH" close "$L_CLOSE" ok "$L_BT_OK" fail "$L_BT_FAIL" \
+    | ui bt --heading="$(plain "$L_BT_HEADING")"
+}
+# The computers with Remote Desktop (port 3389) on this network (the /24 of the device's address), for the computer
+# field: their names when the network's DNS knows them and leads back to them, else the address. 1-2 s.
+rdp_scan(){ local me a n
+  me=$(ipv4); [ -n "$me" ] || return 0
+  seq 1 254 | sed "s/^/${me%.*}./" | grep -vx "$me" |
+    xargs -P 64 -I{} timeout 1 bash -c 'exec 3<>/dev/tcp/{}/3389 && echo {}' 2>/dev/null | sort -t. -k4 -n |
+    while read -r a; do
+      n=$(getent hosts "$a" 2>/dev/null | awk '{print $2}' | cut -d. -f1)
+      [ -n "$n" ] && getent ahostsv4 "$n" 2>/dev/null | awk '{print $1}' | grep -qx "$a" && echo "$n" || echo "$a"
+    done | paste -sd'|'
 }
 
 settings_dialog(){
@@ -472,7 +519,17 @@ settings_dialog(){
   local -a LNV=(en it) LNL=(English Italiano)
   local -a WSECV=(psk peap tls) WSECL=("$L_WSEC_PSK" "$L_WSEC_PEAP" "$L_WSEC_TLS") D1XV=(off peap tls) D1XL=("$L_OFF" "$L_D1X_PEAP" "$L_D1X_TLS")
   local h u br brf dom lbi nm ip mask gw d1 d2 ntp off thr share mu mp um ur su an tz tr wb wu ku kr pon poff pdays wf ws wp ln
-  local wsec d1x d1xs eid ean epw eca esn
+  local wsec d1x d1xs eid ean epw eca esn kind kind0 rem wmac conns vpn tss found="" bro
+  local -a BROV=(chromium firefox brave chrome edge) BROL=(Chromium "Firefox ESR" Brave "Google Chrome" "Microsoft Edge")
+  [ "$(otr_arch)" = amd64 ] || { BROV=(chromium firefox brave); BROL=(Chromium "Firefox ESR" Brave); }
+  bro=$(cfg BROWSER)
+  local -a SETV=(domain workgroup) SETL=("$L_SETUP_DOMAIN" "$L_SETUP_WORKGROUP") VPNV=(off tailscale) VPNL=("$L_OFF" "$L_ON")
+  kind=$(setup_kind); [ -z "$kind" ] && kind=workgroup; kind0=$kind; rem=$(cfg REMEMBER_PASSWORD); wmac=$(cfg WAKE_MAC)
+  conns=$(cfg CONNECTIONS); vpn=$(cfg VPN); tss=$(cat /run/openthinrdp-tailscale 2>/dev/null)
+  # a VPN of the office (WireGuard, OpenVPN) set from the manager stays selectable as it is
+  case "$vpn" in off|tailscale) ;; *) VPNV+=("$vpn"); VPNL+=("$vpn") ;; esac
+  # in a workgroup the computers with Remote Desktop on this network, offered in the computer field
+  [ "$kind" = workgroup ] && [ $GREETER = 1 ] && found=$(rdp_scan)
   wsec=$(cfg WIFI_SECURITY); d1x=$(cfg DOT1X); eid=$(cfg EAP_IDENTITY); ean=$(cfg EAP_ANONYMOUS); eca=$(cfg EAP_CA); esn=$(cfg EAP_SERVER_NAME)
   d1xs=$("$OTR/dot1x.sh" status 2>/dev/null)
   h=$(hostname); u=$(cfg DEFAULT_USER); br=$(cfg BROKER); brf=$(cfg BROKER_FALLBACK); dom=$(cfg DOMAIN); mu=$(cfg MGMT_USER)
@@ -498,12 +555,14 @@ settings_dialog(){
     if [ $GREETER = 1 ]; then
       # a device with a Wi-Fi adapter: the Wi-Fi page from here (13), the settings again after it with what it saved
       local -a wbt=(); [ -n "$wli" ] && wbt=(--button="$L_WIFI_PAGE:13")
+      ls /sys/class/bluetooth/hci* >/dev/null 2>&1 && wbt+=(--button="$L_BT_PAGE:14")
       out=$(settings_spec | ui form --heading="$(plain "$L_SETTINGS")" --small="$(plain "$st")" \
               --t-save="$L_SAVE" --t-close="$L_CLOSE" --t-terminal="$L_TERMINAL" "${wbt[@]}"); r=$?
       case $r in
         0) wp=""; mp=""; epw=""; settings_read "$out" ;;
         11) break ;;
         13) wifi_page; settings_dialog; return ;;
+        14) bt_page; settings_dialog; return ;;
         12) xterm -fa Monospace -fs 11 2>/dev/null; break ;;
         *) ev "settings: the settings screen failed (exit $r), the earlier dialog instead" ;;
       esac
@@ -546,7 +605,8 @@ settings_dialog(){
       "USB_REDIRECT=$ur" "USB_LOCAL=$ul" "SECURITY_UPDATES=$su" "ANON_STATS=$an" "TIMEZONE=$tz" "TRANSPORT=$tr" "WEB_BUTTON=$wb" "WEB_URL=$wu" "KIOSK_URL=$ku" \
       "KIOSK_RELOAD_MIN=$kr" "POWER_ON_TIME=$pon" "POWER_OFF_TIME=$poff" "POWER_ON_DAYS=$pdays" "LANGUAGE=$ln" \
       "WIFI=$wf" "WIFI_SSID=$ws" "WIFI_SECURITY=$wsec" "DOT1X=$d1x" "EAP_IDENTITY=$eid" "EAP_ANONYMOUS=$ean" \
-      "EAP_CA=$eca" "EAP_SERVER_NAME=$esn" > "$tmp"
+      "EAP_CA=$eca" "EAP_SERVER_NAME=$esn" "SETUP=$kind" "REMEMBER_PASSWORD=$rem" "WAKE_MAC=$wmac" \
+      "CONNECTIONS=$conns" "VPN=$vpn" "BROWSER=$bro" > "$tmp"
     [ -n "$wp" ] && printf 'WIFI_PSK=%s\n' "$wp" >> "$tmp"
     [ -n "$mp" ] && printf 'MGMT_PASSWORD=%s\n' "$mp" >> "$tmp"
     [ -n "$epw" ] && printf 'EAP_PASSWORD=%s\n' "$epw" >> "$tmp"
@@ -557,6 +617,10 @@ settings_dialog(){
       otr_lang     # the language may have changed
       if [ $GREETER = 1 ]; then ui message --icon=ok --heading="$(plain "$L_SAVED")" --timeout=2 >/dev/null
       else yad --center --undecorated --skip-taskbar --no-buttons --timeout=2 --width=300 --text="<b>$L_SAVED</b>" 2>/dev/null; fi
+      # another kind of setup: the settings again at once, with the fields of that kind
+      [ "$kind" != "$kind0" ] && [ $GREETER = 1 ] && { ev "kind of setup: $kind0 -> $kind"; settings_dialog; return; }
+      # the password remembered no more: forgotten now
+      [ "$rem" = off ] && sudo -n "$OTR/remember.sh" forget >/dev/null 2>&1
       break
     fi
     ev "settings rejected: $(echo "$msg" | tr '\n' ' ')"
@@ -738,12 +802,47 @@ vm_wait(){ local now m rc
   [ $rc = 1 ] && { ev "waiting for the desktop of $U cancelled by the user after $m min"; return 1; }
   return 0; }
 
+# The desktop opened: the password is remembered (REMEMBER_PASSWORD=on, the default user only: remember.sh decides),
+# and in a workgroup the MAC address of the PC is learnt for Wake-on-LAN, when it is on this network (no gateway)
+remember_ok(){ ( printf '%s' "$2" | sudo -n "$OTR/remember.sh" store "$1"
+  [ "$(setup_kind)" = workgroup ] && [ -n "$3" ] || exit 0; [ -z "$CONN" ] && [ -n "$(cfg WAKE_MAC)" ] && exit 0
+  ip route get "$3" 2>/dev/null | grep -q ' via ' && exit 0
+  m=$(ip neigh show "$3" 2>/dev/null | awk '{for(i=1;i<NF;i++) if($i=="lladdr") print $(i+1)}' | head -1)
+  [ -n "$m" ] && sudo -n "$OTR/remember.sh" mac "${CONN:-$(cfg BROKER)}" "$m" ) >/dev/null 2>&1 & }
+# MAC address to wake HOST: WAKE_MAC for the main computer, else the one learnt for it
+wake_mac(){ local m=""; [ "$1" = "$(cfg BROKER)" ] && m=$(cfg WAKE_MAC); [ -n "$m" ] || m=$(cat "$OTR_LIB/wake/$1" 2>/dev/null); echo "$m"; }
+# the computers of the sign-in screen, in a workgroup: the main one and the others (CONNECTIONS), "a|b|c"
+conn_hosts(){ [ "$(setup_kind)" = workgroup ] && [ -n "$(cfg CONNECTIONS)" ] || return 0; echo "$(cfg BROKER) $(cfg CONNECTIONS)" | tr -s ' ' '\n' | awk 'NF && !s[$0]++' | paste -sd'|'; }
+# Wake-on-LAN, in a workgroup: the PC does not answer on its RDP port -> magic packet, then a wait (WAKE_WAIT, with
+# Cancel) until it answers. 1 = cancelled by the user. No MAC, or a domain: nothing to do.
+wake_pc(){ local h port=3389 mac w t0 rc
+  [ "$(setup_kind)" = workgroup ] || return 0
+  h=${CONN:-$(cfg BROKER)}; mac=$(wake_mac "$h"); [ -n "$mac" ] || return 0
+  [[ $h == *:* ]] && { port=${h##*:}; h=${h%:*}; }
+  timeout 2 bash -c "exec 3<>/dev/tcp/$h/$port" 2>/dev/null && return 0
+  w=$(cfg_num WAKE_WAIT 120); t0=$(date +%s)
+  ev "$h does not answer on port $port: Wake-on-LAN to $mac, waiting up to $w s"
+  while [ $(( $(date +%s) - t0 )) -lt "$w" ]; do
+    python3 - "$mac" <<'WOL' 2>/dev/null
+import socket, sys
+m = bytes.fromhex(sys.argv[1].replace(':', ''))
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+for p in (9, 7): s.sendto(b'\xff' * 6 + m * 16, ('255.255.255.255', p))
+WOL
+    ui message --icon=busy --heading="$(plain "$L_P_WAKE_T")" --text="$(plain "$(printf "$L_P_WAKE" "$h")")" \
+       --timeout=10 --button="$L_CANCEL:1" --primary=1 --default=1
+    rc=$?
+    [ $rc = 1 ] && { ev "Wake-on-LAN wait cancelled by the user"; return 1; }
+    timeout 2 bash -c "exec 3<>/dev/tcp/$h/$port" 2>/dev/null && { ev "$h woke up after $(( $(date +%s) - t0 )) s"; sleep 5; return 0; }
+  done
+  ev "$h still not answering after $w s: connecting anyway"; return 0; }
+
 # session USER PASSWORD [reconnect]. Returns 0 = ended deliberately, 1 = credentials refused,
 # 2 = desktop not available after the attempts, 3 = session DROPPED (the caller reconnects without asking),
 # 4 = session taken over from another device (warn, never reconnect: the two devices would fight)
 session(){
   local U="$1" P="$2" att=0 max=8 txt="$L_P_CONNECTING" B BRHA st d ec thr xp wp udponly=0 noudp=0 vmfails=0 vmwait=0 vmlog=0 ctmo=150
-  BRHA=$(cfg BROKER)
+  BRHA=${CONN:-$(cfg BROKER)}
   rm -f /tmp/kiosk.cancel /tmp/kiosk.stopped /tmp/kiosk.timeout /tmp/kiosk.disconnect
   [ "$3" = reconnect ] && { max=40; txt="$L_P_RECONNECTING"; }
   LAST_ERR=""; LAST_EC=""
@@ -764,6 +863,7 @@ session(){
     fi
     # the log of the previous attempt or session stays as kiosk.log.prev: after a drop the next attempt starts at once
     [ -s /tmp/kiosk.log ] && mv -f /tmp/kiosk.log /tmp/kiosk.log.prev; : > /tmp/kiosk.log; rm -f /tmp/kiosk.vm /tmp/kiosk.quality
+    [ $att -eq 1 ] && [ "$3" != reconnect ] && { wake_pc || return 5; }
     st=$(date +%s)
     B=$(pick_broker $att "$BRHA")
     ( connect "$U" "$P" "$B"; echo $? > /tmp/kiosk.rc ) &
@@ -800,7 +900,8 @@ session(){
           if xdotool search --onlyvisible --pid "$fp" >/dev/null 2>&1; then pointer_show; echo "# $L_P_READY"; echo "100"; s3=1
             t3=$(date +%s%1N); t1=${t1:-$t3}; t2=${t2:-$t1}
             ev "sign-in of $U: $(tenths $((t3 - t0))) s (broker $(tenths $((t1 - t0))) s, VM $(tenths $((t2 - t1))) s, Windows $(tenths $((t3 - t2))) s)$([ "$3" = reconnect ] && echo ', reconnection')"
-            ( sleep 15; sudo -n "$OTR/usb-hold.sh" release >/dev/null 2>&1 ) & echo $! > /tmp/kiosk.usbrel; fi
+            ( sleep 15; sudo -n "$OTR/usb-hold.sh" release >/dev/null 2>&1 ) & echo $! > /tmp/kiosk.usbrel
+            remember_ok "$U" "$P" "$first"; fi
         fi 2>/dev/null
         sleep 0.4; n=$((n + 1))
         # Watchdog, every ~5 s: FreeRDP alive but without any TCP connection for 60 s = stuck. Seen with USB
@@ -903,7 +1004,7 @@ session(){
       151|157)     CRED_MSG=$L_C_DISABLED ;;
       155|156|158|159) CRED_MSG=$L_C_DENIED ;;
     esac
-    if [ -n "$CRED_MSG" ]; then ev "sign-in refused for $U (code $ec)"; return 1; fi
+    if [ -n "$CRED_MSG" ]; then ev "sign-in refused for $U (code $ec)"; sudo -n "$OTR/remember.sh" forget >/dev/null 2>&1; return 1; fi
     # UDP only and closed for running without UDP: a failed attempt, also after a long session. Three in a
     # row = UDP does not get through: say so instead of cutting the user off every 30 s
     if [ -f /tmp/kiosk.noudp ]; then
@@ -1065,8 +1166,9 @@ start_update_check(){
   update_question
 }
 start_update_check
-# the live system (from the USB stick) tests the hardware at its first start: what anyone trying it wants to know
-otr_installed || [ -f /tmp/openthinrdp-selftest-shown ] || { : > /tmp/openthinrdp-selftest-shown; selftest_dialog; }
+# the live system (from the USB stick) tests the hardware at its first start: what anyone trying it wants to know.
+# The mark in the home folder: on a stick that keeps its settings it stays, and the test is not shown at every start
+otr_installed || [ -f "$HOME/.openthinrdp-selftest-shown" ] || { : > "$HOME/.openthinrdp-selftest-shown"; selftest_dialog; }
 
 # --- main loop ----------------------------------------------------------------------------------
 # first start: no broker yet -> the settings dialog opens by itself (it is the setup of a new device).
@@ -1078,8 +1180,18 @@ if [ -z "$(cfg BROKER)" ]; then
     case "$(systemctl show -p ActiveState --value openthinrdp-boot.service 2>/dev/null)" in active|failed) break ;; esac
     sleep 0.5
   done
+  # with a domain or without, asked once (also live from the USB stick): the settings then show only what it needs
+  if [ -z "$(setup_kind)" ] && [ $GREETER = 1 ]; then
+    ui message --icon=info --heading="$(plain "$L_SETUP_ASK_T")" --text="$(plain "$L_SETUP_ASK")" \
+       --button="$L_SETUP_DOMAIN:22" --button="$L_SETUP_WORKGROUP:21" --primary=21 --default=21 >/dev/null
+    case $? in 22) k=domain ;; *) k=workgroup ;; esac
+    tmp=$(mktemp); printf 'SETUP=%s\n' "$k" > "$tmp"; sudo -n "$OTR/save-config.sh" "$tmp" >/dev/null 2>&1; rm -f "$tmp"
+    ev "kind of setup chosen at the first start: $k"
+  fi
   ev "no broker configured: settings dialog opened"; settings_dialog
 fi
+AUTO=1       # the first sign-in screen may sign in with the password remembered (remember.sh)
+CONN=""      # the computer chosen on the sign-in screen when there are several (CONNECTIONS); empty = BROKER
 KSTOPPED=0   # 1 = somebody used the form: no countdown until we go back to the page
 while true; do
   # a new version offered to a device without a management folder: asked before the sign-in screen (update_question)
@@ -1098,14 +1210,18 @@ while true; do
   fi
   # IP only if already there: the form does not wait for it (it is always shown in the settings dialog)
   IPNOW=$(ipv4)
-  if [ $GREETER = 1 ]; then
+  # the password remembered: the first sign-in screen after the start signs in by itself (once: after a session or a
+  # failure the screen is shown as always)
+  AUTOL=""; [ "$AUTO" = 1 ] && { AUTO=0; AUTOL=$(sudo -n "$OTR/remember.sh" get 2>/dev/null); }
+  if [ -n "$AUTOL" ]; then OUT="${AUTOL%%$'\t'*}|${AUTOL#*$'\t'}"; rc=10; ev "automatic sign-in of ${AUTOL%%$'\t'*} (password remembered)"
+  elif [ $GREETER = 1 ]; then
     WEBL=""; case "$WEB" in app|browser) WEBL=$(cfg WEB_LABEL) ;; kiosk) WEBL=$L_KIOSK ;; esac
     NOTE=$(printf '%b' "$KTXT" | sed 's/<[^>]*>//g; /^$/d')
     OUT=$(ui login --class=OtrLogin --heading="$L_LOGIN_HEADING" \
           --info="$HOSTN${IPNOW:+  ·  $IPNOW}" --note="$NOTE" --user="$DEF" \
           --web="$WEBL" --t-user="$L_USER" --t-password="$L_PASSWORD" \
           --t-signin="$L_SIGNIN" --t-shutdown="$L_SHUTDOWN" --t-restart="$L_RESTART" --t-settings="$L_SETTINGS" \
-          --t-diag="$L_DIAG" --t-power="$L_POWER" \
+          --t-diag="$L_DIAG" --t-power="$L_POWER" --hosts="$(conn_hosts)" --host="$CONN" \
           --t-net="$L_NET_CABLE|$L_NET_WIFI|$L_NET_NONE|$L_NET_NOIP" 2>/dev/null)
     rc=$?
   else
@@ -1143,6 +1259,9 @@ while true; do
   fi
   { [ $rc -eq 10 ] || [ $rc -eq 0 ]; } || { sleep 1; continue; }
   U=$(echo "$OUT" | cut -d'|' -f1); P=$(echo "$OUT" | cut -d'|' -f2-); P=${P%|}
+  # the computer chosen on the sign-in screen (several computers), else the main one
+  CONN=""; [ -f /tmp/kiosk.host ] && { CONN=$(cat /tmp/kiosk.host); rm -f /tmp/kiosk.host; }
+  [ "$CONN" = "$(cfg BROKER)" ] && CONN=""
   # an empty field = the default user AS IT IS NOW (read again: the form may have been drawn before the central
   # settings brought it); still nobody = the name is asked, never a connection without a user (FreeRDP would ask for
   # it on the console nobody sees)
@@ -1197,7 +1316,9 @@ while true; do
       { [ $rc -eq 5 ] || [ $rc -eq 70 ]; } && power_off "after the session ended"
       break
     elif [ $res -eq 1 ]; then
-      ui message --icon=error --text="$(plain "${CRED_MSG:-$L_C_INVALID}")" --timeout=8 --button="$L_OK:0" --primary=0 --default=0; break
+      # without a domain: the Microsoft account and the PIN of Windows Hello are the usual cause, said with it
+      HINT=""; [ "$(setup_kind)" = workgroup ] && HINT="\n\n$L_C_MSACCOUNT"
+      ui message --icon=error --text="$(plain "${CRED_MSG:-$L_C_INVALID}$HINT")" --timeout=20 --button="$L_OK:0" --primary=0 --default=0; break
     else
       show_err "$LAST_ERR" "$U"; break
     fi
