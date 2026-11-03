@@ -64,6 +64,19 @@ looks after change more often than a device does):
 | Language of the window | `it` |
 | How many devices it manages, in ranges | `1-5`, `6-20`, `21-100`, `more than 100` |
 
+### Feedback (manager 1.1.2)
+
+Once a week, until it is sent, the manager asks how it is going (also from *Settings > Manager > Send feedback*).
+Only when you press *Send*, and only these, go as two anonymous counts like the ones above:
+
+| Count | Example |
+|---|---|
+| The vote | `4` (1 to 5) |
+| What it is used for, if chosen | `home`, `office`, `trying` |
+
+The words you write are not sent by the manager: it opens a discussion on GitHub already written, in your browser,
+and you decide whether to post it (with your GitHub account, in public). *Later* asks again in a week.
+
 ## What is never sent
 
 The name of a device or of a computer, IP or MAC addresses, user names, passwords, the domain, the names or addresses
