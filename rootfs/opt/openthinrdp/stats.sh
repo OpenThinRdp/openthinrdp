@@ -8,7 +8,9 @@
 #   (yes/no), managed from a management folder or not;
 #   and what went wrong since the last send, as counts per kind (sessions frozen or dropped, connections that failed
 #   or timed out, failed updates, programs that crashed, graphics hangs, kernel errors, stops without a shutdown),
-#   with the exit code of FreeRDP or the name of the program that crashed, by version and by model.
+#   with the exit code of FreeRDP or the name of the program that crashed, by version and by model; for the hardware
+#   test, the names of the checks that failed (memory, network card, IP address...), a graphics driver or sound card
+#   missing, and the file names of the firmware missing.
 # Never: the name of the device, its addresses (IP, MAC), users, domain, servers, settings or anything typed.
 # Each value is one count (an "event") on GoatCounter, which keeps no IP address and sets no cookie: the project sees
 # totals such as "OptiPlex 3000 Thin Client: 12 devices", never a device.
@@ -63,6 +65,18 @@ problems(){
     -e 's/.*software update .* FAILED.*/update-failed/p' \
     -e 's/.*the settings screen failed.*/screen-failed/p' \
     -e 's/.*hardware test: .*, [1-9][0-9]* problems$/hardware-test-problems/p'
+  # the hardware test run since (selftest.sh --save, by itself at the first start of a live system): which of its
+  # checks failed and, among its warnings, the graphics driver and the sound card missing, by the fixed name of the
+  # check; the missing firmware by the name of its file (what the image lacks). Never the details of a check
+  if awk -v f="$from" 'substr($0, 1, 19) > f' "$OTR_EVENTS" 2>/dev/null | grep -q 'hardware test: '; then
+    sed -nE -e 's/^- `FAIL` \*\*([^*]+)\*\*.*/hardware-test-fail \1/p' \
+      -e 's/^- `WARN` \*\*(Graphics driver|Sound)\*\*.*/hardware-test-warn \1/p' "$OTR_LOG/selftest.md" 2>/dev/null |
+      awk '{k = $1; $1 = ""; sub(/^ /, ""); gsub(/ /, "-"); print k, tolower($0)}'
+    # "firmware: failed to load X (-2)" and "firmware load for X failed with error -2", as the kernel writes them
+    sed -n 's/^- `WARN` \*\*Missing firmware\*\*: //p' "$OTR_LOG/selftest.md" 2>/dev/null | tr ';' '\n' |
+      sed -nE -e 's/.*failed to load ([^ ]+).*/\1/p' -e 's/.*load for ([^ ]+).*/\1/p' | tr '/' '_' |
+      tr -c 'A-Za-z0-9._+\n-' '_' | cut -c1-60 | awk 'NF {print "missing-firmware", $1}'
+  fi
   # the kernel: a program that crashed, the graphics stuck, errors of the kernel itself
   journalctl -k -q --no-pager -o cat --since "@$1" 2>/dev/null | sed -nE \
     -e 's/^([A-Za-z0-9_.-]+)\[[0-9]+\]: segfault at .*/crash \1/p' \

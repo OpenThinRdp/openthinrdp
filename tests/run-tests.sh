@@ -920,6 +920,16 @@ n=$(date '+%Y-%m-%d %H:%M:%S')
   echo "$n connection of mario.rossi: no desktop after 150 s, stopped"; } > $OTR_EVENTS
 SP=$($OTR/stats.sh --print | grep "^otr/error")
 ok "anonymous counts: problems by kind, code, version and model; nothing of the messages" 'printf "%s\n" "$SP" | grep -qx "otr/error/session-frozen/1" && printf "%s\n" "$SP" | grep -qx "otr/error/session-dropped/2-5" && printf "%s\n" "$SP" | grep -qx "otr/error-detail/session-dropped/145" && printf "%s\n" "$SP" | grep -qx "otr/error-detail/session-dropped/147" && printf "%s\n" "$SP" | grep -qx "otr/error-detail/connect-failed/131" && printf "%s\n" "$SP" | grep -qx "otr/error/connect-timeout/1" && printf "%s\n" "$SP" | grep -qx "otr/error-version/session-frozen/$(cat $OTR/VERSION)" && printf "%s\n" "$SP" | grep -q "^otr/error-model/session-frozen/" && ! printf "%s\n" "$SP" | grep -q "update-failed\|otr/error/none" && ! printf "%s\n" "$SP" | grep -qi "mario\|srv-secret\|ERRCONNECT\|refused"'
+# the hardware test: the names of the checks that failed and of the firmware missing, never what a check found
+mkdir -p "$OTR_LOG"; cp "$OTR_LOG/selftest.md" /tmp/selftest.keep 2>/dev/null
+printf '%s\n' '### Network' '- `FAIL` **IP address**: none on the main card (192.0.2.77 expected)' '- `FAIL` **DNS**: names do not resolve' \
+  '- `WARN` **Sound**: no sound card' '- `WARN` **Internet**: GitHub not reachable' \
+  '- `WARN` **Missing firmware**: firmware: failed to load iwlwifi-8265-36.ucode (-2);firmware load for i915/kbl_dmc_ver1_04.bin failed with error -2;' > "$OTR_LOG/selftest.md"
+SPN=$($OTR/stats.sh --print | grep "^otr/error")
+echo "$n hardware test: 20 OK, 3 warnings, 2 problems" > $OTR_EVENTS
+SPH=$($OTR/stats.sh --print | grep "^otr/error")
+ok "anonymous counts: the hardware test by the names of its failed checks, sound or graphics missing and the firmware files; no address, nothing when it did not run" 'printf "%s\n" "$SPH" | grep -qx "otr/error-detail/hardware-test-fail/ip-address" && printf "%s\n" "$SPH" | grep -qx "otr/error-detail/hardware-test-fail/dns" && printf "%s\n" "$SPH" | grep -qx "otr/error-detail/hardware-test-warn/sound" && printf "%s\n" "$SPH" | grep -qx "otr/error-detail/missing-firmware/iwlwifi-8265-36.ucode" && printf "%s\n" "$SPH" | grep -qx "otr/error-detail/missing-firmware/i915_kbl_dmc_ver1_04.bin" && printf "%s\n" "$SPH" | grep -qx "otr/error/hardware-test-fail/2-5" && ! printf "%s\n" "$SPH" | grep -qi "192.0.2\|internet\|github" && ! printf "%s\n" "$SPN" | grep -q "hardware-test"'
+if [ -f /tmp/selftest.keep ]; then mv /tmp/selftest.keep "$OTR_LOG/selftest.md"; else rm -f "$OTR_LOG/selftest.md"; fi
 : > $OTR_EVENTS
 # a local server in place of GoatCounter records what really arrives (a fake curl hid that the image has no curl)
 SB=$(mktemp -d); rm -f /var/lib/openthinrdp/stats-sent; GU=http://127.0.0.1:18099/count
