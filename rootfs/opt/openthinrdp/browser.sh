@@ -27,8 +27,17 @@ FF=0; [ "$b" = firefox ] && FF=1
 [ -z "$B" ] && { python3 "$OTR/ui.py" message --icon=error --lang="$(cfg LANGUAGE)" --heading="$L_NO_BROWSER" --text="$L_BROWSER_INSTALL_FAIL" \
   --timeout=8 2>/dev/null || yad --error --center --timeout=5 --text="$L_NO_BROWSER" 2>/dev/null; exit 1; }
 FLAGS=(--no-first-run --no-default-browser-check --password-store=basic --disable-features=Translate,MediaRouter)
+# the scale of the screens (DISPLAY_SCALE, from kiosk.sh as OTR_UI_SCALE, #183): Chromium and its kin by option,
+# Firefox in its profile (1.0 at 100%: a value once written stays in prefs.js)
+S=${OTR_UI_SCALE:-100}; [[ $S =~ ^[0-9]{2,3}$ ]] || S=100
+K=$(awk -v s="$S" 'BEGIN { printf "%.2f", s / 100 }')
+[ "$S" != 100 ] && FLAGS+=(--force-device-scale-factor="$K")
+# the scale of the GTK windows of the kiosk would come on top of it (the text twice as large again)
+unset GDK_DPI_SCALE GDK_SCALE
 # Firefox: its own profile folder and options; the rules are its policies (browser-policy.sh)
-ff(){ local p=$1; shift; mkdir -p "$p"; "$B" --no-remote --profile "$p" "$@" >/dev/null 2>&1; }
+ff(){ local p=$1; shift; mkdir -p "$p"
+  { grep -v 'layout.css.devPixelsPerPx' "$p/user.js" 2>/dev/null; printf 'user_pref("layout.css.devPixelsPerPx", "%s");\n' "$([ "$S" = 100 ] && echo -1.0 || echo "$K")"; } > "$p/user.js.new" && mv -f "$p/user.js.new" "$p/user.js"
+  "$B" --no-remote --profile "$p" "$@" >/dev/null 2>&1; }
 
 # Certificate authorities of the organization ($OTR_ETC/ca/*.crt, built into the image) in the NSS database
 # that Chromium uses on Linux: the thin client is not in the domain and would show "connection not private"

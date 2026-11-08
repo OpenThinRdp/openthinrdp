@@ -28,7 +28,7 @@
 #                        code 0), more buttons (--button LABEL:CODE, --primary CODE has the focus) and --timeout N (70).
 #   ui.py wifi ...       the Wi-Fi: networks around, one chosen, its password, connect and the result here (wifi.sh).
 #                        Texts on stdin ("key<TAB>text"). Exit: 0 = a network joined, 11 = closed.
-import argparse, locale, math, os, subprocess, sys, time
+import argparse, locale, math, os, re, subprocess, sys, time
 import gi
 gi.require_version('Gtk', '3.0')
 gi.require_version('Gdk', '3.0')
@@ -54,6 +54,17 @@ except locale.Error:
 
 PROGRESS_FILE = '/run/openthinrdp-update-progress'   # "percent version", written by auto-update.sh and install.sh
 ACCENT = '#2563eb'
+
+# Scale of these screens (DISPLAY_SCALE, #183), in percent from kiosk.sh (OTR_UI_SCALE). Every size here is written for
+# 100%: the pixels of the CSS, spacing, margins, fixed sizes, icons and pictures go through dp(), and SW/SH are the
+# screen in those units. GTK alone scales only by whole numbers (GDK_SCALE), and its pixel font sizes ignore the DPI.
+try:
+    K = max(1.0, min(3.0, float(os.environ.get('OTR_UI_SCALE') or 100) / 100))
+except ValueError:
+    K = 1.0
+
+def dp(n):
+    return n if n < 0 else int(round(n * K))
 
 def rgb(h, default):
     c = Gdk.RGBA()
@@ -120,6 +131,7 @@ COLORS = {'info': (0.15, 0.39, 0.92), 'ok': (0.09, 0.64, 0.29), 'warn': (0.85, 0
           'update': (0.15, 0.39, 0.92)}
 
 def icon(kind, size=22, color=(1, 1, 1), alpha=0.92):
+    size = dp(size)
     d = Gtk.DrawingArea(halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER); d.set_size_request(size, size)
     state = {'a': 0.0}
     def draw(w, cr):
@@ -198,6 +210,7 @@ def bars(dbm):
 # the icon of a network, its kind and bars changed later (st['kind'], st['bars']): wifi (arcs, the empty ones faint),
 # wired (a plug), none (a Wi-Fi crossed out)
 def net_icon(kind='none', level=0, size=20, color=(1, 1, 1)):
+    size = dp(size)
     d = Gtk.DrawingArea(valign=Gtk.Align.CENTER); d.set_size_request(size, size)
     st = {'kind': kind, 'bars': level, 'color': color}
     def draw(w, cr):
@@ -226,9 +239,12 @@ def picture(path, maxw, maxh):
         pb = GdkPixbuf.Pixbuf.new_from_file(path)
     except Exception:
         return None
-    k = min(1.0, maxw / pb.get_width(), maxh / pb.get_height())
-    if k < 1.0:
-        pb = pb.scale_simple(max(1, int(pb.get_width() * k)), max(1, int(pb.get_height() * k)), GdkPixbuf.InterpType.BILINEAR)
+    # never larger than the picture itself at 100%; scaled up by K with the screens (a logo on a 4K screen at 200%)
+    maxw, maxh = maxw * K, maxh * K
+    k = min(K, maxw / pb.get_width(), maxh / pb.get_height())
+    if k != 1.0:
+        pb = pb.scale_simple(max(1, int(pb.get_width() * k)), max(1, int(pb.get_height() * k)),
+                             GdkPixbuf.InterpType.BILINEAR if k < 1.0 else GdkPixbuf.InterpType.HYPER)
     return Gtk.Image.new_from_pixbuf(pb)
 
 def label(text, cls, wrap=True, xalign=0.5, chars=52):
@@ -259,23 +275,29 @@ def leave(c, out=None):
         print(out, flush=True)
     Gtk.main_quit()
 
+if K != 1.0:
+    CSS = re.sub(rb'(\d+(?:\.\d+)?)px', lambda m: b'%dpx' % max(1, round(float(m.group(1)) * K)), CSS)
+    # the arrows of the drop-down lists and menus come from the theme, at its own size
+    CSS += b'combobox arrow, menuitem arrow { -gtk-icon-transform: scale(%.2f); }' % K
+    # and the items of a drop-down list use the font of the theme: the size of the fields instead
+    CSS += b'menu menuitem { font-size: %dpx; min-height: %dpx; }' % (round(15 * K), round(30 * K))
 prov = Gtk.CssProvider(); prov.load_from_data(CSS)
 Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), prov, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 scr = Gdk.Screen.get_default()
 mon = scr.get_display().get_primary_monitor() or scr.get_display().get_monitor(0)
-geo = mon.get_geometry(); SW, SH = geo.width, geo.height
+geo = mon.get_geometry(); SW, SH = int(geo.width / K), int(geo.height / K)   # in the units of the sizes here (K)
 
 # --- small notice in the corner (no background) ------------------------------------------------------------
 if MODE == 'toast':
     win = Gtk.Window(type=Gtk.WindowType.POPUP)
     win.set_wmclass('OtrToast', 'OtrToast')
-    box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14); box.get_style_context().add_class('toast')
+    box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=dp(14)); box.get_style_context().add_class('toast')
     kind = 'warn' if A.while_file else 'update'
     box.pack_start(icon(kind, 28, COLORS[kind], 1.0), False, False, 0)
-    col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+    col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=dp(6))
     # one line for the remote screen notice: a wrapped label in a popup is given room for lines it does not use
     tl = label(A.text, 'text', wrap=not A.while_file, xalign=0, chars=34); col.pack_start(tl, False, False, 0)
-    bar = Gtk.ProgressBar(); bar.set_size_request(260, -1)
+    bar = Gtk.ProgressBar(); bar.set_size_request(dp(260), dp(-1))
     if not A.while_file: col.pack_start(bar, False, False, 0)
     box.pack_start(col, True, True, 0); win.add(box)
     def poll():
@@ -290,21 +312,21 @@ if MODE == 'toast':
         return True
     poll(); GLib.timeout_add(700, poll)
     win.show_all()
-    w, h = win.get_size(); win.move(geo.x + SW - w - 24, geo.y + 24)
+    w, h = win.get_size(); win.move(geo.x + geo.width - w - dp(24), geo.y + dp(24))
     Gtk.main(); sys.exit(code)
 
 # --- a question at the top of the screen (remote-screen.sh: REMOTE_CONSENT=ask) --------------------------------
 if MODE == 'ask':
     win = Gtk.Window(type=Gtk.WindowType.POPUP)
     win.set_wmclass('OtrAsk', 'OtrAsk')
-    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10); box.get_style_context().add_class('toast')
-    head = Gtk.Box(spacing=12); head.pack_start(icon('warn', 28, COLORS['warn'], 1.0), False, False, 0)
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=dp(10)); box.get_style_context().add_class('toast')
+    head = Gtk.Box(spacing=dp(12)); head.pack_start(icon('warn', 28, COLORS['warn'], 1.0), False, False, 0)
     head.pack_start(label(A.heading, 'heading', xalign=0, chars=44), True, True, 0); box.pack_start(head, False, False, 0)
     tx = label(A.text.replace('\\n', '\n'), 'text', xalign=0, chars=52); tx.set_justify(Gtk.Justification.LEFT)
     box.pack_start(tx, False, False, 0)
     bar = Gtk.ProgressBar()
     if A.timeout: box.pack_start(bar, False, False, 0)
-    row = Gtk.Box(spacing=10, halign=Gtk.Align.END)
+    row = Gtk.Box(spacing=dp(10), halign=Gtk.Align.END)
     for b in A.button:
         text, _, c = b.rpartition(':')
         bt = Gtk.Button(label=text); bt.get_style_context().add_class('primary' if c == A.primary else 'secondary')
@@ -320,13 +342,13 @@ if MODE == 'ask':
             bar.set_fraction(left / T); return True
         tick(); GLib.timeout_add(100, tick)
     win.show_all()
-    w, h = win.get_size(); win.move(geo.x + (SW - w) // 2, geo.y + 24)
+    w, h = win.get_size(); win.move(geo.x + (geo.width - w) // 2, geo.y + dp(24))
     Gtk.main(); sys.exit(code)
 
 # --- full screen: background, the picture of the site, a card ------------------------------------------------
 win = Gtk.Window(title=A.title or 'Remote desktop')
 win.set_wmclass('OtrLogin' if MODE == 'login' else 'OtrScreen', 'OtrLogin' if MODE == 'login' else 'OtrScreen')
-win.set_decorated(False); win.move(geo.x, geo.y); win.set_default_size(SW, SH); win.fullscreen()
+win.set_decorated(False); win.move(geo.x, geo.y); win.set_default_size(geo.width, geo.height); win.fullscreen()
 top, bottom = rgb(A.top, '#1b2733'), rgb(A.bottom, '#000000')
 ov = Gtk.Overlay(); win.add(ov)
 bg = Gtk.DrawingArea()
@@ -337,27 +359,27 @@ def draw_bg(w, cr):
     cr.set_source(g); cr.paint()
 bg.connect('draw', draw_bg); ov.add(bg)
 
-mid = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=26, halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
+mid = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=dp(26), halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
 sp = picture(A.splash, SW * 0.42, SH * 0.26) if A.splash else None
 if sp: mid.pack_start(sp, False, False, 0)
-card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12); card.get_style_context().add_class('card')
+card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=dp(12)); card.get_style_context().add_class('card')
 mid.pack_start(card, False, False, 0)
 ov.add_overlay(mid)
 win.connect('delete-event', lambda *_: True)        # only the buttons close it
 
 if MODE == 'message':
-    card.set_size_request(min(460, SW - 40), -1)
+    card.set_size_request(dp(min(460, SW - 40)), dp(-1))
     if A.icon:
-        ic = icon(A.icon, 46, COLORS.get(A.icon, COLORS['info']), 1.0); ic.set_margin_bottom(2); card.pack_start(ic, False, False, 0)
+        ic = icon(A.icon, 46, COLORS.get(A.icon, COLORS['info']), 1.0); ic.set_margin_bottom(dp(2)); card.pack_start(ic, False, False, 0)
     if A.heading: card.pack_start(label(A.heading, 'heading'), False, False, 2)
     tx = label(A.text.replace('\\n', '\n'), 'text'); card.pack_start(tx, False, False, 0)
     bar = None
     if A.progress or A.update or A.timeout:
-        bar = Gtk.ProgressBar(); bar.set_margin_top(6); card.pack_start(bar, False, False, 0)
+        bar = Gtk.ProgressBar(); bar.set_margin_top(dp(6)); card.pack_start(bar, False, False, 0)
     if A.small: card.pack_start(label(A.small.replace('\\n', '\n'), 'small'), False, False, 2)
     buttons = {}
     if A.button:
-        row = Gtk.Box(spacing=10, halign=Gtk.Align.CENTER); row.set_margin_top(8)
+        row = Gtk.Box(spacing=dp(10), halign=Gtk.Align.CENTER); row.set_margin_top(dp(8))
         for b in A.button:
             text, _, c = b.rpartition(':')
             bt = Gtk.Button(label=text); bt.get_style_context().add_class('primary' if c == A.primary else 'secondary')
@@ -451,17 +473,17 @@ if MODE in ('form', 'text') and sp:
 #   F  KEY  type  label  value  choices  hint        type: text, password, choice (choices "value=label|..."), tz, ro
 # Save prints KEY=value for every field but ro, in their order. --small = a status line under the heading.
 if MODE == 'form':
-    card.set_size_request(min(1060, SW - 40), min(720, SH - 40)); card.set_spacing(14)
+    card.set_size_request(dp(min(1060, SW - 40)), dp(min(720, SH - 40))); card.set_spacing(dp(14))
     card.pack_start(left_label(A.heading, 'heading'), False, False, 0)
     if A.small: card.pack_start(left_label(A.small.replace('\\n', '\n'), 'small', 140), False, False, 0)
     stack = Gtk.Stack(); stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
-    side = Gtk.StackSidebar(); side.set_stack(stack); side.set_size_request(210, -1)
+    side = Gtk.StackSidebar(); side.set_stack(stack); side.set_size_request(dp(210), dp(-1))
     fields, grid, row, n = [], None, 0, 0
     for line in sys.stdin.read().split('\n'):
         p = line.split('\t')
         if p[0] == 'S' and len(p) > 1:
-            grid = Gtk.Grid(column_spacing=22, row_spacing=4); grid.set_margin_start(22); grid.set_margin_end(14)
-            grid.set_margin_top(4); grid.set_margin_bottom(10); row = 0; n += 1
+            grid = Gtk.Grid(column_spacing=dp(22), row_spacing=dp(4)); grid.set_margin_start(dp(22)); grid.set_margin_end(dp(14))
+            grid.set_margin_top(dp(4)); grid.set_margin_bottom(dp(10)); row = 0; n += 1
             sc = Gtk.ScrolledWindow(); sc.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC); sc.add(grid)
             stack.add_titled(sc, 'page%d' % n, p[1])
         elif p[0] == 'F' and grid is not None:
@@ -490,14 +512,14 @@ if MODE == 'form':
                 if typ == 'ro':
                     w.set_editable(False); w.set_can_focus(False); w.get_style_context().add_class('readonly')
             w.set_hexpand(True); w.set_valign(Gtk.Align.CENTER)
-            fl = Gtk.Label(label=lab, xalign=0); fl.get_style_context().add_class('field'); fl.set_size_request(230, -1)
-            fl.set_line_wrap(True); fl.set_max_width_chars(28); fl.set_margin_top(10)
-            w.set_margin_top(10)
+            fl = Gtk.Label(label=lab, xalign=0); fl.get_style_context().add_class('field'); fl.set_size_request(dp(230), dp(-1))
+            fl.set_line_wrap(True); fl.set_max_width_chars(28); fl.set_margin_top(dp(10))
+            w.set_margin_top(dp(10))
             grid.attach(fl, 0, row, 1, 1); grid.attach(w, 1, row, 1, 1); row += 1
             if hint:
                 grid.attach(left_label(hint, 'hint', 72), 1, row, 1, 1); row += 1
             if typ != 'ro': fields.append((key, typ, w))
-    body = Gtk.Box(spacing=0); body.pack_start(side, False, False, 0); body.pack_start(stack, True, True, 0)
+    body = Gtk.Box(spacing=dp(0)); body.pack_start(side, False, False, 0); body.pack_start(stack, True, True, 0)
     card.pack_start(body, True, True, 0)
     def save(*_):
         out = []
@@ -505,7 +527,7 @@ if MODE == 'form':
             v = (w.get_active_id() or '') if typ == 'choice' else w.get_child().get_text() if typ in ('tz', 'combo') else w.get_text()
             out.append('%s=%s' % (key, v.replace('\n', ' ')))
         leave(0, '\n'.join(out))
-    bar = Gtk.Box(spacing=10); bar.set_margin_top(4)
+    bar = Gtk.Box(spacing=dp(10)); bar.set_margin_top(dp(4))
     if A.t_terminal: bar.pack_start(button(A.t_terminal, 'secondary', lambda *_: leave(12)), False, False, 0)
     # more buttons (--button LABEL:CODE), after Terminal: the code they end with (the Wi-Fi page: 13)
     for b in A.button:
@@ -524,12 +546,12 @@ if MODE == 'form':
 # --- the settings PIN ------------------------------------------------------------------------------------------
 # OK prints the PIN typed (exit 0); Cancel 11
 if MODE == 'pin':
-    card.set_size_request(min(400, SW - 40), -1)
+    card.set_size_request(dp(min(400, SW - 40)), dp(-1))
     card.pack_start(icon('gear', 40, COLORS['info'], 1.0), False, False, 0)
     card.pack_start(label(A.heading, 'heading'), False, False, 2)
     if A.text: card.pack_start(label(A.text, 'text'), False, False, 0)
     ep = Gtk.Entry(visibility=False); ep.set_input_purpose(Gtk.InputPurpose.PIN); card.pack_start(ep, False, False, 4)
-    row = Gtk.Box(spacing=10, halign=Gtk.Align.CENTER); row.set_margin_top(6)
+    row = Gtk.Box(spacing=dp(10), halign=Gtk.Align.CENTER); row.set_margin_top(dp(6))
     ok = lambda *_: leave(0, ep.get_text()) if ep.get_text() else ep.grab_focus()
     row.pack_start(button(A.t_close or 'Cancel', 'secondary', lambda *_: leave(11)), False, False, 0)
     row.pack_start(button(A.t_save or 'OK', 'primary', ok), False, False, 0)
@@ -552,11 +574,11 @@ if MODE == 'wifi':
         if k: T[k] = v.replace('\\n', '\n')
     t = lambda k, *a: (T.get(k, k) % a) if a else T.get(k, k)
     WIFI = ['sudo', '-n', '/opt/openthinrdp/wifi.sh']
-    card.set_size_request(min(760, SW - 40), min(660, SH - 40)); card.set_spacing(12)
+    card.set_size_request(dp(min(760, SW - 40)), dp(min(660, SH - 40))); card.set_spacing(dp(12))
     if sp: mid.remove(sp)
     card.pack_start(left_label(t('heading'), 'heading'), False, False, 0)
     # where the device is now
-    srow = Gtk.Box(spacing=10); sico = net_icon('none', 0, 20, (0.15, 0.39, 0.92)); slab = left_label('', 'text', 80)
+    srow = Gtk.Box(spacing=dp(10)); sico = net_icon('none', 0, 20, (0.15, 0.39, 0.92)); slab = left_label('', 'text', 80)
     srow.pack_start(sico, False, False, 0); srow.pack_start(slab, True, True, 0); card.pack_start(srow, False, False, 0)
     def show_state():
         k, ssid, lv, ip = net_state()
@@ -565,7 +587,7 @@ if MODE == 'wifi':
         return True
     show_state(); GLib.timeout_add_seconds(4, show_state)
     # the networks around
-    hrow = Gtk.Box(spacing=10); hrow.pack_start(left_label(t('list'), 'field'), True, True, 0)
+    hrow = Gtk.Box(spacing=dp(10)); hrow.pack_start(left_label(t('list'), 'field'), True, True, 0)
     brf = button(t('refresh'), 'secondary', lambda *_: scan()); hrow.pack_end(brf, False, False, 0)
     card.pack_start(hrow, False, False, 0)
     lb = Gtk.ListBox(); lb.set_selection_mode(Gtk.SelectionMode.SINGLE)
@@ -573,12 +595,12 @@ if MODE == 'wifi':
     sc.set_min_content_height(200); card.pack_start(sc, True, True, 0)
     # the one chosen, its password
     sel = left_label(t('choose'), 'text', 80); card.pack_start(sel, False, False, 0)
-    prow = Gtk.Box(spacing=10)
+    prow = Gtk.Box(spacing=dp(10))
     ep = Gtk.Entry(placeholder_text=t('password'), visibility=False); ep.set_input_purpose(Gtk.InputPurpose.PASSWORD)
     cshow = Gtk.CheckButton(label=t('show')); cshow.connect('toggled', lambda c: ep.set_visibility(c.get_active()))
     prow.pack_start(ep, True, True, 0); prow.pack_start(cshow, False, False, 0); card.pack_start(prow, False, False, 0)
     res = left_label('', 'text', 90); card.pack_start(res, False, False, 0)
-    bar = Gtk.Box(spacing=10)
+    bar = Gtk.Box(spacing=dp(10))
     bcn = button(t('connect'), 'primary', lambda *_: connect()); bcl = button(t('close'), 'secondary', lambda *_: leave(code))
     bar.pack_end(bcn, False, False, 0); bar.pack_end(bcl, False, False, 0); card.pack_start(bar, False, False, 0)
     state = {'busy': False, 'net': None}
@@ -601,7 +623,7 @@ if MODE == 'wifi':
         for r in lb.get_children(): lb.remove(r)
         cur = net_state()[1]
         for n in nets:
-            row = Gtk.ListBoxRow(); row.net = n; box = Gtk.Box(spacing=12); box.get_style_context().add_class('wifirow')
+            row = Gtk.ListBoxRow(); row.net = n; box = Gtk.Box(spacing=dp(12)); box.get_style_context().add_class('wifirow')
             box.pack_start(net_icon('wifi', bars(n['dbm']), 20, (0.15, 0.39, 0.92)), False, False, 0)
             col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
             nm = Gtk.Label(label=n['ssid'], xalign=0); nm.get_style_context().add_class('wifiname'); col.pack_start(nm, False, False, 0)
@@ -678,7 +700,7 @@ if MODE == 'bt':
         if k: T[k] = v.replace('\\n', '\n')
     t = lambda k: T.get(k, k)
     BT = ['sudo', '-n', '/opt/openthinrdp/bt.sh']
-    card.set_size_request(min(640, SW - 40), min(560, SH - 40)); card.set_spacing(12)
+    card.set_size_request(dp(min(640, SW - 40)), dp(min(560, SH - 40))); card.set_spacing(dp(12))
     if sp: mid.remove(sp)
     card.pack_start(left_label(t('heading'), 'heading'), False, False, 0)
     lb = Gtk.ListBox(); lb.set_selection_mode(Gtk.SelectionMode.SINGLE)
@@ -689,7 +711,7 @@ if MODE == 'bt':
         res.set_text(text)
         for c in ('result-ok', 'result-err', 'result-busy', 'text'): res.get_style_context().remove_class(c)
         res.get_style_context().add_class(cls)
-    bar = Gtk.Box(spacing=10)
+    bar = Gtk.Box(spacing=dp(10))
     brf = button(t('refresh'), 'secondary', lambda *_: scan()); bpair = button(t('pair'), 'primary', lambda *_: act('pair'))
     brm = button(t('remove'), 'secondary', lambda *_: act('remove'))
     bar.pack_start(brf, False, False, 0); bar.pack_end(button(t('close'), 'secondary', lambda *_: leave(11)), False, False, 0)
@@ -731,7 +753,7 @@ if MODE == 'bt':
 
 # --- a text read from stdin as it comes (diagnostics) ----------------------------------------------------------
 if MODE == 'text':
-    card.set_size_request(min(900, SW - 40), min(600, SH - 40)); card.set_spacing(12)
+    card.set_size_request(dp(min(900, SW - 40)), dp(min(600, SH - 40))); card.set_spacing(dp(12))
     card.pack_start(left_label(A.heading, 'heading'), False, False, 0)
     if A.text: card.pack_start(left_label(A.text, 'small', 120), False, False, 0)
     tv = Gtk.TextView(editable=False, cursor_visible=False, wrap_mode=Gtk.WrapMode.WORD_CHAR)
@@ -753,7 +775,7 @@ if MODE == 'text':
                 leave(70); return False
             bar.set_fraction(left / T); return True
         tick(); GLib.timeout_add(100, tick)
-    row = Gtk.Box(spacing=10); bc = button(A.t_close or 'Close', 'secondary' if A.primary else 'primary', lambda *_: leave(0)); row.pack_end(bc, False, False, 0)
+    row = Gtk.Box(spacing=dp(10)); bc = button(A.t_close or 'Close', 'secondary' if A.primary else 'primary', lambda *_: leave(0)); row.pack_end(bc, False, False, 0)
     # more buttons (--button LABEL:CODE), left of Close: the code they end with; --primary CODE is the main one, with
     # the focus (Enter presses it)
     focus = bc
@@ -769,10 +791,10 @@ if MODE == 'text':
     Gtk.main(); sys.exit(code)
 
 # --- sign-in screen --------------------------------------------------------------------------------------------
-card.set_size_request(min(400, SW - 40), -1)
+card.set_size_request(dp(min(400, SW - 40)), dp(-1))
 # the logo in the card only when the background picture is not shown above it: the same mark twice looks odd
 lg = picture(A.logo, 240, 90) if A.logo and not sp else None
-if lg: lg.set_margin_bottom(4); card.pack_start(lg, False, False, 0)
+if lg: lg.set_margin_bottom(dp(4)); card.pack_start(lg, False, False, 0)
 card.pack_start(label(A.heading, 'heading'), False, False, 4)
 # several computers (a workgroup with CONNECTIONS): which one, above the user; the choice goes to /tmp/kiosk.host
 hosts = [h for h in A.hosts.split('|') if h]
@@ -784,7 +806,7 @@ if len(hosts) > 1:
 eu = Gtk.Entry(placeholder_text=A.t_user or 'User'); eu.set_text(A.user)
 ep = Gtk.Entry(placeholder_text=A.t_password or 'Password', visibility=False); ep.set_input_purpose(Gtk.InputPurpose.PASSWORD)
 card.pack_start(eu, False, False, 0); card.pack_start(ep, False, False, 0)
-bs = Gtk.Button(label=A.t_signin or 'Sign in'); bs.get_style_context().add_class('signin'); bs.set_margin_top(6)
+bs = Gtk.Button(label=A.t_signin or 'Sign in'); bs.get_style_context().add_class('signin'); bs.set_margin_top(dp(6))
 card.pack_start(bs, False, False, 0)
 if A.note: card.pack_start(label(A.note, 'note', chars=46), False, False, 2)
 
@@ -818,20 +840,20 @@ def corner_button(kind, tip, cb):
     return b
 
 # top left: clock and date; top right: information and settings
-tl = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, halign=Gtk.Align.START, valign=Gtk.Align.START, margin=26)
+tl = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, halign=Gtk.Align.START, valign=Gtk.Align.START, margin=dp(26))
 clk = Gtk.Label(xalign=0); clk.get_style_context().add_class('clock')
 dt = Gtk.Label(xalign=0); dt.get_style_context().add_class('date')
 tl.pack_start(clk, False, False, 0); tl.pack_start(dt, False, False, 0); ov.add_overlay(tl)
 def tick():
     clk.set_text(time.strftime('%H:%M')); dt.set_text(today()); return True
 tick(); GLib.timeout_add_seconds(10, tick)
-tr = Gtk.Box(spacing=10, halign=Gtk.Align.END, valign=Gtk.Align.START, margin=22)
+tr = Gtk.Box(spacing=dp(10), halign=Gtk.Align.END, valign=Gtk.Align.START, margin=dp(22))
 # the network, left of them, kept current: cable, Wi-Fi with its name and bars, or none (red). Pressed: the Wi-Fi
 # page (exit 8; kiosk.sh asks the PIN of the settings first). --t-net = "cable|Wi-Fi|no network|no address"
 if A.t_net:
     tn = (A.t_net.split('|') + ['', '', '', ''])[:4]
     nb = Gtk.Button(); nb.get_style_context().add_class('netpill'); nb.set_can_focus(False)
-    nbx = Gtk.Box(spacing=8); nic = net_icon('none', 0, 20); nlb = Gtk.Label(); nbx.pack_start(nic, False, False, 0); nbx.pack_start(nlb, False, False, 0)
+    nbx = Gtk.Box(spacing=dp(8)); nic = net_icon('none', 0, 20); nlb = Gtk.Label(); nbx.pack_start(nic, False, False, 0); nbx.pack_start(nlb, False, False, 0)
     nb.add(nbx); nb.connect('clicked', lambda *_: leave(8))
     def net_tick():
         k, ssid, lv, ip = net_state()
@@ -848,7 +870,7 @@ tr.pack_start(corner_button('gear', A.t_settings or 'Settings', lambda *_: leave
 ov.add_overlay(tr)
 
 # bottom left: web button and the name of the device; bottom right: power with its menu
-bl = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, halign=Gtk.Align.START, valign=Gtk.Align.END, margin=24)
+bl = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=dp(8), halign=Gtk.Align.START, valign=Gtk.Align.END, margin=dp(24))
 if A.web:
     wb = Gtk.Button(label=A.web); wb.get_style_context().add_class('webbtn'); wb.set_can_focus(False)
     wb.connect('clicked', lambda *_: leave(7)); wb.set_halign(Gtk.Align.START); bl.pack_start(wb, False, False, 0)
@@ -857,12 +879,12 @@ if A.info:
 ov.add_overlay(bl)
 pw = corner_button('power', A.t_power or 'Power', None)
 pop = Gtk.Popover(); pop.set_relative_to(pw); pop.set_position(Gtk.PositionType.TOP)
-pb = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, margin=6)
+pb = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, margin=dp(6))
 for text, c in ((A.t_restart or 'Restart', 6), (A.t_shutdown or 'Shut down', 5)):
     b = Gtk.Button(label=text, xalign=0); b.connect('clicked', lambda _b, c=c: leave(c)); pb.pack_start(b, False, False, 0)
 pb.show_all(); pop.add(pb)
 pw.connect('clicked', lambda *_: pop.popup())
-br = Gtk.Box(halign=Gtk.Align.END, valign=Gtk.Align.END, margin=22); br.pack_start(pw, False, False, 0); ov.add_overlay(br)
+br = Gtk.Box(halign=Gtk.Align.END, valign=Gtk.Align.END, margin=dp(22)); br.pack_start(pw, False, False, 0); ov.add_overlay(br)
 
 win.show_all()
 (ep if A.user else eu).grab_focus(); eu.select_region(0, 0)

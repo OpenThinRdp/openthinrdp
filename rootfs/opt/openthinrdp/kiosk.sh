@@ -7,17 +7,73 @@ otr_lang
 export DISPLAY=${DISPLAY:-:0}
 for i in $(seq 1 200); do xset q >/dev/null 2>&1 && break; sleep 0.1; done
 
+# --- screen (#183) -------------------------------------------------------------------------------------------------
+# DISPLAY_RESOLUTION on every monitor that offers it (native = its own); DISPLAY_SCALE for the screens of the device
+# (ui.py: OTR_UI_SCALE; yad and the other GTK windows: GDK_DPI_SCALE), the web page (browser.sh) and the remote
+# desktop (connect). Applied at the start and before every sign-in form when the settings or the monitors changed.
+SCALE=100; DISP=""
+# what the monitors show now: X starts each on its preferred mode (+ in the list), a mode in use (*) that is not the
+# preferred one was set before (a kiosk started again in the same X session) and is put back when native is chosen
+DRES=$(xrandr --current 2>/dev/null | awk '/ connected/ {c = 1; next} /^[^ ]/ {c = 0} c && /\*/ && !/\+/ {n = 1} END {print (n ? "other" : "native")}')
+# the connected monitors from left to right, and the modes one of them offers (WIDTHxHEIGHT, one per line)
+outputs(){ xrandr --current 2>/dev/null | awk '/ connected/{x = 0; if (match($0, /[0-9]+x[0-9]+\+[0-9]+/)) { g = substr($0, RSTART, RLENGTH); sub(/.*\+/, "", g); x = g }; print x, $1}' | sort -n | awk '{print $2}'; }
+out_modes(){ xrandr --current 2>/dev/null | awk -v o="$1" '$1 == o {f = 1; next} /^[^ ]/ {f = 0} f {print $1}'; }
+# monitors side by side stay side by side, in the same order; one without the mode keeps its own resolution
+display_modes(){ local res o prev="" side=0
+  res=$(cfg DISPLAY_RESOLUTION); [ -n "$res" ] || res=native
+  [ "$(xrandr --current 2>/dev/null | grep ' connected' | grep -oE '[0-9]+x[0-9]+\+[0-9]+' | cut -d+ -f2 | sort -u | wc -l)" -gt 1 ] && side=1
+  for o in $(outputs); do
+    if [ "$res" != native ] && out_modes "$o" | grep -qx "$res"; then xrandr --output "$o" --mode "$res" 2>/dev/null
+    else
+      [ "$res" != native ] && ev "screen $o has no $res mode: its own resolution kept"
+      xrandr --output "$o" --auto 2>/dev/null
+    fi
+    [ $side = 1 ] && [ -n "$prev" ] && xrandr --output "$o" --right-of "$prev" 2>/dev/null
+    prev=$o
+  done; }
+# the width of the widest monitor as it shows now
+max_width(){ xrandr --current 2>/dev/null | grep ' connected' | grep -oE '[0-9]+x[0-9]+\+' | cut -dx -f1 | sort -n | tail -1; }
+display_scale(){ local s; s=$(cfg DISPLAY_SCALE)
+  case "$s" in 100|125|150|175|200) echo "$s" ;; *) [ "$(max_width)" -ge 3200 ] 2>/dev/null && echo 200 || echo 100 ;; esac; }
+display_apply(){ local res sig
+  res=$(cfg DISPLAY_RESOLUTION); [ -n "$res" ] || res=native
+  sig="$res|$(cfg DISPLAY_SCALE)|$(outputs | tr '\n' ' ')|$(max_width)"
+  [ "$sig" = "$DISP" ] && [ "${1:-}" != force ] && return 0
+  DISP=$sig
+  # the native resolution is what X starts with: nothing to change until another one is chosen
+  if [ "$res" != native ] || [ "$DRES" != native ]; then display_modes; DRES=$res; fi
+  SCALE=$(display_scale)
+  export OTR_UI_SCALE=$SCALE GDK_DPI_SCALE=$(awk -v s="$SCALE" 'BEGIN { printf "%.2f", s / 100 }')
+  { [ "$res" != native ] || [ "$SCALE" != 100 ]; } && ev "screen: resolution $res, scale $SCALE% ($(max_width) pixels wide)"
+  return 0; }
+# a size in pixels for a window of yad at the scale of the screens
+pxs(){ echo $(( $1 * SCALE / 100 )); }
+
 # Background: the boot splash is always the image's own; from here on the background picture of the site
 # (management folder, otherwise the image's). Plymouth quits leaving its picture until X draws: no black gap.
-background(){ command -v hsetroot >/dev/null && hsetroot -add "$(cfg BG_TOP)" -add "$(cfg BG_BOTTOM)" -gradient 0 -center "$SPLASH" 2>/dev/null; }
+# On a scaled screen the picture grows with it (a copy made once per picture and scale).
+background(){ local s=$SPLASH
+  command -v hsetroot >/dev/null || return 0
+  if [ "$SCALE" != 100 ] && [ -f "$SPLASH" ]; then
+    s=/tmp/otr-splash-$SCALE-$(echo "$SPLASH" | md5sum | cut -c1-8).png
+    [ -s "$s" ] && [ "$s" -nt "$SPLASH" ] || python3 - "$SPLASH" "$s" "$SCALE" <<'PY' 2>/dev/null || s=$SPLASH
+import sys, gi
+gi.require_version('GdkPixbuf', '2.0')
+from gi.repository import GdkPixbuf
+p = GdkPixbuf.Pixbuf.new_from_file(sys.argv[1]); k = int(sys.argv[3]) / 100
+p.scale_simple(int(p.get_width() * k), int(p.get_height() * k), GdkPixbuf.InterpType.HYPER).savev(sys.argv[2], 'png', [], [])
+PY
+  fi
+  hsetroot -add "$(cfg BG_TOP)" -add "$(cfg BG_BOTTOM)" -gradient 0 -center "$s" 2>/dev/null; }
 # title, logo and background, read again before every form: a logo or background picture of the management folder
-# (branding.sh) and new colors show up without restarting the kiosk
+# (branding.sh) and new colors show up without restarting the kiosk; the screen settings too
 LOOK=""
 look(){
   local now
+  display_apply
   TITLE=$(cfg TITLE); LOGO=$(otr_logo); IMG=""; [ -f "$LOGO" ] && IMG="--image=$LOGO"
   SPLASH=$(otr_splash)
-  now="$SPLASH $(stat -c %Y "$SPLASH" 2>/dev/null) $(cfg BG_TOP) $(cfg BG_BOTTOM)"
+  now="$SPLASH $(stat -c %Y "$SPLASH" 2>/dev/null) $(cfg BG_TOP) $(cfg BG_BOTTOM) $SCALE $(max_width)"
   [ "$now" = "$LOOK" ] || { LOOK=$now; background; }
 }
 look
@@ -37,7 +93,7 @@ monitor_watch(){
     # --current does not probe the monitor (no flicker); "connected (" = connected but no picture
     if xrandr --current 2>/dev/null | grep -qE ' connected (primary )?\('; then
       ev "monitor connected without picture: enabled"
-      xrandr --auto 2>/dev/null; sleep 1
+      xrandr --auto 2>/dev/null; [ "$(cfg DISPLAY_RESOLUTION)" = native ] || display_modes; sleep 1
       xset s off -dpms s noblank 2>/dev/null
       SPLASH=$(otr_splash); background
       # the form was drawn for the wrong resolution: close it, the main loop draws it again
@@ -66,8 +122,8 @@ update_watch(){
         if [ $UIOK = 1 ]; then python3 "$OTR/ui.py" toast --text="$L_UPDATE_RUNNING (%p%)" 2>/dev/null & y=$!
         else
           w=$(xrandr --current 2>/dev/null | sed -n 's/.*current \([0-9]*\) x.*/\1/p' | head -1)
-          yad --undecorated --skip-taskbar --on-top --no-focus --no-buttons --borders=10 --width=360 \
-              --posx=$(( ${w:-1024} - 380 )) --posy=20 --text="⟳  $L_UPDATE_RUNNING" 2>/dev/null & y=$!
+          yad --undecorated --skip-taskbar --on-top --no-focus --no-buttons --borders=10 --width=$(pxs 360) \
+              --posx=$(( ${w:-1024} - $(pxs 380) )) --posy=20 --text="⟳  $L_UPDATE_RUNNING" 2>/dev/null & y=$!
         fi
       fi
     elif [ -n "$y" ]; then kill "$y" 2>/dev/null; y=""; fi
@@ -295,6 +351,11 @@ connect(){
   v=$(cfg RDP_KEYBOARD); [ -n "$v" ] && o+=(/kbd:layout:"$v")
   # every monitor when more than one is connected (with /f the session is full screen on all of them)
   [ "$(cfg MULTIMON)" != off ] && [ "$(xrandr --current 2>/dev/null | grep -c ' connected')" -gt 1 ] && o+=(/multimon)
+  # the scale of the screens as the display scale of Windows (#183): the desktop as chosen, the device scale (store
+  # apps) the nearest of 100, 140, 180. A /scale option in RDP_EXTRA wins.
+  if [ "${SCALE:-100}" != 100 ] && [[ $(cfg RDP_EXTRA) != */scale* ]]; then
+    o+=(/scale-desktop:"$SCALE" /scale-device:$( [ "$SCALE" -ge 180 ] && echo 180 || { [ "$SCALE" -ge 140 ] && echo 140 || echo 100; } ))
+  fi
   for dev in /dev/ttyUSB* /dev/ttyACM* /dev/ttyS0; do [ -e "$dev" ] && { o+=(/serial:"COM$i,$dev"); i=$((i+1)); }; done
   usb=$(usb_opt); o+=("$usb")
   [ -n "$(touch_ids)" ] && o+=(+multitouch)
@@ -386,6 +447,11 @@ settings_spec(){
     fld SESSION_THRESHOLD text "$L_F_THRESHOLD" "$thr" "" "$L_H_THRESHOLD"
   fi
   fld SHUTDOWN_SECS text "$L_F_SHUTDOWN" "$off" "" "$L_H_SHUTDOWN"
+  # the screen (#183): the resolutions the main monitor offers, the scale, every monitor or the main one only
+  sec "$L_SEC_SCREEN"
+  fld DISPLAY_RESOLUTION choice "$L_F_RESOLUTION" "$dres" "$(chs RESV RESL)" "$L_H_RESOLUTION"
+  fld DISPLAY_SCALE choice "$L_F_SCALE" "$dsc" "$(chs SCV SCL)" "$L_H_SCALE"
+  fld MULTIMON choice "$L_F_MULTIMON" "$mm" "$(chs MMV MML)" "$L_H_MULTIMON"
   sec "$L_SEC_NETWORK"
   fld NETMODE choice "$L_F_NETWORK" "$nm" "$(chs NETV NETL)" "$L_H_NETWORK"
   fld IPADDR text "$L_F_IP" "$ip" "" "$L_H_IP"
@@ -462,6 +528,7 @@ settings_read(){
       WIFI_SECURITY) wsec=$v ;; DOT1X) d1x=$v ;; EAP_IDENTITY) eid=$v ;; EAP_ANONYMOUS) ean=$v ;; EAP_PASSWORD) epw=$v ;;
       EAP_CA) eca=$v ;; EAP_SERVER_NAME) esn=$v ;;
       SETUP) kind=$v ;; REMEMBER_PASSWORD) rem=$v ;; WAKE_MAC) wmac=$v ;; CONNECTIONS) conns=$v ;; VPN) vpn=$v ;; BROWSER) bro=$v ;;
+      DISPLAY_RESOLUTION) dres=$v ;; DISPLAY_SCALE) dsc=$v ;; MULTIMON) mm=$v ;;
     esac
   done <<< "$1"
 }
@@ -540,13 +607,25 @@ settings_dialog(){
   share=$(cfg MGMT_SHARE); um=$(cfg USB_MODE); ur=$(cfg USB_REDIRECT); ul=$(cfg USB_LOCAL); su=$(cfg SECURITY_UPDATES); an=$(cfg ANON_STATS); tz=$(cfg TIMEZONE); tr=$(cfg TRANSPORT)
   wb=$(cfg WEB_BUTTON); wu=$(cfg WEB_URL); ku=$(cfg KIOSK_URL); kr=$(cfg_num KIOSK_RELOAD_MIN 10)
   pon=$(cfg POWER_ON_TIME); poff=$(cfg POWER_OFF_TIME); pdays=$(cfg POWER_ON_DAYS); wf=$(cfg WIFI); ws=$(cfg WIFI_SSID); ln=$(cfg LANGUAGE)
+  # the screen: native and the modes of the main monitor (once each, 1024 pixels wide and more), the value set centrally
+  # even when this monitor lacks it; the scale with what auto means here now
+  local dres dsc mm o0 o pm; local -a RESV=(native) RESL=() SCV=(auto 100 125 150 175 200) SCL=() MMV=(auto off) MML=("$L_MM_ALL" "$L_MM_MAIN")
+  dres=$(cfg DISPLAY_RESOLUTION); dsc=$(cfg DISPLAY_SCALE); mm=$(cfg MULTIMON)
+  o0=$(outputs | head -1)
+  # the preferred mode of the monitor (+ in the list of xrandr) is its native resolution
+  pm=$(xrandr --current 2>/dev/null | awk -v o="$o0" '$1 == o {f = 1; next} /^[^ ]/ {f = 0} f && /\+/ {print $1; exit}')
+  if [ -n "$pm" ]; then RESL=("$(printf "$L_RES_NATIVE" "$pm")"); else RESL=("$L_RES_NATIVE_PLAIN"); fi
+  for o in $(out_modes "$o0" | awk -Fx '/^[0-9]+x[0-9]+$/ && $1 >= 1024 && !s[$0]++'); do RESV+=("$o"); RESL+=("$o"); done
+  [ "$dres" = native ] || printf '%s\n' "${RESV[@]}" | grep -qx "$dres" || { RESV+=("$dres"); RESL+=("$dres"); }
+  SCL=("$(printf "$L_SCALE_AUTO" "$( [ "$(max_width)" -ge 3200 ] 2>/dev/null && echo 200 || echo 100)")" "100%" "125%" "150%" "175%" "200%")
   # two columns: on one column the dialog does not fit a 1440x900 screen and Save disappears. Below 900 px
   # (1366x768, 1280x1024 is fine but 1024x768 is not) even two columns are taller than the screen: the form
   # scrolls inside a window as high as the screen, so the buttons stay visible
-  local sw sh; local -a geo=(--width=1150)
+  # (sizes at 100%, pxs: at the scale of the screens)
+  local sw sh; local -a geo=(--width=$(pxs 1150))
   read -r sw sh < <(xdpyinfo 2>/dev/null | awk '/dimensions:/{split($2, a, "x"); print a[1], a[2]; exit}')
-  if [ -n "$sh" ] && { [ "$sh" -lt 900 ] || [ "$sw" -lt 1170 ]; }; then
-    geo=(--scroll --width=$(( sw < 1170 ? sw - 20 : 1150 )) --height=$(( sh - 40 )))
+  if [ -n "$sh" ] && { [ "$sh" -lt "$(pxs 900)" ] || [ "$sw" -lt "$(pxs 1170)" ]; }; then
+    geo=(--scroll --width=$(( sw < $(pxs 1170) ? sw - 20 : $(pxs 1150) )) --height=$(( sh - 40 )))
   fi
   # fields separated by a character nobody can type (unit separator): passwords may contain anything else
   local FS=$'\x1f'
@@ -606,7 +685,7 @@ settings_dialog(){
       "KIOSK_RELOAD_MIN=$kr" "POWER_ON_TIME=$pon" "POWER_OFF_TIME=$poff" "POWER_ON_DAYS=$pdays" "LANGUAGE=$ln" \
       "WIFI=$wf" "WIFI_SSID=$ws" "WIFI_SECURITY=$wsec" "DOT1X=$d1x" "EAP_IDENTITY=$eid" "EAP_ANONYMOUS=$ean" \
       "EAP_CA=$eca" "EAP_SERVER_NAME=$esn" "SETUP=$kind" "REMEMBER_PASSWORD=$rem" "WAKE_MAC=$wmac" \
-      "CONNECTIONS=$conns" "VPN=$vpn" "BROWSER=$bro" > "$tmp"
+      "CONNECTIONS=$conns" "VPN=$vpn" "BROWSER=$bro" "DISPLAY_RESOLUTION=$dres" "DISPLAY_SCALE=$dsc" "MULTIMON=$mm" > "$tmp"
     [ -n "$wp" ] && printf 'WIFI_PSK=%s\n' "$wp" >> "$tmp"
     [ -n "$mp" ] && printf 'MGMT_PASSWORD=%s\n' "$mp" >> "$tmp"
     [ -n "$epw" ] && printf 'EAP_PASSWORD=%s\n' "$epw" >> "$tmp"
@@ -616,7 +695,7 @@ settings_dialog(){
       ev "settings saved from the dialog: hostname=$h user=$u network=$nm ip=$ip broker=$br"
       otr_lang     # the language may have changed
       if [ $GREETER = 1 ]; then ui message --icon=ok --heading="$(plain "$L_SAVED")" --timeout=2 >/dev/null
-      else yad --center --undecorated --skip-taskbar --no-buttons --timeout=2 --width=300 --text="<b>$L_SAVED</b>" 2>/dev/null; fi
+      else yad --center --undecorated --skip-taskbar --no-buttons --timeout=2 --width=$(pxs 300) --text="<b>$L_SAVED</b>" 2>/dev/null; fi
       # another kind of setup: the settings again at once, with the fields of that kind
       [ "$kind" != "$kind0" ] && [ $GREETER = 1 ] && { ev "kind of setup: $kind0 -> $kind"; settings_dialog; return; }
       # the password remembered no more: forgotten now
@@ -625,7 +704,7 @@ settings_dialog(){
     fi
     ev "settings rejected: $(echo "$msg" | tr '\n' ' ')"
     if [ $GREETER = 1 ]; then ui message --icon=error --heading="$(plain "$L_INVALID")" --text="$(plain "$msg")" --button="$L_FIX:0" --primary=0 >/dev/null
-    else yad --error --center --width=420 --title="$L_INVALID" --text="$msg" --button="$L_FIX:0" 2>/dev/null; fi
+    else yad --error --center --width=$(pxs 420) --title="$L_INVALID" --text="$msg" --button="$L_FIX:0" 2>/dev/null; fi
   done
   look; DEF=$(cfg DEFAULT_USER)
 }
@@ -642,7 +721,7 @@ diag_dialog(){
     [ "$r" = 22 ] && { diag_send; return; }
   fi
   # the earlier yad window when the screen of ui.py cannot open
-  [ "$r" = 0 ] || diag_text | yad --text-info --wrap $IMG --title="$L_DIAG" --width=780 --height=540 --center --fontname="Monospace 10" \
+  [ "$r" = 0 ] || diag_text | yad --text-info --wrap $IMG --title="$L_DIAG" --width=$(pxs 780) --height=$(pxs 540) --center --fontname="Monospace 10" \
           --text="$L_DIAG_TEXT" --button="$L_CLOSE:0" 2>/dev/null
 }
 # The whole diagnostics (diag-bundle.sh) for the administrator: in diag\ of the management folder at once (its event
@@ -974,7 +1053,7 @@ session(){
       done
       echo "100"; echo "# $L_P_READY"
     } | { if [ $GREETER = 1 ]; then ui message --progress --icon=busy --heading="$(plain "$L_P_TITLE")" --text="$(plain "$txt")" --button="$L_CANCEL:30"
-          else yad --progress --auto-close --undecorated --skip-taskbar --center --width=470 \
+          else yad --progress --auto-close --undecorated --skip-taskbar --center --width=$(pxs 470) \
             --title="$TITLE" --text="$L_P_TITLE" --button="$L_CANCEL:30" 2>/dev/null; fi
         # Cancel while it connects: this attempt ends now, back to the sign-in screen (no retry, no error)
         if [ $? -eq 30 ]; then touch /tmp/kiosk.cancel; kill -9 $(pgrep -P $xp -x xfreerdp3) 2>/dev/null; fi; }
@@ -1232,7 +1311,7 @@ while true; do
     # Enter in the password field presses the LAST button: Sign in goes last with the highest code
     OUT=$(yad --form $IMG --class=OtrLogin --title="$TITLE" \
           --text="<b>$L_LOGIN_HEADING</b>   [ $HOSTN${IPNOW:+  -  IP $IPNOW} ]$KTXT" \
-          --separator="|" --field="$L_USER" --field="$L_PASSWORD:H" --focus-field=2 --width=430 --center \
+          --separator="|" --field="$L_USER" --field="$L_PASSWORD:H" --focus-field=2 --width=$(pxs 430) --center \
           --button="$L_SHUTDOWN:5" --button="⚙:3" --button="ℹ:4" "${WEBBTN[@]}" --button="$L_SIGNIN:10" "$DEF" "" 2>/dev/null)
     rc=$?
   fi
@@ -1248,7 +1327,7 @@ while true; do
   [ $rc -eq 5 ] && [ $GREETER = 1 ] && power_off "Shut down button"
   if [ $rc -eq 5 ]; then
     # dialog WITHOUT fields: Enter presses the FIRST button -> No goes first
-    yad $IMG --title="$TITLE" --width=360 --center --text="<b>$L_ASK_SHUTDOWN</b>" \
+    yad $IMG --title="$TITLE" --width=$(pxs 360) --center --text="<b>$L_ASK_SHUTDOWN</b>" \
         --button="$L_NO:1" --button="$L_YES_SHUTDOWN:5" 2>/dev/null
     [ $? -eq 5 ] && power_off "Shut down button"
     continue

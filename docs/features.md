@@ -78,6 +78,7 @@ OpenThinRDP has it on, with `TRANSPORT=tcp` one setting away.
 - **Locked down**: no desktop, no menus, no text consoles (Ctrl+Alt+F1..F12 do nothing), no password-less
   account.
 - **Several monitors** become one remote desktop spanning all of them (`MULTIMON`).
+- **4K and other large screens**: a resolution of your choice and a scale (125-200%, automatic on 4K) for the screens of the device, the web page and Windows itself (`DISPLAY_RESOLUTION`, `DISPLAY_SCALE`).
 - **Power schedule and Wake-on-LAN**, screen always on, monitors switched on late handled.
 - **Web button**: a web app, free browsing, or a full screen kiosk page, in the browser you choose (installed only when a web page is turned on)
   ([screens that only show a web page](#screens-that-only-show-a-web-page)).

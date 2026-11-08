@@ -21,8 +21,8 @@ The reference with comments is [`rootfs/opt/openthinrdp/defaults.conf`](../rootf
 
 | Key | Default | Meaning |
 |---|---|---|
-| `BROKER` | | RD Connection Broker, or directly a session host or any Windows PC with Remote Desktop on: name or IP. Empty = the settings dialog opens at start |
-| `BROKER_FALLBACK` | | other brokers, space separated, tried in turn from the 3rd attempt |
+| `BROKER` | | RD Connection Broker, or directly a session host or any Windows PC with Remote Desktop on: name or IP, optionally `name:port` (a PC behind port forwarding). Empty = the settings dialog opens at start |
+| `BROKER_FALLBACK` | | other brokers, space separated (`name[:port]`), tried in turn from the 3rd attempt |
 | `DOMAIN` | | Windows domain of the users |
 | `LOAD_BALANCE_INFO` | | RDS collection, as `loadbalanceinfo` in the .rdp file, e.g. `tsv://VMResource.1.VDI` |
 | `DEFAULT_USER` | | user name pre-filled in the sign-in form |
@@ -34,6 +34,8 @@ The reference with comments is [`rootfs/opt/openthinrdp/defaults.conf`](../rootf
 | `RDP_GFX` | `progressive,AVC420:off,AVC444:off` | `/gfx` options. Without a GPU on the server this keeps text pixel exact |
 | `RDP_KEYBOARD` | | keyboard layout id for Windows, e.g. `0x00000409`. Empty = taken from the X keyboard |
 | `MULTIMON` | `auto` | `auto` = every monitor when more than one is connected (`/multimon`), `off` = only the main one |
+| `DISPLAY_RESOLUTION` | `native` | `native` = what each monitor prefers, or `WIDTHxHEIGHT` (e.g. `1920x1080`) on every monitor that offers it; the others keep their own |
+| `DISPLAY_SCALE` | `auto` | size of text and buttons on the device, on the web page and in the remote desktop (Windows gets it as its display scale): `auto` = 200 on a monitor 3200 pixels wide or more (4K), 100 otherwise; or `100`, `125`, `150`, `175`, `200`. A `/scale` option in `RDP_EXTRA` wins for the remote desktop |
 | `RDP_EXTRA` | | extra xfreerdp3 options (letters, digits, `/:+,._=#-` and spaces only) |
 | `SESSION_THRESHOLD` | `10` | a session that ends within these seconds counts as a failed attempt |
 | `SHUTDOWN_SECS` | `10` | after the user disconnects, switch off after these seconds (0 = never) |
