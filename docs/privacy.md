@@ -37,10 +37,14 @@ And what went wrong since the last send, so we can see which versions and which 
 | The graphics stuck, an error of the kernel | `graphics-hang`, `kernel-error` |
 | A stop that was no shutdown (a power cut, or frozen and switched off by hand) | `stopped-without-shutdown` |
 | The hardware test found problems | `hardware-test-problems` |
+| Which check of the hardware test failed, by its name | `hardware-test-fail`, `ip-address` |
+| No graphics driver or no sound card, from the same test | `hardware-test-warn`, `sound` |
+| A firmware file the computer asked for and the system lacks, by its file name | `missing-firmware`, `iwlwifi-8265-36.ucode` |
 
 Each kind is sent once, with how many times it happened in ranges (1, 2-5, 6-20, more than 20), and once with the
 version and once with the model of the computer. A week with no problem sends `none`. Only the kind, the number of a
-code and the name of a program leave the device, never the text of a message: those hold user and server names.
+code, the name of a program, the name of a check of the hardware test and the name of a firmware file leave the
+device, never the text of a message: those hold user and server names.
 
 `sudo /opt/openthinrdp/stats.sh --print` on a device prints exactly what it would send, and sends nothing.
 
