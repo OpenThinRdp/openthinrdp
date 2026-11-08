@@ -672,7 +672,7 @@ selftest_dialog(){
 }
 diag_text(){
   . "$OTR/lib/netif.sh"
-  local IF GW h a s
+  local IF GW h a s hn hp
   IF=$(main_nic); GW=$(ip -4 route show default 2>/dev/null | awk '{print $3}' | head -1)
   {
     echo "OpenThinRDP $(cat "$OTR/VERSION" 2>/dev/null)   $(hostname)   $(date '+%Y-%m-%d %H:%M')"
@@ -696,10 +696,13 @@ diag_text(){
       if [ -z "$a" ]; then echo "RD Gateway      $gh: name $L_DIAG_NOTFOUND (DNS)"
       else echo "RD Gateway      $gh ($a): port $gp $(diag_port "$a" "$gp")   use: $(cfg RDP_GATEWAY_USE)"; fi
     fi
-    for h in $(cfg BROKER) $(cfg BROKER_FALLBACK); do
-      a=$(getent ahostsv4 "$h" 2>/dev/null | awk 'NR==1{print $1}')
-      if [ -z "$a" ]; then echo "Remote desktop  $h: name $L_DIAG_NOTFOUND (DNS)"
-      else echo "Remote desktop  $h ($a): port 3389 $(diag_port "$a" 3389)"; fi
+    # each on its own port (name:port, 3389 by default); without a domain the other computers of the sign-in screen too
+    s="$(cfg BROKER) $(cfg BROKER_FALLBACK)"; [ "$(setup_kind)" = workgroup ] && s="$(cfg BROKER) $(cfg CONNECTIONS)"
+    for h in $s; do
+      read -r hn hp <<< "$(host_port "$h")"
+      a=$(getent ahostsv4 "$hn" 2>/dev/null | awk 'NR==1{print $1}')
+      if [ -z "$a" ]; then echo "Remote desktop  $hn: name $L_DIAG_NOTFOUND (DNS)"
+      else echo "Remote desktop  $hn ($a): port $hp $(diag_port "$a" "$hp")"; fi
     done
     echo "Transport       $(cfg TRANSPORT), FreeRDP ${FRV:-?}$([ "$HASUDP" = 1 ] && echo ' with UDP')"
     # the state of the tunnel as the last report saw it (vpn.sh runs as root)
@@ -730,14 +733,15 @@ last_error(){ local l
   l=$(grep -a '\[ERROR\]' /tmp/kiosk.log 2>/dev/null | grep -a -E 'ERRCONNECT_|ERRINFO_' | tail -1)
   [ -n "$l" ] || l=$(grep -a '\[ERROR\]' /tmp/kiosk.log 2>/dev/null | grep -a -v -E 'CHANNEL_RC_BAD|VirtualChannelWriteEx|LIBUSB_ERROR|QueryContextAttributes' | tail -1)
   l=$(echo "$l" | sed 's/.*\] - //' | tr -d '\r' | cut -c1-160); [ -n "$l" ] && echo " - $l"; }
-# The VM of the session (the watchdog writes its address while connected) still accepts RDP, twice 5 s apart: it is
-# not shutting down or restarting.
+# The VM of the session (the watchdog writes its address:port while connected: a PC behind port forwarding answers
+# on another port than 3389) still accepts RDP, twice 5 s apart: it is not shutting down or restarting.
 # Through an RD Gateway the connection is to the gateway, and the VM cannot be reached to ask: code 1 then counts
 # as an ending, as with a VM that does not answer.
-vm_alive(){ local a; [ -n "$(cfg RDP_GATEWAY)" ] && return 1
+vm_alive(){ local a p; [ -n "$(cfg RDP_GATEWAY)" ] && return 1
   a=$(cat /tmp/kiosk.vm 2>/dev/null); [ -n "$a" ] || return 1
-  sleep 3; timeout 3 bash -c "exec 3<>/dev/tcp/$a/3389" 2>/dev/null || return 1
-  sleep 5; timeout 3 bash -c "exec 3<>/dev/tcp/$a/3389" 2>/dev/null; }
+  read -r a p <<< "$(host_port "$a")"
+  sleep 3; timeout 3 bash -c "exec 3<>/dev/tcp/$a/$p" 2>/dev/null || return 1
+  sleep 5; timeout 3 bash -c "exec 3<>/dev/tcp/$a/$p" 2>/dev/null; }
 # Is the user already connected from ANOTHER thin client? Based on the thin clients' own reports
 # (report.sh writes $OTR_LIB/sessions-elsewhere: user|hostname|IP, only reports sent in the last 10 minutes),
 # NOT on the Windows sessions: a disconnected session stays on the VM and would warn at every return.
@@ -955,8 +959,8 @@ session(){
             if [ $(( $(date +%s) - qlt )) -gt 0 ]; then r=$(( (qrx - qlr) * 8 / 1000 / ($(date +%s) - qlt) )); [ $r -gt $qpk ] && qpk=$r; qlr=$qrx; qlt=$(date +%s); fi
             [ $qn -gt 0 ] && echo "$qn $qs $qm $qrx0 $qrx $qpk $(( $(date +%s) - qt0 ))" > /tmp/kiosk.quality
           fi
-          # the server it is connected to now, after the broker's redirect the VM (vm_alive)
-          ss -tnpH state established 2>/dev/null | grep "pid=$fp," | awk '{print $4}' | sed 's/:[0-9]*$//' | tail -1 > /tmp/kiosk.vm
+          # the server it is connected to now (address:port), after the broker's redirect the VM (vm_alive)
+          ss -tnpH state established 2>/dev/null | grep "pid=$fp," | awk '{print $4}' | sed 's/^\[::ffff:\([0-9.]*\)\]/\1/' | tail -1 > /tmp/kiosk.vm
           # TRANSPORT=udp: connected for 30 s without a UDP socket = UDP blocked, or FreeRDP fell back to TCP
           # after a UDP failure. The connection ends and counts as a failed attempt: the next one tries UDP.
           if [ $udponly = 1 ]; then
