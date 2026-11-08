@@ -40,9 +40,9 @@ there. The revocation certificate of the project key is kept offline, apart from
 
 ### Custody of the key
 
-The private key lives only on the build machine of the maintainer at Finco Agricoltura (a virtual machine of its
+The private key lives only on the build machine of the maintainer, at the company that runs OpenThinRDP (a virtual machine of its
 own, not reachable from the internet), and a copy sits offline on the disaster recovery disk of the same site. It is
-used only by `make-update.sh` to sign a release. If the maintainer can no longer act, Finco Agricoltura holds both
+used only by `make-update.sh` to sign a release. If the maintainer can no longer act, that company holds both
 copies and can hand the key to a new maintainer, or publish a new key in a release signed by this one
 ([MAINTAINERS.md](MAINTAINERS.md)).
 
