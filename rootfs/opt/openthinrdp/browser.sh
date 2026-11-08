@@ -32,6 +32,8 @@ FLAGS=(--no-first-run --no-default-browser-check --password-store=basic --disabl
 S=${OTR_UI_SCALE:-100}; [[ $S =~ ^[0-9]{2,3}$ ]] || S=100
 K=$(awk -v s="$S" 'BEGIN { printf "%.2f", s / 100 }')
 [ "$S" != 100 ] && FLAGS+=(--force-device-scale-factor="$K")
+# the scale of the GTK windows of the kiosk would come on top of it (the text twice as large again)
+unset GDK_DPI_SCALE GDK_SCALE
 # Firefox: its own profile folder and options; the rules are its policies (browser-policy.sh)
 ff(){ local p=$1; shift; mkdir -p "$p"
   { grep -v 'layout.css.devPixelsPerPx' "$p/user.js" 2>/dev/null; printf 'user_pref("layout.css.devPixelsPerPx", "%s");\n' "$([ "$S" = 100 ] && echo -1.0 || echo "$K")"; } > "$p/user.js.new" && mv -f "$p/user.js.new" "$p/user.js"

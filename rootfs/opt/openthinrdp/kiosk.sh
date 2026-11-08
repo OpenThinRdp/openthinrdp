@@ -11,7 +11,10 @@ for i in $(seq 1 200); do xset q >/dev/null 2>&1 && break; sleep 0.1; done
 # DISPLAY_RESOLUTION on every monitor that offers it (native = its own); DISPLAY_SCALE for the screens of the device
 # (ui.py: OTR_UI_SCALE; yad and the other GTK windows: GDK_DPI_SCALE), the web page (browser.sh) and the remote
 # desktop (connect). Applied at the start and before every sign-in form when the settings or the monitors changed.
-SCALE=100; DISP=""; DRES=native
+SCALE=100; DISP=""
+# what the monitors show now: X starts each on its preferred mode (+ in the list), a mode in use (*) that is not the
+# preferred one was set before (a kiosk started again in the same X session) and is put back when native is chosen
+DRES=$(xrandr --current 2>/dev/null | awk '/ connected/ {c = 1; next} /^[^ ]/ {c = 0} c && /\*/ && !/\+/ {n = 1} END {print (n ? "other" : "native")}')
 # the connected monitors from left to right, and the modes one of them offers (WIDTHxHEIGHT, one per line)
 outputs(){ xrandr --current 2>/dev/null | awk '/ connected/{x = 0; if (match($0, /[0-9]+x[0-9]+\+[0-9]+/)) { g = substr($0, RSTART, RLENGTH); sub(/.*\+/, "", g); x = g }; print x, $1}' | sort -n | awk '{print $2}'; }
 out_modes(){ xrandr --current 2>/dev/null | awk -v o="$1" '$1 == o {f = 1; next} /^[^ ]/ {f = 0} f {print $1}'; }

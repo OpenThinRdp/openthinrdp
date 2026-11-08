@@ -553,14 +553,22 @@ DP-1 connected primary 1920x1080+0+0 (normal left inverted right x axis y axis) 
    1280x720      60.00'
   : > $OTR_CONF; display_scale > /tmp/disp.autofhd; outputs | tr '\n' ' ' > /tmp/disp.order
   printf 'DISPLAY_RESOLUTION=1280x720\n' > $OTR_CONF; display_modes; mv /tmp/disp.calls /tmp/disp.two
+  # at the start: monitors on their preferred mode = native; one on another mode (a kiosk started again) = other
+  eval "$(grep '^DRES=' $OTR/kiosk.sh)"; echo "$DRES" > /tmp/disp.dres1
+  XR='Screen 0: minimum 320 x 200, current 1920 x 1080, maximum 16384 x 16384
+HDMI-1 connected primary 1920x1080+0+0 (normal left inverted right x axis y axis) 600mm x 340mm
+   3840x2160     60.00 +  30.00
+   1920x1080     60.00*   50.00'
+  eval "$(grep '^DRES=' $OTR/kiosk.sh)"; echo "$DRES" > /tmp/disp.dres2
   cp /tmp/conf.save $OTR_CONF
 )
+ok "screen at the start: monitors on their preferred mode are native, one on another mode is put back when native is chosen" '[ "$(cat /tmp/disp.dres1)" = native ] && [ "$(cat /tmp/disp.dres2)" = other ]'
 ok "screen auto: 200 on a monitor 3840 pixels wide, 100 on two Full HD side by side; a chosen scale as it is" '[ "$(cat /tmp/disp.auto4k)" = 200 ] && [ "$(cat /tmp/disp.autofhd)" = 100 ] && [ "$(cat /tmp/disp.s150)" = 150 ]'
 ok "screen: a resolution the monitor offers is set on it; out_modes lists its modes" 'grep -qx -- "--output HDMI-1 --mode 1920x1080" /tmp/disp.fhd && [ "$(head -3 /tmp/disp.modes | paste -sd" ")" = "3840x2160 2560x1440 1920x1080" ]'
 ok "screen: a monitor without the resolution keeps its own, and the event log says so" 'grep -qx -- "--output HDMI-1 --auto" /tmp/disp.none && grep -q "HDMI-1 has no 1280x1024 mode" /tmp/disp.ev'
 ok "screen: monitors from left to right; side by side they stay side by side, in the same order" '[ "$(cat /tmp/disp.order)" = "DP-1 HDMI-1 " ] && grep -qx -- "--output DP-1 --mode 1280x720" /tmp/disp.two && grep -qx -- "--output HDMI-1 --right-of DP-1" /tmp/disp.two'
 ok "ui.py: every size goes through the scale of the screens (no fixed pixels left)" '! grep -nE "set_size_request\([0-9]|[^_]spacing=[0-9]|margin=[0-9]|set_margin_[a-z]+\([0-9]|set_spacing\([0-9]" $OTR/ui.py && ! grep -nE "^[[:space:]]*dp *=|[^.a-z_]dp *= " $OTR/ui.py && python3 -m py_compile $OTR/ui.py'
-ok "browser.sh: the scale of the screens to Chromium (option) and Firefox (profile)" 'grep -qF -- "--force-device-scale-factor=" $OTR/browser.sh && grep -qF "layout.css.devPixelsPerPx" $OTR/browser.sh'
+ok "browser.sh: the scale of the screens to Chromium (option) and Firefox (profile), not the GTK scale of the kiosk on top" 'grep -qF -- "--force-device-scale-factor=" $OTR/browser.sh && grep -qF "layout.css.devPixelsPerPx" $OTR/browser.sh && grep -qx "unset GDK_DPI_SCALE GDK_SCALE" $OTR/browser.sh'
 rm -f /tmp/disp.* /tmp/conf.save
 rm -f /tmp/frdp.* /tmp/conf.save /tmp/kiosk.vm
 
