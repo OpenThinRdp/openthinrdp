@@ -860,19 +860,19 @@ ok "kiosk: a session disconnected from the manager goes back to the sign-in, nev
 SCAN='BSS 11:22:33:44:55:66(on wlp2s0)
 	capability: ESS Privacy ShortSlotTime (0x0411)
 	signal: -71.00 dBm
-	SSID: Finco Work
+	SSID: Office Work
 	RSN:	 * Version: 1
 		 * Authentication suites: PSK
 BSS 11:22:33:44:55:77(on wlp2s0)
 	capability: ESS Privacy (0x0411)
 	signal: -52.00 dBm
-	SSID: Finco Work
+	SSID: Office Work
 	RSN:	 * Version: 1
 		 * Authentication suites: PSK
 BSS aa:bb:cc:dd:ee:01(on wlp2s0)
 	capability: ESS Privacy (0x0411)
 	signal: -60.00 dBm
-	SSID: Finco Corp
+	SSID: Office Corp
 	RSN:	 * Version: 1
 		 * Authentication suites: IEEE 802.1X
 BSS aa:bb:cc:dd:ee:02(on wlp2s0)
@@ -889,7 +889,7 @@ BSS aa:bb:cc:dd:ee:04(on wlp2s0)
 	SSID: 
 	RSN:	 * Version: 1'
 WS=$(eval "$(sed -n '/^parse_scan(){/,/^}/p' $OTR/wifi.sh)"; printf '%s\n' "$SCAN" | parse_scan)
-ok "wifi.sh: scan read right: strongest first, one line per name, psk/eap/open/wep, hidden names out" '[ "$(printf "%s\n" "$WS" | head -1)" = "$(printf "%s\t%s\t%s" -52 psk "Finco Work")" ] && [ $(printf "%s\n" "$WS" | grep -c "Finco Work") -eq 1 ] && printf "%s\n" "$WS" | grep -q "eap	Finco Corp" && printf "%s\n" "$WS" | grep -q "open	Guest" && printf "%s\n" "$WS" | grep -q "wep	Old Router" && [ $(printf "%s\n" "$WS" | grep -c .) -eq 4 ]'
+ok "wifi.sh: scan read right: strongest first, one line per name, psk/eap/open/wep, hidden names out" '[ "$(printf "%s\n" "$WS" | head -1)" = "$(printf "%s\t%s\t%s" -52 psk "Office Work")" ] && [ $(printf "%s\n" "$WS" | grep -c "Office Work") -eq 1 ] && printf "%s\n" "$WS" | grep -q "eap	Office Corp" && printf "%s\n" "$WS" | grep -q "open	Guest" && printf "%s\n" "$WS" | grep -q "wep	Old Router" && [ $(printf "%s\n" "$WS" | grep -c .) -eq 4 ]'
 ok "wifi.sh: the kiosk may run it through sudo; a wrong password changes nothing (tried before save-config)" 'grep -q "/opt/openthinrdp/wifi.sh" /etc/sudoers.d/openthinrdp && [ $(grep -n "step test" $OTR/wifi.sh | cut -d: -f1) -lt $(grep -n "save-config.sh\" \"\$f\"" $OTR/wifi.sh | cut -d: -f1) ]'
 ok "ui.py: compiles, with the Wi-Fi page and the network on the sign-in screen" 'python3 -m py_compile $OTR/ui.py && grep -q "^if MODE == .wifi.:" $OTR/ui.py && grep -q "leave(8)" $OTR/ui.py'
 # the time zones of the settings dialog: tz_list() of ui.py run alone (UTC and every zone of tzdata, sorted)
