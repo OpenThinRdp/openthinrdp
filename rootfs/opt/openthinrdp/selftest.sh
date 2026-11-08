@@ -67,10 +67,10 @@ body(){
   out=$(for d in /sys/bus/usb/devices/[0-9]*-[0-9]*; do [ -f "$d/idVendor" ] && [ "$(cat "$d/bDeviceClass")" != 09 ] && printf '%s:%s %s; ' "$(cat "$d/idVendor")" "$(cat "$d/idProduct")" "$(rd "$d/product")"; done)
   r OK "USB devices" "${out:-none}"
   echo; echo "### Remote desktop"
-  local b; b=$(cfg BROKER)
+  local b p; b=$(cfg BROKER); read -r b p <<< "$(host_port "$b")"
   if [ -z "$b" ]; then r WARN "Broker or PC" "not set yet"
-  elif timeout 4 bash -c "</dev/tcp/$b/3389" 2>/dev/null; then r OK "Broker or PC" "set, answers on port 3389"
-  else r FAIL "Broker or PC" "set, does not answer on port 3389"; fi
+  elif timeout 4 bash -c "</dev/tcp/$b/$p" 2>/dev/null; then r OK "Broker or PC" "set, answers on port $p"
+  else r FAIL "Broker or PC" "set, does not answer on port $p"; fi
   if [ -n "$(cfg MGMT_SHARE)$(cat "$OTR_LIB/share-from-domain" 2>/dev/null)" ]; then
     tail -1 "$OTR_LOG/report.log" 2>/dev/null | grep -q ' sent to ' && r OK "Management folder" "set, the last report was sent" || r WARN "Management folder" "set, the last report was not sent (see Diagnostics)"
   else r OK "Management folder" "not set (optional)"; fi

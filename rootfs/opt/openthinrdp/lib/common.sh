@@ -51,14 +51,17 @@ updating(){ pgrep -f -- "$OTR/auto-update.sh install" >/dev/null 2>&1; }
 # (a round-robin alias for the brokers) or an IP address is nobody's: the Kerberos library then looks the address up
 # by itself and may pick another broker than the one connected to, which cannot open the ticket (KRB_ERROR,
 # SEC_E_INTERNAL_ERROR). So the device picks one of the addresses and uses that server's own name, when its address
-# leads back to it; otherwise the name stays as it is.
+# leads back to it; otherwise the name stays as it is. A :port stays on the result.
 krb_host(){
-  local ip n
-  ip=$(getent ahostsv4 "$1" 2>/dev/null | awk '{print $1}' | sort -u | shuf -n 1)
+  local h=${1%:*} p="" ip n
+  [ "$h" = "$1" ] || p=":${1##*:}"
+  ip=$(getent ahostsv4 "$h" 2>/dev/null | awk '{print $1}' | sort -u | shuf -n 1)
   [ -n "$ip" ] || { echo "$1"; return; }
   n=$(getent hosts "$ip" 2>/dev/null | awk '{print $2; exit}')
-  if [[ $n == *.* ]] && getent ahostsv4 "$n" 2>/dev/null | awk '{print $1}' | grep -qx "$ip"; then echo "$n"; else echo "$1"; fi
+  if [[ $n == *.* ]] && getent ahostsv4 "$n" 2>/dev/null | awk '{print $1}' | grep -qx "$ip"; then echo "$n$p"; else echo "$1"; fi
 }
+# host and port of a "name[:port]" setting, separated by a space (3389 when there is no port)
+host_port(){ local h=${1%:*}; [ "$h" = "$1" ] && echo "$1 3389" || echo "$h ${1##*:}"; }
 
 # interface language: English first, so a string missing from a translation stays readable
 otr_lang(){

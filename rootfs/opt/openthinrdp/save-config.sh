@@ -24,6 +24,9 @@ ip2int(){ local a b c d; IFS=. read -r a b c d <<< "$1"; echo $(( (10#$a<<24) | 
 maskok(){ ipok "$1" || return 1; local m inv; m=$(ip2int "$1"); inv=$(( ~m & 0xFFFFFFFF )); [ "$m" -ne 0 ] && [ $(( inv & (inv + 1) )) -eq 0 ]; }
 hostok(){ [[ $1 =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$ ]] && ! [[ $1 =~ ^[0-9]+$ ]]; }
 nameok(){ [[ $1 =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,252})$ ]]; }
+# a name or an address, optionally :port (1-65535): the remote computer or broker, the fallbacks, the other computers
+hostportok(){ local h=${1%:*} p=${1##*:}; [ "$h" = "$1" ] && p=3389
+  { ipok "$h" || nameok "$h"; } && [[ $p =~ ^[0-9]{1,5}$ ]] && [ $((10#$p)) -ge 1 ] && [ $((10#$p)) -le 65535 ]; }
 userok(){ [[ $1 =~ ^[A-Za-z0-9._@\\-]{1,104}$ ]]; }
 URLRE='^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~:/?#@!$&()*+,;=%-]*)?$'
 urlok(){ [[ $1 =~ $URLRE ]]; }
@@ -39,18 +42,22 @@ declare -A V
 V[HOSTNAME]=$(get HOSTNAME); [ -z "${V[HOSTNAME]}" ] && V[HOSTNAME]=$(hostname)
 hostok "${V[HOSTNAME]}" || err "$V_HOSTNAME"
 V[DEFAULT_USER]=$(get DEFAULT_USER); [ -z "${V[DEFAULT_USER]}" ] || userok "${V[DEFAULT_USER]}" || err "$V_USER"
-V[BROKER]=$(get BROKER); [ -z "${V[BROKER]}" ] || nameok "${V[BROKER]}" || err "$V_BROKER"
-V[BROKER_FALLBACK]=$(get BROKER_FALLBACK | tr -s ' ,;' ' ' | sed 's/^ //; s/ $//')
-for t in ${V[BROKER_FALLBACK]}; do ipok "$t" || nameok "$t" || err "$V_FALLBACK $t"; done
-V[DOMAIN]=$(get DOMAIN); [ -z "${V[DOMAIN]}" ] || nameok "${V[DOMAIN]}" || err "$V_DOMAIN"
 # the environment (empty = guessed, setup_kind in common.sh); the password remembered; waking the PC
 case "$(low "$(get SETUP)")" in domain|dominio) V[SETUP]=domain ;; workgroup|gruppo|nodomain) V[SETUP]=workgroup ;; *) V[SETUP]="" ;; esac
+# without a domain the field is the remote computer, and the message says so: there is no broker (#182)
+V[BROKER]=$(get BROKER)
+if [ -n "${V[BROKER]}" ] && ! hostportok "${V[BROKER]}"; then
+  if [ "${V[SETUP]:-$(setup_kind)}" = workgroup ]; then err "$V_PC"; else err "$V_BROKER"; fi
+fi
+V[BROKER_FALLBACK]=$(get BROKER_FALLBACK | tr -s ' ,;' ' ' | sed 's/^ //; s/ $//')
+for t in ${V[BROKER_FALLBACK]}; do hostportok "$t" || err "$V_FALLBACK $t"; done
+V[DOMAIN]=$(get DOMAIN); [ -z "${V[DOMAIN]}" ] || nameok "${V[DOMAIN]}" || err "$V_DOMAIN"
 V[REMEMBER_PASSWORD]=$(onoff "$(get REMEMBER_PASSWORD)")
 V[LIVE_PERSISTENCE]=$(onoff "$(get LIVE_PERSISTENCE)")
 V[WAKE_MAC]=$(get WAKE_MAC | tr 'A-F-' 'a-f:')
 [ -z "${V[WAKE_MAC]}" ] || [[ ${V[WAKE_MAC]} =~ ^([0-9a-f]{2}:){5}[0-9a-f]{2}$ ]] || err "$V_WAKE_MAC"
 V[CONNECTIONS]=$(get CONNECTIONS | tr -s " ,;" " " | sed "s/^ //; s/ $//")
-for t in ${V[CONNECTIONS]}; do { { ipok "${t%:*}" || nameok "${t%:*}"; } && { [ "${t%:*}" = "$t" ] || [[ ${t##*:} =~ ^[0-9]{1,5}$ ]]; }; } || err "$V_CONNECTIONS $t"; done
+for t in ${V[CONNECTIONS]}; do hostportok "$t" || err "$V_CONNECTIONS $t"; done
 V[WAKE_WAIT]=$(get WAKE_WAIT)
 { [[ ${V[WAKE_WAIT]} =~ ^[0-9]{1,3}$ ]] && [ $((10#${V[WAKE_WAIT]})) -ge 10 ] && [ $((10#${V[WAKE_WAIT]})) -le 600 ]; } || err "$V_WAKE_WAIT"
 # spaces are allowed: a session collection is tsv://MS Terminal Services Plugin.1.<collection> (#76)

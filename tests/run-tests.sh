@@ -61,6 +61,15 @@ ok "bad time refused" '! check x "POWER_ON_TIME=25:00"'
 ok "bad USB id refused" '! check x "USB_REDIRECT=1eaf:00x9"'
 ok "unknown language refused" '! check x "LANGUAGE=xx"'
 ok "Dutch accepted" 'check x "LANGUAGE=nl"'
+# the remote computer or broker: name:port too, the fallbacks and the other computers the same way (#182)
+ok "computer or broker: name:port and address:port accepted, also among the fallbacks" 'check x "BROKER=pc.example.test:3390" && check x "BROKER=192.0.2.10:3390" && check x "BROKER_FALLBACK=rdcb2.example.test:3391 192.0.2.11" && check x "$(printf "SETUP=workgroup\nBROKER=192.0.2.10:3390")"'
+ok "computer or broker: port 0, a port above 65535, an empty port and two colons refused" '! check x "BROKER=pc.example.test:0" && ! check x "BROKER=pc.example.test:65536" && ! check x "BROKER=pc.example.test:" && ! check x "BROKER=a:b:3390" && ! check x "BROKER_FALLBACK=rdcb2.example.test:x" && ! check x "CONNECTIONS=pc2:99999"'
+ok "without a domain the message names the remote computer, with a domain the broker" 'printf "SETUP=workgroup\nBROKER=bad_name\n" > "$T"; $OTR/save-config.sh "$T" --print 2>&1 | grep -q "Remote computer not valid" && printf "SETUP=domain\nBROKER=bad_name\n" > "$T" && $OTR/save-config.sh "$T" --print 2>&1 | grep -q "^- Broker not valid"'
+ok "host_port: the port of name:port, 3389 without one" '[ "$(host_port pc.example.test:3390)" = "pc.example.test 3390" ] && [ "$(host_port 192.0.2.10)" = "192.0.2.10 3389" ]'
+# /etc/hosts of a container is a bind mount: written in place and put back in place (no sed -i, no mv)
+cp /etc/hosts /tmp/hosts.save; printf '192.0.2.77 rdcb1.example.test\n192.0.2.77 rdalias.example.test\n' >> /etc/hosts
+ok "krb_host: the server's own name keeps the port, a name it cannot resolve stays as it is" '[ "$(krb_host rdalias.example.test:3390)" = "rdcb1.example.test:3390" ] && [ "$(krb_host rdalias.example.test)" = "rdcb1.example.test" ] && [ "$(krb_host nothing.invalid:3390)" = "nothing.invalid:3390" ]'
+cat /tmp/hosts.save > /etc/hosts; rm -f /tmp/hosts.save
 # the hardware test: a report with its counts, and nothing in it that identifies the device or the network
 ST=$($OTR/selftest.sh 2>/dev/null)
 ok "selftest.sh: a report with its counts and its sections" 'echo "$ST" | grep -qE "^[0-9]+ OK, [0-9]+ warnings, [0-9]+ problems" && echo "$ST" | grep -q "^### Network" && echo "$ST" | grep -q "^### Remote desktop"'
@@ -483,6 +492,13 @@ ok "RD Gateway: use always, detect (rileva), anything else always" 'printf "RDP_
   printf 'RDP_AUTH=ntlm\nRDP_GATEWAY=rdg.example.test\n' > $OTR_CONF; connect u p rdbroker.example.test; cp /tmp/frdp.args /tmp/frdp.always
   printf 'RDP_AUTH=ntlm\nRDP_GATEWAY=rdg.example.test:8443\nRDP_GATEWAY_USE=detect\n' > $OTR_CONF; connect u p rdbroker.example.test; cp /tmp/frdp.args /tmp/frdp.detect
   echo 10.9.9.9 > /tmp/kiosk.vm; vm_alive && echo alive > /tmp/frdp.vm || echo "not asked" > /tmp/frdp.vm
+  # a PC behind port forwarding (#182): FreeRDP gets name:port, and after a drop the VM is asked on that port
+  printf 'RDP_AUTH=ntlm\nSETUP=workgroup\n' > $OTR_CONF; connect u p pc.example.test:3390; cp /tmp/frdp.args /tmp/frdp.port
+  python3 -c 'import socket,time; s=socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(("127.0.0.1", 3390)); s.listen(8); time.sleep(30)' & LP=$!
+  for i in $(seq 1 25); do timeout 1 bash -c 'exec 3<>/dev/tcp/127.0.0.1/3390' 2>/dev/null && break; command sleep 0.2; done
+  echo 127.0.0.1:3390 > /tmp/kiosk.vm; vm_alive && echo alive > /tmp/frdp.vmport || echo dead > /tmp/frdp.vmport
+  echo 127.0.0.1:3391 > /tmp/kiosk.vm; vm_alive && echo alive >> /tmp/frdp.vmport || echo dead >> /tmp/frdp.vmport
+  kill $LP 2>/dev/null; wait $LP 2>/dev/null
   # after the UDP transport stalled (watchdog 3): TCP with auto, still UDP when UDP was asked for
   printf 'RDP_AUTH=ntlm\n' > $OTR_CONF; touch /tmp/kiosk.udpstall; connect u p rdbroker.example.test; cp /tmp/frdp.args /tmp/frdp.stalled
   printf 'RDP_AUTH=ntlm\nTRANSPORT=udp\n' > $OTR_CONF; connect u p rdbroker.example.test; cp /tmp/frdp.args /tmp/frdp.stalledudp
@@ -497,6 +513,8 @@ ok "connect without a gateway: no /gateway, /network:auto (UDP)" '! grep -q "^/g
 ok "connect with RDP_GATEWAY: through it, same credentials, no UDP offered" 'grep -qx "/gateway:g:rdg.example.test,type:auto,usage-method:direct" /tmp/frdp.always && grep -qx -- "-multitransport" /tmp/frdp.always && [ "$(grep -cx "/network:auto" /tmp/frdp.always)" = 1 ] && grep -qx "/v:rdbroker.example.test" /tmp/frdp.always'
 ok "connect with RDP_GATEWAY_USE=detect: the gateway only when needed" 'grep -qx "/gateway:g:rdg.example.test:8443,type:auto,usage-method:detect" /tmp/frdp.detect && ! grep -qx -- "-multitransport" /tmp/frdp.detect && grep -qx "/network:auto" /tmp/frdp.detect'
 ok "through a gateway the VM is not probed after a drop" 'grep -qx "not asked" /tmp/frdp.vm'
+ok "a PC on another port: FreeRDP gets name:port" 'grep -qx "/v:pc.example.test:3390" /tmp/frdp.port'
+ok "after a drop the VM is asked on the port of the session, not on 3389" '[ "$(cat /tmp/frdp.vmport | tr "\n" " ")" = "alive dead " ]'
 rm -f /tmp/frdp.* /tmp/conf.save /tmp/kiosk.vm
 
 # --- VPN (vpn.sh): validation, the DNS of the tunnel in front of resolv.conf and back, the OpenVPN profile and password
