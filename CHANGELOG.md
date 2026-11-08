@@ -5,6 +5,22 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.3.2 (2026-11-08)
+
+- **A computer on another port** ([#182](https://github.com/OpenThinRdp/openthinrdp/issues/182)): the remote
+  computer (or broker) takes `name:port`, as its help text said, for a PC or VM reached through port forwarding.
+  Before, Save refused it with "Invalid broker", also in Workgroup mode where there is no broker. The fallback
+  brokers and the other computers of the sign-in screen take the same form. Diagnostics and the hardware test try
+  each computer on its own port, and after a drop the VM is asked on the port of the session.
+- **4K and other large screens** ([#183](https://github.com/OpenThinRdp/openthinrdp/issues/183)): a *Screen*
+  section in the settings.
+  - **Resolution**: native, or one of the modes the monitor offers (`DISPLAY_RESOLUTION`).
+  - **Scale**: automatic (200% on a 4K monitor, 100% otherwise) or 100-200% (`DISPLAY_SCALE`), for the screens of
+    the device, the web page and the remote desktop, which Windows gets as its own display scale.
+  - **Monitors** (`MULTIMON`), until now only in the manager.
+  - Applied when saved, no restart. 125-175% are drawn sharp, not blown up.
+- The manager 1.1.6 sets both for the whole site, a group or one device, and takes `name:port` too.
+
 ## 0.3.1 (2026-11-01)
 
 - **A lighter image: what only some devices use is installed where it is used, the first time** (Internet needed
