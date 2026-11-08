@@ -70,6 +70,9 @@ ok "host_port: the port of name:port, 3389 without one" '[ "$(host_port pc.examp
 cp /etc/hosts /tmp/hosts.save; printf '192.0.2.77 rdcb1.example.test\n192.0.2.77 rdalias.example.test\n' >> /etc/hosts
 ok "krb_host: the server's own name keeps the port, a name it cannot resolve stays as it is" '[ "$(krb_host rdalias.example.test:3390)" = "rdcb1.example.test:3390" ] && [ "$(krb_host rdalias.example.test)" = "rdcb1.example.test" ] && [ "$(krb_host nothing.invalid:3390)" = "nothing.invalid:3390" ]'
 cat /tmp/hosts.save > /etc/hosts; rm -f /tmp/hosts.save
+# the screen (#183): native or WIDTHxHEIGHT, a scale of 100-200 in steps of 25, anything else auto
+ok "screen: native (also nativa, empty), 1920x1080 and \"1920 x 1080\" accepted and normalized, garbage refused" 'printf "DISPLAY_RESOLUTION=Nativa\n" > "$T"; $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "DISPLAY_RESOLUTION=native" && printf "DISPLAY_RESOLUTION=1920 x 1080\n" > "$T" && $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "DISPLAY_RESOLUTION=1920x1080" && ! check x "DISPLAY_RESOLUTION=big" && ! check x "DISPLAY_RESOLUTION=0x0"'
+ok "screen: scale 150 and 150% kept, 300 and garbage become auto" 'printf "DISPLAY_SCALE=150%%\n" > "$T"; $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "DISPLAY_SCALE=150" && printf "DISPLAY_SCALE=300\n" > "$T" && $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "DISPLAY_SCALE=auto" && printf "DISPLAY_SCALE=x\n" > "$T" && $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "DISPLAY_SCALE=auto"'
 # the hardware test: a report with its counts, and nothing in it that identifies the device or the network
 ST=$($OTR/selftest.sh 2>/dev/null)
 ok "selftest.sh: a report with its counts and its sections" 'echo "$ST" | grep -qE "^[0-9]+ OK, [0-9]+ warnings, [0-9]+ problems" && echo "$ST" | grep -q "^### Network" && echo "$ST" | grep -q "^### Remote desktop"'
@@ -499,6 +502,11 @@ ok "RD Gateway: use always, detect (rileva), anything else always" 'printf "RDP_
   echo 127.0.0.1:3390 > /tmp/kiosk.vm; vm_alive && echo alive > /tmp/frdp.vmport || echo dead > /tmp/frdp.vmport
   echo 127.0.0.1:3391 > /tmp/kiosk.vm; vm_alive && echo alive >> /tmp/frdp.vmport || echo dead >> /tmp/frdp.vmport
   kill $LP 2>/dev/null; wait $LP 2>/dev/null
+  # the scale of the screens to Windows (#183)
+  printf 'RDP_AUTH=ntlm\n' > $OTR_CONF; SCALE=200; connect u p rdbroker.example.test; cp /tmp/frdp.args /tmp/frdp.s200
+  SCALE=125; connect u p rdbroker.example.test; cp /tmp/frdp.args /tmp/frdp.s125
+  SCALE=100; connect u p rdbroker.example.test; cp /tmp/frdp.args /tmp/frdp.s100
+  printf 'RDP_AUTH=ntlm\nRDP_EXTRA=/scale-desktop:150\n' > $OTR_CONF; SCALE=200; connect u p rdbroker.example.test; cp /tmp/frdp.args /tmp/frdp.sextra; SCALE=100
   # after the UDP transport stalled (watchdog 3): TCP with auto, still UDP when UDP was asked for
   printf 'RDP_AUTH=ntlm\n' > $OTR_CONF; touch /tmp/kiosk.udpstall; connect u p rdbroker.example.test; cp /tmp/frdp.args /tmp/frdp.stalled
   printf 'RDP_AUTH=ntlm\nTRANSPORT=udp\n' > $OTR_CONF; connect u p rdbroker.example.test; cp /tmp/frdp.args /tmp/frdp.stalledudp
@@ -515,6 +523,45 @@ ok "connect with RDP_GATEWAY_USE=detect: the gateway only when needed" 'grep -qx
 ok "through a gateway the VM is not probed after a drop" 'grep -qx "not asked" /tmp/frdp.vm'
 ok "a PC on another port: FreeRDP gets name:port" 'grep -qx "/v:pc.example.test:3390" /tmp/frdp.port'
 ok "after a drop the VM is asked on the port of the session, not on 3389" '[ "$(cat /tmp/frdp.vmport | tr "\n" " ")" = "alive dead " ]'
+ok "scale 200: Windows gets desktop scale 200 and device scale 180" 'grep -qx "/scale-desktop:200" /tmp/frdp.s200 && grep -qx "/scale-device:180" /tmp/frdp.s200'
+ok "scale 125: desktop scale 125, device scale 100; at 100 no scale option at all" 'grep -qx "/scale-desktop:125" /tmp/frdp.s125 && grep -qx "/scale-device:100" /tmp/frdp.s125 && ! grep -q "^/scale" /tmp/frdp.s100'
+ok "a /scale option in RDP_EXTRA wins over the scale of the screens" '! grep -q "^/scale-device" /tmp/frdp.sextra && [ "$(grep -c "^/scale-desktop" /tmp/frdp.sextra)" -le 1 ]'
+# the screen of the kiosk with a stand-in xrandr: which mode on which monitor, the scale auto
+(
+  eval "$(sed -n '/^outputs(){/p; /^out_modes(){/p; /^display_modes(){/,/^  done; }/p; /^max_width(){/p; /^display_scale(){/,/esac; }$/p' $OTR/kiosk.sh)"
+  ev(){ echo "$*" >> /tmp/disp.ev; }
+  xrandr(){ if [ "$1" = --current ]; then printf '%s\n' "$XR"; else echo "$*" >> /tmp/disp.calls; fi; }
+  cp $OTR_CONF /tmp/conf.save; rm -f /tmp/disp.*
+  XR='Screen 0: minimum 320 x 200, current 3840 x 2160, maximum 16384 x 16384
+HDMI-1 connected primary 3840x2160+0+0 (normal left inverted right x axis y axis) 600mm x 340mm
+   3840x2160     60.00*+  30.00
+   2560x1440     59.95
+   1920x1080     60.00    50.00
+   1920x1080i    60.00
+DP-1 disconnected (normal left inverted right x axis y axis)'
+  : > $OTR_CONF; display_scale > /tmp/disp.auto4k
+  printf 'DISPLAY_SCALE=150\n' > $OTR_CONF; display_scale > /tmp/disp.s150
+  printf 'DISPLAY_RESOLUTION=1920x1080\n' > $OTR_CONF; display_modes; mv /tmp/disp.calls /tmp/disp.fhd
+  printf 'DISPLAY_RESOLUTION=1280x1024\n' > $OTR_CONF; display_modes; mv /tmp/disp.calls /tmp/disp.none
+  out_modes HDMI-1 > /tmp/disp.modes
+  XR='Screen 0: minimum 320 x 200, current 3840 x 1080, maximum 16384 x 16384
+HDMI-1 connected 1920x1080+1920+0 (normal left inverted right x axis y axis) 530mm x 300mm
+   1920x1080     60.00*+
+   1280x720      60.00
+DP-1 connected primary 1920x1080+0+0 (normal left inverted right x axis y axis) 530mm x 300mm
+   1920x1080     60.00*+
+   1280x720      60.00'
+  : > $OTR_CONF; display_scale > /tmp/disp.autofhd; outputs | tr '\n' ' ' > /tmp/disp.order
+  printf 'DISPLAY_RESOLUTION=1280x720\n' > $OTR_CONF; display_modes; mv /tmp/disp.calls /tmp/disp.two
+  cp /tmp/conf.save $OTR_CONF
+)
+ok "screen auto: 200 on a monitor 3840 pixels wide, 100 on two Full HD side by side; a chosen scale as it is" '[ "$(cat /tmp/disp.auto4k)" = 200 ] && [ "$(cat /tmp/disp.autofhd)" = 100 ] && [ "$(cat /tmp/disp.s150)" = 150 ]'
+ok "screen: a resolution the monitor offers is set on it; out_modes lists its modes" 'grep -qx -- "--output HDMI-1 --mode 1920x1080" /tmp/disp.fhd && [ "$(head -3 /tmp/disp.modes | paste -sd" ")" = "3840x2160 2560x1440 1920x1080" ]'
+ok "screen: a monitor without the resolution keeps its own, and the event log says so" 'grep -qx -- "--output HDMI-1 --auto" /tmp/disp.none && grep -q "HDMI-1 has no 1280x1024 mode" /tmp/disp.ev'
+ok "screen: monitors from left to right; side by side they stay side by side, in the same order" '[ "$(cat /tmp/disp.order)" = "DP-1 HDMI-1 " ] && grep -qx -- "--output DP-1 --mode 1280x720" /tmp/disp.two && grep -qx -- "--output HDMI-1 --right-of DP-1" /tmp/disp.two'
+ok "ui.py: every size goes through the scale of the screens (no fixed pixels left)" '! grep -nE "set_size_request\([0-9]|[^_]spacing=[0-9]|margin=[0-9]|set_margin_[a-z]+\([0-9]|set_spacing\([0-9]" $OTR/ui.py && ! grep -nE "^[[:space:]]*dp *=|[^.a-z_]dp *= " $OTR/ui.py && python3 -m py_compile $OTR/ui.py'
+ok "browser.sh: the scale of the screens to Chromium (option) and Firefox (profile)" 'grep -qF -- "--force-device-scale-factor=" $OTR/browser.sh && grep -qF "layout.css.devPixelsPerPx" $OTR/browser.sh'
+rm -f /tmp/disp.* /tmp/conf.save
 rm -f /tmp/frdp.* /tmp/conf.save /tmp/kiosk.vm
 
 # --- VPN (vpn.sh): validation, the DNS of the tunnel in front of resolv.conf and back, the OpenVPN profile and password
@@ -674,13 +721,15 @@ ok "802.1X off: the supplicants stopped, the status says off" '! pgrep -f "dot1x
   h= u= br= brf= dom= lbi= tr=auto thr= off= nm=dhcp ip= mask= gw= d1= d2= ntp= wf=on ws= wp= um=all ur= ul= wb=none wu= ku= kr=
   pon= poff= pdays= share= mu= mp= su=on an=on tz= ln=en ean= epw= SETV=(domain workgroup) SETL=(a b) kind=domain rem=off wmac= found="pc1|192.168.1.20" conns= vpn=off tss= VPNV=(off tailscale) VPNL=(a b) bro=chromium BROV=(chromium firefox) BROL=(a b)
   wsec=peap d1x=tls d1xs="eth0: authenticated (EAP-TLS)" eid='EXAMPLE\thin' eca=system esn=nps.example.test
+  dres=native dsc=auto mm=auto RESV=(native 1920x1080) RESL=("Native (3840x2160)" 1920x1080) SCV=(auto 100 200) SCL=(a b c) MMV=(auto off) MML=(a b)
   settings_spec > /tmp/spec
-  settings_read "$(printf 'DOT1X=peap\nEAP_PASSWORD=p w=x\nEAP_IDENTITY=EX\\u\nWIFI_SECURITY=tls\nEAP_SERVER_NAME=a.example b.example\n')"
-  echo "$d1x|$epw|$eid|$wsec|$esn" > /tmp/spec.read
+  settings_read "$(printf 'DOT1X=peap\nEAP_PASSWORD=p w=x\nEAP_IDENTITY=EX\\u\nWIFI_SECURITY=tls\nEAP_SERVER_NAME=a.example b.example\nDISPLAY_RESOLUTION=1920x1080\nDISPLAY_SCALE=150\nMULTIMON=off\n')"
+  echo "$d1x|$epw|$eid|$wsec|$esn|$dres|$dsc|$mm" > /tmp/spec.read
   kind=workgroup; settings_spec > /tmp/spec.wg
 )
 ok "settings screen: an 802.1X section with the state, the method, the identity, an empty password field" 'grep -qP "^S\t802.1X$" /tmp/spec && grep -qP "^F\tDOT1X_STATE\tro\t[^\t]+\teth0: authenticated \(EAP-TLS\)\t" /tmp/spec && grep -qP "^F\tDOT1X\tchoice\t[^\t]+\ttls\toff=Off\|peap=PEAP \(user and password\)\|tls=EAP-TLS \(certificate\)\t" /tmp/spec && grep -qP "^F\tEAP_IDENTITY\ttext\tIdentity\tEXAMPLE\\\\thin\t" /tmp/spec && grep -qP "^F\tEAP_PASSWORD\tpassword\t[^\t]+\t\t" /tmp/spec && grep -qP "^F\tWIFI_SECURITY\tchoice\t[^\t]+\tpeap\t" /tmp/spec'
-ok "settings screen: what it gives back" '[ "$(cat /tmp/spec.read)" = "peap|p w=x|EX\\u|tls|a.example b.example" ]'
+ok "settings screen: what it gives back" '[ "$(cat /tmp/spec.read)" = "peap|p w=x|EX\\u|tls|a.example b.example|1920x1080|150|off" ]'
+ok "settings screen: a Screen section with the resolutions, the scale and the monitors, in both kinds of setup" 'grep -qP "^F\tDISPLAY_RESOLUTION\tchoice\t[^\t]+\tnative\tnative=Native \(3840x2160\)\|1920x1080=1920x1080\t" /tmp/spec && grep -qP "^F\tDISPLAY_SCALE\tchoice\t" /tmp/spec && grep -qP "^F\tMULTIMON\tchoice\t" /tmp/spec && grep -qP "^F\tDISPLAY_SCALE\tchoice\t" /tmp/spec.wg'
 ok "settings screen in a workgroup: the PC, the password remembered, Wake-on-LAN; no 802.1X, domain or management folder" 'grep -qP "^F\tSETUP\tchoice\t[^\t]+\tworkgroup\t" /tmp/spec.wg && grep -qP "^F\tREMEMBER_PASSWORD\t" /tmp/spec.wg && grep -qP "^F\tWAKE_MAC\t" /tmp/spec.wg && grep -qP "^F\tBROKER\tcombo\t[^\t]+\t[^\t]*\tpc1\|192\.168\.1\.20\t" /tmp/spec.wg && grep -qP "^F\tVPN\tchoice\t" /tmp/spec.wg && ! grep -qP "^F\t(DOT1X|DOMAIN|MGMT_SHARE|BROKER_FALLBACK)\t" /tmp/spec.wg'
 printf 'SETUP=Dominio\nWAKE_MAC=AA-BB-CC-DD-EE-FF\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
 ok "environment and Wake-on-LAN normalized (dominio = domain, MAC in lower case with colons), a bad MAC refused" '[ "$(cfg SETUP)" = domain ] && [ "$(cfg WAKE_MAC)" = aa:bb:cc:dd:ee:ff ] && printf "WAKE_MAC=zz\n" > "$T" && ! $OTR/save-config.sh "$T" >/dev/null 2>&1'

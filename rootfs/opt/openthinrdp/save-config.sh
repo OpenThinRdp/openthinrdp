@@ -77,6 +77,11 @@ V[RDP_GFX]=$(get RDP_GFX); [[ ${V[RDP_GFX]} =~ ^[A-Za-z0-9:,]*$ ]] || err "$V_GF
 V[RDP_KEYBOARD]=$(get RDP_KEYBOARD); [[ ${V[RDP_KEYBOARD]} =~ ^(0x[0-9a-fA-F]{8})?$ ]] || err "$V_RDPKBD"
 V[RDP_EXTRA]=$(get RDP_EXTRA); [[ ${V[RDP_EXTRA]} =~ $EXTRARE ]] || err "$V_EXTRA"
 case "$(low "$(get MULTIMON)")" in off|no|0) V[MULTIMON]=off ;; *) V[MULTIMON]=auto ;; esac
+# the screen (#183): native or WIDTHxHEIGHT; a scale of 100-200 in steps of 25, anything else auto
+V[DISPLAY_RESOLUTION]=$(low "$(get DISPLAY_RESOLUTION)" | tr -d ' ' | tr '*' 'x')
+case "${V[DISPLAY_RESOLUTION]}" in ""|native|nativa|auto) V[DISPLAY_RESOLUTION]=native ;; esac
+[ "${V[DISPLAY_RESOLUTION]}" = native ] || [[ ${V[DISPLAY_RESOLUTION]} =~ ^[1-9][0-9]{2,4}x[1-9][0-9]{2,4}$ ]] || err "$V_RESOLUTION"
+case "$(get DISPLAY_SCALE | tr -d ' %')" in 100|125|150|175|200) V[DISPLAY_SCALE]=$(get DISPLAY_SCALE | tr -d ' %') ;; *) V[DISPLAY_SCALE]=auto ;; esac
 V[SESSION_THRESHOLD]=$(get SESSION_THRESHOLD)
 { [[ ${V[SESSION_THRESHOLD]} =~ ^[0-9]{1,3}$ ]] && [ $((10#${V[SESSION_THRESHOLD]})) -ge 5 ] && [ $((10#${V[SESSION_THRESHOLD]})) -le 120 ]; } || err "$V_THRESHOLD"
 V[SHUTDOWN_SECS]=$(get SHUTDOWN_SECS)
