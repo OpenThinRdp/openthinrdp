@@ -5,6 +5,28 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.3.3 (2026-11-09)
+
+- **Anonymous data: Full, Errors only or Off** ([#190](https://github.com/OpenThinRdp/openthinrdp/issues/190)). A
+  new device asks at its first start, with every level explained on the screen and *Full* ready, and sends nothing
+  before the answer. Devices that sent the anonymous counts before send *Full*.
+  - **Full**, once a week:
+    - what the device is;
+    - how it is set up: domain or workgroup, broker or one PC, VPN, screens, kinds of USB devices;
+    - how it is used: sessions, days, hours, UDP or TCP;
+    - how fast it runs: start to sign-in screen, sign-in by step, latency;
+    - what went wrong.
+  - **Errors only**: only in a week when something went wrong.
+  - **Off**: nothing.
+  - **Never** names, addresses, users, servers, settings or anything typed.
+  - **Where it goes:** to PostHog in the EU, with a random id per send, no person profile, no place, no IP address
+    kept. [privacy.md](docs/privacy.md) lists every item.
+  - **Stays on the device:** the event log now notes whether a session ran over UDP or TCP, and how long the device
+    took from power on to the sign-in screen.
+- **Hardware test in the anonymous data**: which check failed, a missing graphics driver or sound card, and the
+  firmware files the computer asked for and the system lacks. They tell us what to add to the image.
+- The manager 1.1.7 has the same three levels for itself, and sets them for the devices.
+
 ## 0.3.2 (2026-11-08)
 
 - **A computer on another port** ([#182](https://github.com/OpenThinRdp/openthinrdp/issues/182)): the remote
