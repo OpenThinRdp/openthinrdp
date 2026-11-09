@@ -342,6 +342,6 @@ stats_start(){
 systemctl is-active -q openthinrdp-update.service 2>/dev/null || "$OTR/central-apply.sh"
 # boot splash: always the image's own (a device that took the folder's picture there with 0.1.1 gets it back)
 "$OTR/branding.sh" splash
-# anonymous usage counts, once a week (ANON_STATS=on): apart, a slow internet never holds the report
+# anonymous data for the project, once a week (ANON_STATS full or errors): apart, a slow internet never holds the report
 stats_start ""
 exit 0

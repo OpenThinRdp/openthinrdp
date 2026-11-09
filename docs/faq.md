@@ -212,10 +212,10 @@ See [security.md](security.md) and [SECURITY.md](../SECURITY.md).
 
 ### Does it send anything to the project?
 
-A few anonymous counts, at the first start and then once a week: the version, the model of the computer, its
-processor and memory, a few yes/no, and how often sessions froze, dropped or failed and what crashed. Never names,
-addresses, users, log text or anything typed. `ANON_STATS=off` switches it off; [privacy.md](privacy.md) lists
-everything.
+You choose at the first start: *Full* (the default) sends once a week anonymous data on what the device is (model,
+processor, memory, versions), how it is set up and used, how fast it signs in and what went wrong; *Errors only* sends
+only in a week when something went wrong; *Off* sends nothing. Never names, addresses, users, servers, log text or
+anything typed. It can be changed any time (`ANON_STATS`); [privacy.md](privacy.md) lists everything, item by item.
 
 ### Does it boot over the network (PXE)?
 

@@ -337,7 +337,7 @@ own to test on. Reports are welcome in the [Discussions](https://github.com/Open
 | `MGMT_USER` | | account of the management folder: `user`, `DOMAIN\user` or `user@domain`. Empty = `smb.cred` of the image |
 | `MGMT_PASSWORD` | | its password. Only in central settings or the dialog; stored only in `/etc/openthinrdp/smb.cred` |
 | `SECURITY_UPDATES` | `on` | Debian security updates, never FreeRDP, never a reboot |
-| `ANON_STATS` | `on` | anonymous counts for the project (model, processor, memory, versions, and counts of what went wrong: frozen or dropped sessions, failed connections and updates, crashes; never names, addresses or log text), at the first start and then weekly; `off` = nothing is sent. See [privacy.md](privacy.md) |
+| `ANON_STATS` | `full` | anonymous data for the project: `full` = once a week what the device is, how it is set up and used, how fast it runs and what went wrong; `errors` = only in a week when something went wrong; `off` = nothing. Never names, addresses, users, servers or log text. A new device asks at its first start. `on` (before 0.3.3) = `full`. See [privacy.md](privacy.md) |
 | `TPM_SECRETS` | `on` | with a TPM 2.0: folder password, Wi-Fi key, SSH host keys, VPN and 802.1X secrets kept encrypted in it ([security.md](security.md)); `off` = root-only files, and back out of the TPM at the next start |
 | `UPDATE_FROM` | `github` | OpenThinRDP software updates: `github` (signed releases, checked every 3 hours), `share` (`updates\` of the management folder) or `off`, see [management.md](management.md#signed-updates) |
 | `UPDATE_GITHUB` | `OpenThinRdp/openthinrdp` | repository of the releases, `owner/repository` (for a fork) |

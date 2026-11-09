@@ -208,7 +208,7 @@ V[UPDATE_HOURS]=$(get UPDATE_HOURS | tr -d ' '); [ -z "${V[UPDATE_HOURS]}" ] || 
 V[SSH]=$(onoff "$(get SSH)")
 V[REMOTE_SCREEN]=$(onoff "$(get REMOTE_SCREEN)")
 case "$(low "$(get REMOTE_CONSENT)")" in ask|chiedi|vraag|on|yes) V[REMOTE_CONSENT]=ask ;; *) V[REMOTE_CONSENT]=off ;; esac
-V[ANON_STATS]=$(onoff "$(get ANON_STATS)")
+V[ANON_STATS]=$(anon_level "$(get ANON_STATS)")
 V[CAMERA_H264]=$(onoff "$(get CAMERA_H264)")
 V[CAMERA_HWACCEL]=$(onoff "$(get CAMERA_HWACCEL)")
 case "$(low "$(get CAMERA_MAX)")" in 720*|hd) V[CAMERA_MAX]=720p ;; 1080*|fhd|fullhd) V[CAMERA_MAX]=1080p ;; max|massima|maximum) V[CAMERA_MAX]=max ;; *) V[CAMERA_MAX]=auto ;; esac
