@@ -724,7 +724,7 @@ ok "802.1X off: the supplicants stopped, the status says off" '! pgrep -f "dot1x
 # the settings screen of the device (kiosk.sh: the spec ui.py shows, and what comes back from it)
 (
   eval "$(sed -n '/^settings_spec(){/,/^}/p; /^settings_read(){/,/^}/p' $OTR/kiosk.sh)"; otr_lang
-  NETV=(dhcp static) NETL=(a b) USBV=(all) USBL=(a) ONV=(on off) ONL=(a b) TRV=(auto) TRL=(a) WEBV=(none) WEBL=(a) LNV=(en) LNL=(a)
+  NETV=(dhcp static) NETL=(a b) USBV=(all) USBL=(a) ONV=(on off) ONL=(a b) STV=(full errors off) STL=(a b c) TRV=(auto) TRL=(a) WEBV=(none) WEBL=(a) LNV=(en) LNL=(a)
   WSECV=(psk peap tls) WSECL=(a b c) D1XV=(off peap tls) D1XL=("$L_OFF" "$L_D1X_PEAP" "$L_D1X_TLS")
   h= u= br= brf= dom= lbi= tr=auto thr= off= nm=dhcp ip= mask= gw= d1= d2= ntp= wf=on ws= wp= um=all ur= ul= wb=none wu= ku= kr=
   pon= poff= pdays= share= mu= mp= su=on an=on tz= ln=en ean= epw= SETV=(domain workgroup) SETL=(a b) kind=domain rem=off wmac= found="pc1|192.168.1.20" conns= vpn=off tss= VPNV=(off tailscale) VPNL=(a b) bro=chromium BROV=(chromium firefox) BROL=(a b)
@@ -905,64 +905,96 @@ PY
 )
 ok "settings dialog: the time zone chosen from the list of tzdata, with a search" '[ "$TZN" = ok ] && grep -q "fld TIMEZONE tz " $OTR/kiosk.sh && grep -q "elif typ in (.tz., .combo.):" $OTR/ui.py'
 
-# --- anonymous counts: on by default, what is sent, nothing when off (curl replaced: no test talks to GoatCounter)
-ok "anonymous counts: on by default, the setting kept by save-config" '[ "$(cfg ANON_STATS)" = on ] && printf "ANON_STATS=No\n" > "$T" && $OTR/save-config.sh "$T" --print 2>/dev/null | grep -qx "ANON_STATS=off"'
+# --- anonymous data: full by default, errors only, off; what each sends; nothing reaches PostHog (a local stand-in)
+# has_all TEXT EVENT ITEM...: every item is a line "EVENT ITEM" of TEXT; the missing ones are named
+has_all(){ local s=$1 e=$2 x m=""; shift 2; for x in "$@"; do printf "%s
+" "$s" | grep -qx "$e $x" || m="$m [$x]"; done; [ -z "$m" ] || echo "missing:$m"; [ -z "$m" ]; }
+ok "anonymous data: full by default; on is full, no is off, errori is errors (save-config)" '[ "$(cfg ANON_STATS)" = full ] && printf "ANON_STATS=No\n" > "$T" && $OTR/save-config.sh "$T" --print 2>/dev/null | grep -qx "ANON_STATS=off" && printf "ANON_STATS=on\n" > "$T" && $OTR/save-config.sh "$T" --print 2>/dev/null | grep -qx "ANON_STATS=full" && printf "ANON_STATS=Errori\n" > "$T" && $OTR/save-config.sh "$T" --print 2>/dev/null | grep -qx "ANON_STATS=errors"'
 cp $OTR_EVENTS /tmp/events.keep; : > $OTR_EVENTS
 SP=$($OTR/stats.sh --print)
-ok "anonymous counts: only the listed counts, no name of the device, no address; a week with no problem says none" '[ $(printf "%s\n" "$SP" | grep -c .) -eq 12 ] && ! printf "%s\n" "$SP" | grep -v "^otr/\(version\|model\|cpu\|ram\|freerdp\|transport\|language\|mode\|wifi\|tpm\|managed\)/" | grep -qvx "otr/error/none" && ! printf "%s\n" "$SP" | grep -qiF "$(hostname)" && ! printf "%s\n" "$SP" | grep -qE "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+|([0-9a-f]{2}:){5}"'
-# problems: counted by kind, with the exit code; older than the last send left out; users and servers never leave
+AK='version|freerdp|model|cpu|ram_gb|arch|mode|language|first|wifi_adapter|tpm|managed|setup|target|gateway|vpn|update_from|transport|remember_password|wake_on_lan|bluetooth_paired|network|web|browser|monitors|resolution_class|resolution_setting|scale_setting|usb|live_saved_settings|alongside_windows|sessions|days_used|session_hours|sessions_udp|sessions_tcp|latency_ms|signin_s|signin_broker_s|signin_vm_s|signin_windows_s|start_to_signin_s|problems'
+ok "anonymous data, full: one week event with only the listed items, no address, no name of the device; a week with no problem has no error event" '[ -n "$SP" ] && ! printf "%s\n" "$SP" | grep -vE "^otr_week ($AK)=" | grep -q . && printf "%s\n" "$SP" | grep -qx "otr_week problems=0" && printf "%s\n" "$SP" | grep -qx "otr_week sessions=0" && ! printf "%s\n" "$SP" | grep -q "^otr_errors" && ! printf "%s\n" "$SP" | grep -qE "([0-9]{1,3}\.){3}[0-9]{1,3}|([0-9a-f]{2}:){5}[0-9a-f]{2}|$(hostname)"'
+ok "anonymous data, errors only: nothing at all in a week with no problem" '[ -z "$(OTR_STATS_ANON=errors $OTR/stats.sh --print)" ] && [ -z "$(OTR_STATS_ANON=off $OTR/stats.sh --print)" ]'
+# how the device was used and how fast it was: numbers from its event log, medians
 n=$(date '+%Y-%m-%d %H:%M:%S')
+{ echo "$n sign-in screen ready 41 s after power on"
+  echo "$n sign-in of mario.rossi: 2.0 s (broker 1.0 s, VM 0.5 s, Windows 0.5 s)"
+  echo "$n session of mario.rossi opened (broker srv-secret.example)"
+  echo "$n session quality of mario.rossi: latency 10.0 ms (max 20.0 ms), 900 kbit/s average (peak 4000 kbit/s), 25 min, over UDP"
+  echo "$n sign-in of mario.rossi: 4.0 s (broker 2.0 s, VM 1.0 s, Windows 1.0 s)"
+  echo "$n session of mario.rossi opened (broker srv-secret.example)"
+  echo "$n session quality of mario.rossi: latency 30.0 ms (max 60.0 ms), 500 kbit/s average (peak 2000 kbit/s), 300 s, over TCP"; } > $OTR_EVENTS
+SPU=$($OTR/stats.sh --print)
+ok "anonymous data, full: sessions, days, hours, UDP or TCP, latency, sign-in by step and start time; nothing of the messages" 'has_all "$SPU" otr_week sessions=2 days_used=1 session_hours=0.5 sessions_udp=1 sessions_tcp=1 latency_ms=20.0 signin_s=3.0 signin_broker_s=1.5 signin_vm_s=0.8 signin_windows_s=0.8 start_to_signin_s=41 &&! printf "%s\n" "$SPU" | grep -qi "mario\|srv-secret"'
+# problems: counted by kind, with the exit code; older than the last send left out; users and servers never leave
 { echo "2000-01-01 00:00:00 software update 0.0.1 FAILED (code 1): old"
   echo "$n watchdog: FreeRDP connected but no longer reading for 60 s (5 bytes waiting), killed (session-hang.log)"
   echo "$n session of mario.rossi DROPPED after 2 min (error 145, code 145): reconnecting - [x]: srv-secret.example"
   echo "$n session of mario.rossi DROPPED after 5 min (network lost, code 147): reconnecting"
   echo "$n attempt 1 for mario.rossi on srv-secret.example failed after 3s (code 131, ERRCONNECT_X): refused"
   echo "$n connection of mario.rossi: no desktop after 150 s, stopped"; } > $OTR_EVENTS
-SP=$($OTR/stats.sh --print | grep "^otr/error")
-ok "anonymous counts: problems by kind, code, version and model; nothing of the messages" 'printf "%s\n" "$SP" | grep -qx "otr/error/session-frozen/1" && printf "%s\n" "$SP" | grep -qx "otr/error/session-dropped/2-5" && printf "%s\n" "$SP" | grep -qx "otr/error-detail/session-dropped/145" && printf "%s\n" "$SP" | grep -qx "otr/error-detail/session-dropped/147" && printf "%s\n" "$SP" | grep -qx "otr/error-detail/connect-failed/131" && printf "%s\n" "$SP" | grep -qx "otr/error/connect-timeout/1" && printf "%s\n" "$SP" | grep -qx "otr/error-version/session-frozen/$(cat $OTR/VERSION)" && printf "%s\n" "$SP" | grep -q "^otr/error-model/session-frozen/" && ! printf "%s\n" "$SP" | grep -q "update-failed\|otr/error/none" && ! printf "%s\n" "$SP" | grep -qi "mario\|srv-secret\|ERRCONNECT\|refused"'
+SP=$($OTR/stats.sh --print)
+SPE=$(OTR_STATS_ANON=errors $OTR/stats.sh --print)
+ok "anonymous data: what went wrong by kind and code, with version and model; nothing of the messages" 'has_all "$SP" otr_errors e_session_frozen=1 e_session_dropped=2 e_connect_failed=1 e_connect_timeout=1 "detail=session-dropped 145" "detail=session-dropped 147" "detail=connect-failed 131" "version=$(cat $OTR/VERSION)" &&printf "%s\n" "$SP" | grep -qx "otr_week problems=4" && ! printf "%s\n" "$SP" | grep -q "update_failed" && ! printf "%s\n" "$SP" | grep -qi "mario\|srv-secret\|ERRCONNECT\|refused"'
+ok "anonymous data, errors only: the same error event, and no week event" 'printf "%s\n" "$SPE" | grep -qx "otr_errors e_session_dropped=2" && ! printf "%s\n" "$SPE" | grep -q "^otr_week" && [ "$(printf "%s\n" "$SP" | grep "^otr_errors")" = "$SPE" ]'
 # the hardware test: the names of the checks that failed and of the firmware missing, never what a check found
 mkdir -p "$OTR_LOG"; cp "$OTR_LOG/selftest.md" /tmp/selftest.keep 2>/dev/null
 printf '%s\n' '### Network' '- `FAIL` **IP address**: none on the main card (192.0.2.77 expected)' '- `FAIL` **DNS**: names do not resolve' \
   '- `WARN` **Sound**: no sound card' '- `WARN` **Internet**: GitHub not reachable' \
   '- `WARN` **Missing firmware**: firmware: failed to load iwlwifi-8265-36.ucode (-2);firmware load for i915/kbl_dmc_ver1_04.bin failed with error -2;' > "$OTR_LOG/selftest.md"
-SPN=$($OTR/stats.sh --print | grep "^otr/error")
+SPN=$($OTR/stats.sh --print | grep "^otr_errors")
 echo "$n hardware test: 20 OK, 3 warnings, 2 problems" > $OTR_EVENTS
-SPH=$($OTR/stats.sh --print | grep "^otr/error")
-ok "anonymous counts: the hardware test by the names of its failed checks, sound or graphics missing and the firmware files; no address, nothing when it did not run" 'printf "%s\n" "$SPH" | grep -qx "otr/error-detail/hardware-test-fail/ip-address" && printf "%s\n" "$SPH" | grep -qx "otr/error-detail/hardware-test-fail/dns" && printf "%s\n" "$SPH" | grep -qx "otr/error-detail/hardware-test-warn/sound" && printf "%s\n" "$SPH" | grep -qx "otr/error-detail/missing-firmware/iwlwifi-8265-36.ucode" && printf "%s\n" "$SPH" | grep -qx "otr/error-detail/missing-firmware/i915_kbl_dmc_ver1_04.bin" && printf "%s\n" "$SPH" | grep -qx "otr/error/hardware-test-fail/2-5" && ! printf "%s\n" "$SPH" | grep -qi "192.0.2\|internet\|github" && ! printf "%s\n" "$SPN" | grep -q "hardware-test"'
+SPH=$($OTR/stats.sh --print | grep "^otr_errors")
+ok "anonymous data: the hardware test by the names of its failed checks, sound or graphics missing and the firmware files; no address, nothing when it did not run" 'has_all "$SPH" otr_errors "detail=hardware-test-fail ip-address" "detail=hardware-test-fail dns" "detail=hardware-test-warn sound" "detail=missing-firmware iwlwifi-8265-36.ucode" "detail=missing-firmware i915_kbl_dmc_ver1_04.bin" e_hardware_test_fail=2 &&! printf "%s\n" "$SPH" | grep -qi "192.0.2\|internet\|github" && ! printf "%s\n" "$SPN" | grep -q "hardware-test"'
 if [ -f /tmp/selftest.keep ]; then mv /tmp/selftest.keep "$OTR_LOG/selftest.md"; else rm -f "$OTR_LOG/selftest.md"; fi
+echo "$n watchdog: FreeRDP received nothing over UDP for 75 s while it sent 40 datagrams, killed: TCP until the device restarts (session-hang.log)" > $OTR_EVENTS
+echo "$n power off with a session still open (FreeRDP 123): its threads in session-hang.log, its log in last-session.log" >> $OTR_EVENTS
+SP=$($OTR/stats.sh --print | grep "^otr_errors")
+ok "anonymous data: a UDP stall and a power off in a session are kinds of their own" 'printf "%s\n" "$SP" | grep -qx "otr_errors e_udp_stalled=1" && printf "%s\n" "$SP" | grep -qx "otr_errors e_switched_off_in_session=1" && ! printf "%s\n" "$SP" | grep -q session_frozen'
 : > $OTR_EVENTS
-# a local server in place of GoatCounter records what really arrives (a fake curl hid that the image has no curl)
-SB=$(mktemp -d); rm -f /var/lib/openthinrdp/stats-sent; GU=http://127.0.0.1:18099/count
+# a local server in place of PostHog records what really arrives (one JSON request per send)
+SB=$(mktemp -d); rm -f /var/lib/openthinrdp/stats-sent; GU=http://127.0.0.1:18099/batch/
 python3 -c '
-import http.server, sys, urllib.parse
+import http.server, sys
 class H(http.server.BaseHTTPRequestHandler):
-    def do_GET(s):
-        q = urllib.parse.parse_qs(urllib.parse.urlparse(s.path).query)
-        open(sys.argv[1], "a").write(q["p"][0] + " | " + q["e"][0] + " | " + s.headers.get("User-Agent", "") + "\n")
-        s.send_response(200); s.end_headers()
+    def do_POST(s):
+        b = s.rfile.read(int(s.headers.get("Content-Length", 0)))
+        open(sys.argv[1], "ab").write(b + b"\n")
+        s.send_response(200); s.end_headers(); s.wfile.write(b"{\"status\":\"Ok\"}")
     def log_message(s, *a): pass
 http.server.HTTPServer(("127.0.0.1", 18099), H).serve_forever()' "$SB/sent" & GS=$!
 for i in $(seq 20); do python3 -c 'import socket; socket.create_connection(("127.0.0.1", 18099), 1)' 2>/dev/null && break; sleep 0.5; done
-printf 'ANON_STATS=off\n' > /etc/openthinrdp/openthinrdp.conf; OTR_STATS_URL=$GU $OTR/stats.sh
-ok "anonymous counts: off = nothing sent" '[ ! -e "$SB/sent" ] && [ ! -e /var/lib/openthinrdp/stats-sent ]'
-: > /etc/openthinrdp/openthinrdp.conf; OTR_STATS_URL=$GU $OTR/stats.sh; n1=$(grep -c . "$SB/sent" 2>/dev/null); OTR_STATS_URL=$GU $OTR/stats.sh
-ok "anonymous counts: on = sent at once the first time, as events with the OpenThinRDP agent, then not again within the week" '[ "$n1" = 12 ] && [ $(grep -c . "$SB/sent") -eq 12 ] && grep -qE "^otr/version/$(cat $OTR/VERSION) \| true \| Mozilla/5\.0 \(X11; Linux x86_64\) OpenThinRDP/$(cat $OTR/VERSION) \(s [0-9a-f]{8}\)$" "$SB/sent" && [ $(sed -n "s/.*(s \([0-9a-f]*\))$/\1/p" "$SB/sent" | sort -u | wc -l) -eq 1 ] && [ -e /var/lib/openthinrdp/stats-sent ]'
-# a new device: its first counts with its own setting, before the central settings (ANON_STATS=off there) are applied
-rm -f /var/lib/openthinrdp/stats-sent; : > "$SB/sent"; printf 'ANON_STATS=off\n' > /etc/openthinrdp/openthinrdp.conf; OTR_STATS_ANON=on OTR_STATS_URL=$GU $OTR/stats.sh
-ok "anonymous counts: a new device sends its first counts with its own setting, before the central off arrives" '[ $(grep -c . "$SB/sent") -eq 12 ]'
-rm -f /var/lib/openthinrdp/stats-sent; : > "$SB/sent"; OTR_STATS_ANON=off OTR_STATS_URL=$GU $OTR/stats.sh; : > /etc/openthinrdp/openthinrdp.conf
+sent(){ local n; n=$(grep -c . "$SB/sent" 2>/dev/null); echo "${n:-0}"; }
+printf 'ANON_STATS=off\n' > $OTR_CONF; OTR_STATS_URL=$GU $OTR/stats.sh
+ok "anonymous data: off = nothing sent" '[ ! -e "$SB/sent" ] && [ ! -e /var/lib/openthinrdp/stats-sent ]'
+: > $OTR_CONF; OTR_STATS_URL=$GU $OTR/stats.sh
+ok "anonymous data: a new device that has not chosen yet (no broker, no choice) sends nothing before the question" '[ ! -e "$SB/sent" ] && [ ! -e /var/lib/openthinrdp/stats-sent ]'
+OTR_STATS_ANON=full OTR_STATS_URL=$GU $OTR/stats.sh
+ok "anonymous data: also with its own setting passed by report.sh, nothing before the question" '[ ! -e "$SB/sent" ]'
+printf 'ANON_STATS=full\n' > $OTR_CONF; OTR_STATS_URL=$GU $OTR/stats.sh; n1=$(sent); OTR_STATS_URL=$GU $OTR/stats.sh
+ok "anonymous data: full = one request to PostHog the first time, then not again within the week" '[ "$n1" = 1 ] && [ "$(sent)" = 1 ] && [ -e /var/lib/openthinrdp/stats-sent ]'
+ok "anonymous data: the request has the public project key, a random id of its own, no person profile and no place" 'python3 -c "
+import json, sys, re
+b = json.loads(open(sys.argv[1]).readline())
+e = b[\"batch\"][0]; p = e[\"properties\"]
+assert b[\"api_key\"].startswith(\"phc_\") and e[\"event\"] == \"otr_week\"
+assert re.fullmatch(r\"[0-9a-f-]{36}\", e[\"distinct_id\"])
+assert p[\"\$process_person_profile\"] is False and p[\"\$geoip_disable\"] is True and isinstance(p[\"ram_gb\"], int)
+" "$SB/sent"'
+rm -f /var/lib/openthinrdp/stats-sent; : > "$SB/sent"; printf 'ANON_STATS=errors\n' > $OTR_CONF; OTR_STATS_URL=$GU $OTR/stats.sh
+ok "anonymous data, errors only: a week with no problem sends nothing and counts as checked" '[ "$(sent)" = 0 ] && [ -e /var/lib/openthinrdp/stats-sent ]'
+# a new device: its first data with its own setting, before the central settings (ANON_STATS=off there) are applied
+rm -f /var/lib/openthinrdp/stats-sent; : > "$SB/sent"; printf 'ANON_STATS=off\n' > $OTR_CONF; OTR_STATS_ANON=full OTR_STATS_URL=$GU $OTR/stats.sh
+ok "anonymous data: a new device sends its first data with its own setting, before the central off arrives" '[ "$(sent)" = 1 ]'
+rm -f /var/lib/openthinrdp/stats-sent; : > "$SB/sent"; OTR_STATS_ANON=off OTR_STATS_URL=$GU $OTR/stats.sh; : > $OTR_CONF
 ra=$(grep -n '|| stats_start "$(cfg ANON_STATS)"' $OTR/report.sh | cut -d: -f1); rb=$(grep -n 'central-apply.sh"$' $OTR/report.sh | cut -d: -f1)
-ok "report.sh: a new device (no counts sent, no central settings taken) counts before the central settings; off on the device = nothing" '[ ! -s "$SB/sent" ] && [ -n "$ra" ] && [ -n "$rb" ] && [ "$ra" -lt "$rb" ]'
-ok "report.sh: the anonymous counts in a unit of their own (systemd-run): the oneshot service stops what it leaves in the background" 'grep -qF "systemd-run --no-block --quiet --collect" $OTR/report.sh && [ $(grep -c "stats_start" $OTR/report.sh) -eq 3 ]'
-kill $GS 2>/dev/null; wait $GS 2>/dev/null; rm -f /var/lib/openthinrdp/stats-sent; $OTR/stats.sh
-ok "anonymous counts: no answer = not marked as sent, tried again at the next report" '[ ! -e /var/lib/openthinrdp/stats-sent ]'
+ok "report.sh: a new device (no data sent, no central settings taken) sends before the central settings; off on the device = nothing" '[ ! -s "$SB/sent" ] && [ -n "$ra" ] && [ -n "$rb" ] && [ "$ra" -lt "$rb" ]'
+ok "report.sh: the anonymous data in a unit of their own (systemd-run): the oneshot service stops what it leaves in the background" 'grep -qF "systemd-run --no-block --quiet --collect" $OTR/report.sh && [ $(grep -c "stats_start" $OTR/report.sh) -eq 3 ]'
+kill $GS 2>/dev/null; wait $GS 2>/dev/null; rm -f /var/lib/openthinrdp/stats-sent; printf 'ANON_STATS=full\n' > $OTR_CONF; OTR_STATS_URL=$GU $OTR/stats.sh; : > $OTR_CONF
+ok "anonymous data: no answer = not marked as sent, tried again at the next report" '[ ! -e /var/lib/openthinrdp/stats-sent ]'
 ok "no client script calls curl (not in the image)" '! grep -nE "^[^#]*\bcurl " $OTR/*.sh $OTR/lib/*.sh'
+ok "kiosk: a new device is asked about the anonymous data once (full ready), and the session quality says UDP or TCP" 'grep -qF "if ! anon_decided && [ \$GREETER = 1 ]; then" $OTR/kiosk.sh && grep -qF -- "--primary=31 --default=31" $OTR/kiosk.sh && grep -qF ", over \$([ \"\${q[7]:-0}\" = 1 ] && echo UDP || echo TCP)" $OTR/kiosk.sh && grep -qF "sign-in screen ready" $OTR/kiosk.sh'
 rm -rf "$SB" /var/lib/openthinrdp/stats-sent; mv /tmp/events.keep $OTR_EVENTS
-n=$(date '+%Y-%m-%d %H:%M:%S'); cp $OTR_EVENTS /tmp/events.keep
-{ echo "$n watchdog: FreeRDP received nothing over UDP for 75 s while it sent 40 datagrams, killed: TCP until the device restarts (session-hang.log)"
-  echo "$n power off with a session still open (FreeRDP 123): its threads in session-hang.log, its log in last-session.log"; } > $OTR_EVENTS
-SP=$($OTR/stats.sh --print | grep "^otr/error/")
-ok "anonymous counts: a UDP stall and a power off in a session are kinds of their own" 'printf "%s\n" "$SP" | grep -qx "otr/error/udp-stalled/1" && printf "%s\n" "$SP" | grep -qx "otr/error/switched-off-in-session/1" && ! printf "%s\n" "$SP" | grep -q session-frozen'
 # at shutdown (openthinrdp-keep-log.service): the FreeRDP log kept, a FreeRDP still running said and its threads kept
 : > $OTR_EVENTS; rm -f /tmp/kiosk.log.prev; cp /bin/sleep /tmp/xfreerdp3; /tmp/xfreerdp3 30 & XF=$!; echo "session log line" > /tmp/kiosk.log
 $OTR/keep-session-log.sh

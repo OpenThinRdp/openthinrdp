@@ -26,6 +26,11 @@ cfg_num(){ local v; v=$(cfg "$1"); [[ $v =~ ^[0-9]{1,6}$ ]] && echo $((10#$v)) |
 # first start asks).
 # a web page in the settings (web button or kiosk page): the only reason a device has a browser (0.3.1)
 web_used(){ local w; w=$(cfg WEB_BUTTON); [ -n "$(cfg KIOSK_URL)" ] || { [ -n "$w" ] && [ "$w" != none ]; }; }
+# the anonymous data for the project (ANON_STATS, stats.sh): full, errors or off; on and the words of before 0.3.3 are
+# full. $1 instead of the setting when given
+anon_level(){ case "$(echo "${1:-$(cfg ANON_STATS)}" | tr "A-Z" "a-z")" in off|no|0|false|disattivato|spento|uit) echo off ;; errors|errori|error|errors-only|fouten) echo errors ;; *) echo full ;; esac; }
+# chosen on this device or for the site: a new device that has neither is asked at its first start (kiosk.sh)
+anon_decided(){ grep -qs "^ANON_STATS=" "$OTR_CONF" "$OTR_SITE"; }
 setup_kind(){
   case "$(cfg SETUP)" in domain|workgroup) cfg SETUP; return ;; esac
   if [ -n "$(cfg DOMAIN)$(cfg LOAD_BALANCE_INFO)$(cfg BROKER_FALLBACK)$(cfg MGMT_SHARE)" ] || [ "$(cfg DOT1X)" = peap ] || [ "$(cfg DOT1X)" = tls ]; then echo domain

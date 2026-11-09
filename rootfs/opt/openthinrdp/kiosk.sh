@@ -479,7 +479,7 @@ settings_spec(){
     sec "$L_SEC_SYSTEM"
     fld SECURITY_UPDATES choice "$L_F_UPDATES" "$su" "$(chs ONV ONL)" "$L_H_UPDATES"
     fld LANGUAGE choice "$L_F_LANGUAGE" "$ln" "$(chs LNV LNL)" "$L_H_LANGUAGE"
-    fld ANON_STATS choice "$L_F_ANON" "$an" "$(chs ONV ONL)" "$L_H_ANON"
+    fld ANON_STATS choice "$L_F_ANON" "$an" "$(chs STV STL)" "$L_H_ANON"
     return
   fi
   sec "$L_SEC_DOT1X"
@@ -510,7 +510,7 @@ settings_spec(){
   fld MGMT_PASSWORD password "$L_F_MGMTPW" "" "" "$L_H_MGMTPW"
   fld SECURITY_UPDATES choice "$L_F_UPDATES" "$su" "$(chs ONV ONL)" "$L_H_UPDATES"
   fld LANGUAGE choice "$L_F_LANGUAGE" "$ln" "$(chs LNV LNL)" "$L_H_LANGUAGE"
-  fld ANON_STATS choice "$L_F_ANON" "$an" "$(chs ONV ONL)" "$L_H_ANON"
+  fld ANON_STATS choice "$L_F_ANON" "$an" "$(chs STV STL)" "$L_H_ANON"
 }
 # KEY=value lines of the settings screen into the values of settings_dialog
 settings_read(){
@@ -582,6 +582,7 @@ settings_dialog(){
 
   local -a NETV=(dhcp static) NETL=("DHCP" "$L_STATIC") USBV=(auto all disks) USBL=("$L_USB_AUTO" "$L_USB_ALL" "$L_USB_DISKS")
   local -a ONV=(on off) ONL=("$L_ON" "$L_OFF") TRV=(auto udp tcp) TRL=("$L_TR_AUTO" "$L_TR_UDP" "$L_TR_TCP")
+  local -a STV=(full errors off) STL=("$L_STATS_FULL" "$L_STATS_ERRORS" "$L_STATS_OFF")
   local -a WEBV=(none app browser kiosk) WEBL=("$L_WEB_NONE" "$L_WEB_APP" "$L_WEB_BROWSER" "$L_WEB_KIOSK")
   local -a LNV=(en it) LNL=(English Italiano)
   local -a WSECV=(psk peap tls) WSECL=("$L_WSEC_PSK" "$L_WSEC_PEAP" "$L_WSEC_TLS") D1XV=(off peap tls) D1XL=("$L_OFF" "$L_D1X_PEAP" "$L_D1X_TLS")
@@ -604,7 +605,7 @@ settings_dialog(){
   if [ "$nm" = static ]; then ip=$(cfg IPADDR); mask=$(cfg NETMASK); gw=$(cfg GATEWAY)
   else ip=$IPC; mask=$([ -n "$IPC" ] && pfx2mask "$PFX" || cfg NETMASK); gw=${GWC:-$(cfg GATEWAY)}; fi
   d1=$(cfg DNS1); d2=$(cfg DNS2); ntp=$(cfg NTP); off=$(cfg_num SHUTDOWN_SECS 10); thr=$(cfg_num SESSION_THRESHOLD 10)
-  share=$(cfg MGMT_SHARE); um=$(cfg USB_MODE); ur=$(cfg USB_REDIRECT); ul=$(cfg USB_LOCAL); su=$(cfg SECURITY_UPDATES); an=$(cfg ANON_STATS); tz=$(cfg TIMEZONE); tr=$(cfg TRANSPORT)
+  share=$(cfg MGMT_SHARE); um=$(cfg USB_MODE); ur=$(cfg USB_REDIRECT); ul=$(cfg USB_LOCAL); su=$(cfg SECURITY_UPDATES); an=$(anon_level); tz=$(cfg TIMEZONE); tr=$(cfg TRANSPORT)
   wb=$(cfg WEB_BUTTON); wu=$(cfg WEB_URL); ku=$(cfg KIOSK_URL); kr=$(cfg_num KIOSK_RELOAD_MIN 10)
   pon=$(cfg POWER_ON_TIME); poff=$(cfg POWER_OFF_TIME); pdays=$(cfg POWER_ON_DAYS); wf=$(cfg WIFI); ws=$(cfg WIFI_SSID); ln=$(cfg LANGUAGE)
   # the screen: native and the modes of the main monitor (once each, 1024 pixels wide and more), the value set centrally
@@ -861,7 +862,7 @@ tenths(){ echo "$(( $1 / 10 )).$(( $1 % 10 ))"; }
 # event at its end, read by the manager (Experience)
 quality_event(){ local q; read -r -a q < /tmp/kiosk.quality 2>/dev/null || return 0; rm -f /tmp/kiosk.quality
   [ "${q[0]:-0}" -ge 6 ] || return 0
-  ev "session quality of $1: latency $(tenths $(( q[1] / q[0] ))) ms (max $(tenths "${q[2]}") ms), $(( (q[4] - q[3]) * 8 / 1000 / (q[6] > 0 ? q[6] : 1) )) kbit/s average (peak ${q[5]} kbit/s), $(duration "${q[6]}")"; }
+  ev "session quality of $1: latency $(tenths $(( q[1] / q[0] ))) ms (max $(tenths "${q[2]}") ms), $(( (q[4] - q[3]) * 8 / 1000 / (q[6] > 0 ? q[6] : 1) )) kbit/s average (peak ${q[5]} kbit/s), $(duration "${q[6]}"), over $([ "${q[7]:-0}" = 1 ] && echo UDP || echo TCP)"; }
 # bytes received by the network adapters (not lo)
 rx_bytes(){ awk 'NR > 2 { sub(/^ +/, ""); split($0, a, /[: ]+/); if (a[1] != "lo") s += a[2] } END { print s + 0 }' /proc/net/dev; }
 # Broker for attempt n: the first 2 on BROKER, then in turn on BROKER_FALLBACK, so one broken broker
@@ -963,7 +964,7 @@ session(){
       trap '' PIPE
       local s1=0 s2=0 s3=0 n=0 s1n=0 s1w="" seen=0 lost=0 tcponly=0 fp ips first="" q lastq=0 stuck=0 stopped=0 ui uo lui="" luo=0 lut=0
       # the times of the sign-in (in tenths of a second): the broker, the VM made ready, Windows until the desktop
-      local t0 t1="" t2="" t3 qn=0 qs=0 qm=0 qrx0=0 qrx qpk=0 qt0=0 qlr=0 qlt=0 r
+      local t0 t1="" t2="" t3 qn=0 qs=0 qm=0 qrx0=0 qrx qpk=0 qt0=0 qlr=0 qlt=0 qu=0 r
       t0=$(date +%s%1N)
       # the UTC offset the session started with: Windows takes the time zone of the device only when a session
       # opens (time zone redirection), so a session open across a change of the clock (daylight saving time)
@@ -1036,7 +1037,9 @@ session(){
             if [ $qn -eq 0 ] && [ $qt0 -eq 0 ]; then qrx0=$qrx; qt0=$(date +%s); qlr=$qrx; qlt=$qt0; fi
             if [ "$r" -gt 0 ]; then qn=$((qn + 1)); qs=$((qs + r)); [ "$r" -gt $qm ] && qm=$r; fi
             if [ $(( $(date +%s) - qlt )) -gt 0 ]; then r=$(( (qrx - qlr) * 8 / 1000 / ($(date +%s) - qlt) )); [ $r -gt $qpk ] && qpk=$r; qlr=$qrx; qlt=$(date +%s); fi
-            [ $qn -gt 0 ] && echo "$qn $qs $qm $qrx0 $qrx $qpk $(( $(date +%s) - qt0 ))" > /tmp/kiosk.quality
+            # the session over UDP at least once (a UDP socket of FreeRDP), for the anonymous counts
+            [ "${qu:-0}" = 1 ] || { ss -uanpH 2>/dev/null | grep -q "pid=$fp," && qu=1; }
+            [ $qn -gt 0 ] && echo "$qn $qs $qm $qrx0 $qrx $qpk $(( $(date +%s) - qt0 )) ${qu:-0}" > /tmp/kiosk.quality
           fi
           # the server it is connected to now (address:port), after the broker's redirect the VM (vm_alive)
           ss -tnpH state established 2>/dev/null | grep "pid=$fp," | awk '{print $4}' | sed 's/^\[::ffff:\([0-9.]*\)\]/\1/' | tail -1 > /tmp/kiosk.vm
@@ -1271,6 +1274,15 @@ if [ -z "$(cfg BROKER)" ]; then
     tmp=$(mktemp); printf 'SETUP=%s\n' "$k" > "$tmp"; sudo -n "$OTR/save-config.sh" "$tmp" >/dev/null 2>&1; rm -f "$tmp"
     ev "kind of setup chosen at the first start: $k"
   fi
+  # the anonymous data for the project, asked once too, when neither the device nor its site chose: what each level
+  # sends is said on the screen, Full is the one ready (stats.sh sends nothing before the answer)
+  if ! anon_decided && [ $GREETER = 1 ]; then
+    ui message --icon=info --heading="$(plain "$L_STATS_ASK_T")" --text="$(plain "$L_STATS_ASK")" \
+       --button="$L_STATS_OFF:33" --button="$L_STATS_ERRORS:32" --button="$L_STATS_FULL:31" --primary=31 --default=31 >/dev/null
+    case $? in 33) k=off ;; 32) k=errors ;; *) k=full ;; esac
+    tmp=$(mktemp); printf 'ANON_STATS=%s\n' "$k" > "$tmp"; sudo -n "$OTR/save-config.sh" "$tmp" >/dev/null 2>&1; rm -f "$tmp"
+    ev "anonymous data chosen at the first start: $k"
+  fi
   ev "no broker configured: settings dialog opened"; settings_dialog
 fi
 AUTO=1       # the first sign-in screen may sign in with the password remembered (remember.sh)
@@ -1295,6 +1307,8 @@ while true; do
   IPNOW=$(ipv4)
   # the password remembered: the first sign-in screen after the start signs in by itself (once: after a session or a
   # failure the screen is shown as always)
+  # how long the device took from power on to its first sign-in screen (once per start; /tmp is new at every start)
+  [ -e /tmp/kiosk.bootready ] || { : > /tmp/kiosk.bootready; ev "sign-in screen ready $(cut -d. -f1 /proc/uptime) s after power on"; }
   AUTOL=""; [ "$AUTO" = 1 ] && { AUTO=0; AUTOL=$(sudo -n "$OTR/remember.sh" get 2>/dev/null); }
   if [ -n "$AUTOL" ]; then OUT="${AUTOL%%$'\t'*}|${AUTOL#*$'\t'}"; rc=10; ev "automatic sign-in of ${AUTOL%%$'\t'*} (password remembered)"
   elif [ $GREETER = 1 ]; then
