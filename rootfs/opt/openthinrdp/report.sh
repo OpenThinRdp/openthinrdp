@@ -93,6 +93,11 @@ HOME=${HOME:-/root} xfreerdp3 --buildconfig 2>/dev/null | grep -q 'WITH_RDPEUDP=
   echo "HW_MODEL=$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null) $(cat /sys/class/dmi/id/product_name 2>/dev/null)"
   echo "HW_SERIAL=$(cat /sys/class/dmi/id/product_serial 2>/dev/null)"
   echo "BIOS=$(cat /sys/class/dmi/id/bios_version 2>/dev/null) $(cat /sys/class/dmi/id/bios_date 2>/dev/null)"
+  # what a Dell does when the power comes back (dell-wmi-sysman, read without the BIOS password): Off = it stays off,
+  # and the alarm of POWER_ON_TIME goes with the power (#194)
+  F=/sys/class/firmware-attributes/dell-wmi-sysman/attributes
+  [ "$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)" = "Dell Inc." ] && { [ -d $F ] || modprobe -q dell-wmi-sysman 2>/dev/null; }
+  [ -r $F/AcPwrRcvry/current_value ] && echo "FW_AC_RECOVERY=$(cat $F/AcPwrRcvry/current_value)"
   # the session now (kiosk.sh writes it every ~5 s): latency and what comes in
   Q=($(cat /tmp/kiosk.quality 2>/dev/null)); [ -n "$SU" ] && [ "${Q[0]:-0}" -gt 0 ] && echo "SESSION_QUALITY=$(( Q[1] / Q[0] / 10 )).$(( Q[1] / Q[0] % 10 )) ms $(( (Q[4] - Q[3]) * 8 / 1000 / (Q[6] > 0 ? Q[6] : 1) )) kbit/s"
   # the scheduled jobs (schedule.sh): <id>=<result> <when>, the last of each

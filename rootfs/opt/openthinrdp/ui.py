@@ -321,8 +321,12 @@ if MODE == 'ask':
     win.set_wmclass('OtrAsk', 'OtrAsk')
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=dp(10)); box.get_style_context().add_class('toast')
     head = Gtk.Box(spacing=dp(12)); head.pack_start(icon('warn', 28, COLORS['warn'], 1.0), False, False, 0)
-    head.pack_start(label(A.heading, 'heading', xalign=0, chars=44), True, True, 0); box.pack_start(head, False, False, 0)
-    tx = label(A.text.replace('\\n', '\n'), 'text', xalign=0, chars=52); tx.set_justify(Gtk.Justification.LEFT)
+    # a wrapped label in a popup gets the height of its narrowest width, lines it does not use: the width it needs as
+    # its minimum too
+    def fixed(l, text, chars): l.set_width_chars(min(chars, max(len(s) for s in text.split('\n')))); return l
+    head.pack_start(fixed(label(A.heading, 'heading', xalign=0, chars=44), A.heading, 44), True, True, 0); box.pack_start(head, False, False, 0)
+    TX = A.text.replace('\\n', '\n')
+    tx = fixed(label(TX, 'text', xalign=0, chars=52), TX, 52); tx.set_justify(Gtk.Justification.LEFT)
     box.pack_start(tx, False, False, 0)
     bar = Gtk.ProgressBar()
     if A.timeout: box.pack_start(bar, False, False, 0)

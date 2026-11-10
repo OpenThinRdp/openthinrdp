@@ -365,7 +365,7 @@ own to test on. Reports are welcome in the [Discussions](https://github.com/Open
 | Key | Default | Meaning |
 |---|---|---|
 | `POWER_ON_TIME` | | `hh:mm`, RTC wake alarm (firmware support needed, see [hardware.md](hardware.md)) |
-| `POWER_OFF_TIME` | | `hh:mm`, with a 60 s warning that can be cancelled; waits for an open session to end |
+| `POWER_OFF_TIME` | | `hh:mm`, with a 60 s warning that can be cancelled; waits for an open session to end. With both times set, a device that starts outside its hours (the power came back, see *AC Recovery* in [hardware.md](hardware.md)) gets the same warning and switches off |
 | `POWER_ON_DAYS` | `1234567` | 1 = Monday ... 7 = Sunday |
 
 ## Look and language

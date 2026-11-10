@@ -1043,12 +1043,47 @@ printf 'j7|%s|once||restart|*|0|\n' "$(date -d '-4 hours' '+%Y-%m-%d %H:%M')" > 
 ok "jobs: past the 3 hours a job that never started is not run" '[ ! -s $S/systemctl.log ] && ! grep -q "^j7=" $OTR_LIB/jobs-last'
 printf 'bad;id|%s|once||restart|*|0|\nj8|%s|once||format-disk|*|0|\n' "$PAST" "$PAST" > $JF; sched
 ok "jobs: a line with a wrong name or an action it does not know is ignored" '[ ! -s $S/systemctl.log ] || { cat $S/systemctl.log; false; }'
-rm -f $JF $OTR_LIB/jobs-state $OTR_LIB/jobs-last; rm -rf $S
+rm -f $JF $OTR_LIB/jobs-state $OTR_LIB/jobs-last
+# --- 0.3.4: switched on outside the hours (#194), schedule.sh section 3. The time since the start, the screen and the
+# answer to the warning are fakes: /tmp/sched/uptime, xorg (0 = running), askrc (1 = Cancel, 70 = no answer)
+sed -i 's|/proc/uptime|/tmp/sched/uptime|g; s|touch \$BF; sleep 10$|touch $BF|' $S/schedule.sh
+printf '#!/bin/bash\n[ "$1 $2" = "-x Xorg" ] && exit "$(cat /tmp/sched/xorg)"; exec /usr/bin/pgrep "$@"\n' > $S/bin/pgrep
+printf '#!/bin/bash\n[ "$1" = kiosk ] && exit 0; exec /usr/bin/id "$@"\n' > $S/bin/id
+printf '#!/bin/bash\necho "$*" >> /tmp/sched/ask.log; exit "$(cat /tmp/sched/askrc)"\n' > $S/bin/runuser; chmod +x $S/bin/*
+hm(){ date -d "$1" +%H:%M; }
+# $1 $2 = POWER_ON_TIME POWER_OFF_TIME, $3 = seconds since the start, $4 = screen (0 = on), $5 = answer
+back(){ sed -i '/^POWER_\(ON\|OFF\)_TIME=/d' $OTR_CONF; printf 'POWER_ON_TIME=%s\nPOWER_OFF_TIME=%s\n' "$1" "$2" >> $OTR_CONF
+  echo "$3.00 1.00" > $S/uptime; echo "$4" > $S/xorg; echo "${5:-70}" > $S/askrc; rm -f /run/openthinrdp-schedule-boot $S/ask.log; : > $OTR_EVENTS; sched; }
+back "$(hm '+2 hours')" "$(hm '+3 hours')" 120 0
+ok "outside the hours: a device started 2 minutes ago outside its hours warns (with Cancel) and switches off, the alarm set before" 'grep -qx poweroff $S/systemctl.log && grep -q "Cancel:1" $S/ask.log && grep -q "switched on outside the hours (.*): switched off, on again" $OTR_EVENTS && [ -f /run/openthinrdp-schedule-boot ]'
+rm -f $S/ask.log; sched
+ok "outside the hours: once per start" '[ ! -s $S/systemctl.log ] && [ ! -s $S/ask.log ]'
+back "$(hm '+2 hours')" "$(hm '+3 hours')" 120 0 1
+ok "outside the hours: Cancel keeps it on (switched on by hand)" '! grep -q poweroff $S/systemctl.log 2>/dev/null && grep -q "kept on by the user" $OTR_EVENTS'
+back "$(hm '+2 hours')" "$(hm '+3 hours')" 120 1
+ok "outside the hours: no screen yet, it waits for it (nothing done, asked again at the next minute)" '! grep -q poweroff $S/systemctl.log 2>/dev/null && [ ! -f /run/openthinrdp-schedule-boot ]'
+back "$(hm '+2 hours')" "$(hm '+3 hours')" 1000 0
+ok "outside the hours: not after 15 minutes from the start" '! grep -q poweroff $S/systemctl.log 2>/dev/null && [ ! -s $S/ask.log ] && [ -f /run/openthinrdp-schedule-boot ]'
+back "$(hm '-1 hour')" "$(hm '+1 hour')" 120 0
+ok "outside the hours: started inside its hours, nothing" '! grep -q poweroff $S/systemctl.log 2>/dev/null && [ ! -s $S/ask.log ]'
+back "$(hm '-3 hours')" "$(hm '-6 minutes')" 600 0
+ok "outside the hours: started inside the hours and still on after them, section 3 leaves it to the scheduled power off" '! grep -q poweroff $S/systemctl.log 2>/dev/null && [ ! -s $S/ask.log ]'
+back "$(hm '+2 hours')" "$(hm '+2 hours')" 120 0
+ok "outside the hours: the same time to switch on and off, nothing" '! grep -q poweroff $S/systemctl.log 2>/dev/null'
+$S/xfreerdp3 /u:alice & XP=$!; sleep 0.3
+back "$(hm '+2 hours')" "$(hm '+3 hours')" 120 0
+ok "outside the hours: a remote session open, it stays on" '! grep -q poweroff $S/systemctl.log 2>/dev/null && grep -q "a session is open, it stays on" $OTR_EVENTS'
+pkill -P $XP; kill $XP 2>/dev/null; wait $XP 2>/dev/null
+ok "outside the hours: the hours over midnight (on 22:00, off 06:00)" '( ON=22:00; OFFT=06:00; DAYS=1234567; eval "$(sed -n "/^in_hours(){/,/; fi; }$/p" $S/schedule.sh)"; in_hours $(date -d "today 23:00" +%s) && in_hours $(date -d "today 05:59" +%s) && ! in_hours $(date -d "today 06:00" +%s) && ! in_hours $(date -d "today 12:00" +%s) && DAYS=1 && in_hours $(date -d "next monday 23:00" +%s) && in_hours $(date -d "next tuesday 03:00" +%s) && ! in_hours $(date -d "next tuesday 23:00" +%s) )'
+ok "outside the hours: the question at the top as high as its text (the width of a wrapped text is its minimum too)" 'grep -q "def fixed(l, text, chars): l.set_width_chars(min(chars, max(len(s) for s in text.split(" $OTR/ui.py && grep -q "tx = fixed(label(TX" $OTR/ui.py'
+sed -i '/^POWER_\(ON\|OFF\)_TIME=/d' $OTR_CONF; rm -f /run/openthinrdp-schedule-boot; : > $OTR_EVENTS
+rm -rf $S
 ok "jobs: copied from the folder only signed as the settings, removed with the file only when signing is off" 'grep -q "if \[ -f \"\$JF\" \] && ! signed_ok \"\$JF\"; then unsigned config/jobs.conf" $OTR/report.sh && grep -q "elif \[ \$SIGNED = 0 \]; then rm -f \"\$OTR_LIB/jobs.conf\"; fi" $OTR/report.sh'
 # --- the hours of the updates (UPDATE_HOURS), the report for the inventory and the peripherals, the sign-in times
 ok "UPDATE_HOURS: from-to hours or empty" 'printf "UPDATE_HOURS=2-5\n" > "$T"; $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "UPDATE_HOURS=2-5" && printf "UPDATE_HOURS=02:00\n" > "$T" && ! $OTR/save-config.sh "$T" --print >/dev/null 2>&1'
 ok "UPDATE_HOURS: outside the hours a managed device keeps the update downloaded for later; an update job installs at once" 'grep -q "installs between \$a:00 and \$b:00 (UPDATE_HOURS)" $OTR/auto-update.sh && grep -q "find /run/openthinrdp-update-now -mmin -60" $OTR/auto-update.sh'
 $OTR/report.sh >/dev/null 2>&1
+ok "report: what a Dell does when the power comes back (FW_AC_RECOVERY), read through dell-wmi-sysman" 'grep -q "echo \"FW_AC_RECOVERY=\$(cat \$F/AcPwrRcvry/current_value)\"" $OTR/report.sh'
 ok "report: model, serial number and BIOS for the inventory, the peripherals by kind, the jobs" 'grep -q "^HW_MODEL=" /run/openthinrdp-status.txt && grep -q "^HW_SERIAL=" /run/openthinrdp-status.txt && grep -q "^BIOS=" /run/openthinrdp-status.txt && grep -q "^PERIPHERALS=" /run/openthinrdp-status.txt && grep -q "^JOBS=" /run/openthinrdp-status.txt'
 ok "kiosk: the sign-in in its phases and the quality of the session, in events the manager reads" 'grep -q "ev \"sign-in of \$U: \$(tenths \$((t3 - t0))) s (broker \$(tenths \$((t1 - t0))) s, VM \$(tenths \$((t2 - t1))) s, Windows \$(tenths \$((t3 - t2))) s)" $OTR/kiosk.sh && grep -q "^    quality_event \"\$U\"" $OTR/kiosk.sh'
 ok "kiosk: the quality event from the samples (latency in tenths of a ms, kbit/s over the session), none for a short session" '( eval "$(sed -n "/^duration(){/p; /^tenths(){/p; /^quality_event(){/,/kbit\/s average/p" $OTR/kiosk.sh)"; : > $OTR_EVENTS; echo "8 200 90 1000 3001000 9000 400" > /tmp/kiosk.quality; quality_event alice; echo "2 20 10 0 0 0 10" > /tmp/kiosk.quality; quality_event bob; [ "$(grep -c "session quality" $OTR_EVENTS)" = 1 ] && grep -q "session quality of alice: latency 2.5 ms (max 9.0 ms), 60 kbit/s average (peak 9000 kbit/s), 6 min" $OTR_EVENTS && [ ! -f /tmp/kiosk.quality ] )'

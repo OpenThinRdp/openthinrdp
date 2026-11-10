@@ -63,6 +63,10 @@ emulation, not yet on a real board. What is different from a PC and what to chec
 - **Wake-on-LAN**: enable "Wake on LAN" and **disable "Deep Sleep Control"**. With deep sleep in S4/S5 the
   network card is off and the magic packet never arrives. The same setting blocks the RTC alarm used by
   `POWER_ON_TIME`.
+- **AC Recovery** (Power Management): **On** for a device with `POWER_ON_TIME`. With Off (the default) a device
+  that loses power stays off when it comes back, and the alarm of `POWER_ON_TIME` goes with the power: it does not
+  wake the next morning. With On it starts when the power comes back; outside its hours OpenThinRDP warns for 60 s
+  (with Cancel) and switches off, with the alarm set again. The report of the device says it (`FW_AC_RECOVERY`).
 - **USB boot** must be enabled to install from a stick (Integrated Devices).
 - On Linux the settings can be changed without entering the setup screen, through `dell-wmi-sysman`
   (`/sys/class/firmware-attributes/dell-wmi-sysman/`), with the BIOS admin password if one is set.
