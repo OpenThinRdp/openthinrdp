@@ -5,7 +5,7 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
-## 0.3.4 (unreleased)
+## 0.3.4 (2026-11-10)
 
 - **Back after a power cut** ([#194](https://github.com/OpenThinRdp/openthinrdp/issues/194)). A device with
   `POWER_ON_TIME` and `POWER_OFF_TIME` that starts outside its hours (the power came back at night, or someone
