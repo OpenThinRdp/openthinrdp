@@ -5,6 +5,7 @@
 # save-config.sh runs it with "alarm" to reprogram only the power on at once.
 # Power on: RTC wake alarm. Works only if the firmware lets it through (on Dell: "Deep Sleep Control"
 #   disabled); with the device off no network is needed.
+# Switched on outside the hours (the power came back after a cut, or by hand): the same warning, then off (#194).
 # Power off: within 5 minutes after the time, if the device was already on at that time (switched on by hand
 #   later = stays on). With an open remote session it waits for the session to end. A 60 s warning with
 #   "Cancel" comes first.
@@ -106,7 +107,34 @@ if [ -f "$JF" ]; then
   [ "$(wc -l < "$JS")" -gt 2000 ] && { tail -n 1000 "$JS" > "$JS.new"; mv -f "$JS.new" "$JS"; }
 fi
 
-# --- 3) power off
+# --- 3) switched on outside the hours (#194): the power came back after a cut (firmware "AC Recovery" = On), or
+# someone pressed the button. Once per start, in its first 15 minutes, when the device started outside the hours and
+# it is still outside them: the warning with Cancel, then off. The alarm above was set with the power on, so the
+# device comes back at POWER_ON_TIME. Whoever switched it on by hand keeps it with Cancel; an open session keeps it.
+BF=/run/openthinrdp-schedule-boot
+# $1 = time: inside POWER_ON_TIME..POWER_OFF_TIME of a day of POWER_ON_DAYS (overnight: off the next day)
+in_hours(){ local m d on off; m=$(date -d "@$1" +%H:%M); d=$(date -d "@$1" +%u); on=$ON; off=$OFFT
+  [ "$on" = "$off" ] && return 0
+  if [[ $on < $off ]]; then [[ $DAYS == *$d* ]] && [[ ! $m < $on ]] && [[ $m < $off ]]
+  else { [[ $DAYS == *$d* ]] && [[ ! $m < $on ]]; } || { [[ $DAYS == *$(date -d "@$(( $1 - 86400 ))" +%u)* ]] && [[ $m < $off ]]; }; fi; }
+if [ ! -f $BF ] && [[ $ON =~ $TIMERE ]] && [[ $OFFT =~ $TIMERE ]] && [ "$AL" -gt 0 ]; then
+  UP=$(cut -d. -f1 /proc/uptime)
+  if [ "$UP" -ge 900 ] || in_hours "$BOOTED" || in_hours "$NOW"; then touch $BF
+  # the screen first, so whoever pressed the button sees the warning (at most 15 minutes)
+  elif pgrep -x Xorg >/dev/null; then
+    touch $BF; sleep 10
+    NEXT=$(date -d "@$AL" '+%a %d/%m %H:%M')
+    if in_session; then ev "switched on outside the hours ($ON-$OFFT): a session is open, it stays on"
+    else
+      ask --heading="$L_SCHED_OUT_TITLE" --text="$(printf "$L_SCHED_OUT_TEXT" "$(date -d "@$AL" +%H:%M)" "$(date -d "@$AL" +%d/%m)")" --button="$L_CANCEL:1" --timeout=60; RC=$?
+      if [ $RC -eq 1 ]; then ev "switched on outside the hours ($ON-$OFFT): kept on by the user"
+      elif in_session; then ev "switched on outside the hours ($ON-$OFFT): a session opened during the warning, it stays on"
+      else ev "switched on outside the hours ($ON-$OFFT): switched off, on again $NEXT"; wait_update; sleep 2; systemctl poweroff; exit 0; fi
+    fi
+  fi
+fi
+
+# --- 4) power off
 [[ $OFFT =~ $TIMERE ]] || exit 0
 T=$(date -d "today $OFFT" +%s)
 STATE=$(cat $STF 2>/dev/null)

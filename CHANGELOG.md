@@ -5,6 +5,16 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.3.4 (unreleased)
+
+- **Back after a power cut** ([#194](https://github.com/OpenThinRdp/openthinrdp/issues/194)). A device with
+  `POWER_ON_TIME` and `POWER_OFF_TIME` that starts outside its hours (the power came back at night, or someone
+  pressed the button) shows the 60 s warning with *Cancel* of the scheduled power off, then switches off with the
+  alarm set again, so it wakes at `POWER_ON_TIME`. The report says what a Dell does when the power comes back
+  (`FW_AC_RECOVERY`): with *AC Recovery* = Off it stays off, and the alarm goes with the power.
+- The questions at the top of the screen (this warning, the scheduled jobs, the remote screen) are as high as their
+  text: before, a white space was left under the buttons.
+
 ## 0.3.3 (2026-11-09)
 
 - **Anonymous data: Full, Errors only or Off** ([#190](https://github.com/OpenThinRdp/openthinrdp/issues/190)). A
