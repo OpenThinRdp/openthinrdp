@@ -15,3 +15,11 @@ main_nic(){
 # really is on the network
 route_nic(){ ip -4 route show default 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit }}'; }
 nic_ipv4(){ [ -n "$1" ] && ip -4 -o addr show dev "$1" scope global 2>/dev/null | awk '{print $4}' | head -1; }
+# What is below the address (#197): cable = a wired adapter with its cable in, wifi = Wi-Fi on and an adapter for it
+# (connected or still connecting), none = neither. With cable or wifi a missing address is on its way (DHCP, or a
+# switch port that passes traffic only after its spanning tree wait, ~30 s): the sign-in waits for it instead of
+# telling to check the cable. NETSYS: another /sys/class/net, for the tests.
+net_state(){ local s=${NETSYS:-/sys/class/net} i
+  for i in $(ls "$s" 2>/dev/null | grep -E '^(en|eth)'); do [ "$(cat "$s/$i/carrier" 2>/dev/null)" = 1 ] && { echo cable; return; }; done
+  [ "$(cfg WIFI)" = on ] && ls "$s" 2>/dev/null | grep -qE '^wl' && { echo wifi; return; }
+  echo none; }

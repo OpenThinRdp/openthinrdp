@@ -5,6 +5,18 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.3.5 (unreleased)
+
+- **Waiting for the network, not "check the cable"** ([#197](https://github.com/OpenThinRdp/openthinrdp/issues/197)).
+  When the cable is in (or Wi-Fi is on) and the address has not come yet, the sign-in waits on one screen:
+  *Waiting for the network*, with the seconds and *Cancel*. It waits up to 2 minutes, without spending the attempts,
+  and goes on as soon as the address comes. This is the case of a slow DHCP, or of a switch port that passes traffic
+  only some 30 s after the link. *Check the network cable* now shows only when no cable is in and Wi-Fi is off. If
+  there is still no address after 2 minutes, the message says the cable is fine and the network gives no address. The
+  status line of the settings says *waiting for an address*.
+- A default route on an adapter whose link is down (kept by dhcpcd, marked `linkdown`) no longer counts as a network:
+  with the cable pulled, the sign-in says so instead of trying to connect, or waking the PC, through it.
+
 ## 0.3.4 (2026-11-10)
 
 - **Back after a power cut** ([#194](https://github.com/OpenThinRdp/openthinrdp/issues/194)). A device with

@@ -578,6 +578,7 @@ settings_dialog(){
   elif iw dev "$wli" link 2>/dev/null | grep -q Connected; then wst=$(printf "$L_WIFI_CONNECTED" "$(iw dev "$wli" link | sed -n 's/^[[:space:]]*SSID: //p') $(iw dev "$wli" link | sed -n 's/^[[:space:]]*signal: //p')")
   else wst=$L_WIFI_DISCONNECTED; fi
   rep=$(tail -1 "$OTR_LOG/report.log" 2>/dev/null | cut -c1-60)
+  [ -z "$IPC" ] && [ "$(net_state)" != none ] && IPC=$L_NO_ADDR
   st=$(printf "$L_STATUS_LINE" "${IPC:-$L_NO_NETWORK}" "$mac" "$(date +%H:%M)" "$sync" "$wst" "${rep:-$L_NEVER}")
 
   local -a NETV=(dhcp static) NETL=("DHCP" "$L_STATIC") USBV=(auto all disks) USBL=("$L_USB_AUTO" "$L_USB_ALL" "$L_USB_DISKS")
@@ -835,17 +836,20 @@ session_elsewhere(){ local f=$OTR_LIB/sessions-elsewhere u
 #   net = no address or gateway   dns = broker name not found   broker = no broker answers   vm = broker ok, no desktop
 # IPv4 address only: "hostname -I" may list an IPv6 one first, which is not what users or support look for
 ipv4(){ ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -1; }
-net_ok(){ ip -4 route show default 2>/dev/null | grep -q . && [ -n "$(ipv4)" ]; }
+# a default route on an adapter whose link is down (dhcpcd keeps it with "persistent", marked linkdown) is no network
+net_ok(){ ip -4 route show default 2>/dev/null | grep -v linkdown | grep -q . && [ -n "$(ipv4)" ]; }
+. "$OTR/lib/netif.sh"     # net_state: cable, wifi or none below a missing address
 err_class(){
   case "$1" in 139|140) echo dns; return ;; esac
   if grep -qiE 'credssp|nla|license|ntlm|messageChannel|activation|redirect' /tmp/kiosk.log 2>/dev/null; then echo vm; return; fi
   case "$1" in 131|133|141|142|143|147|150) echo broker ;; *) echo other ;; esac; }
-err_title(){ case "$1" in net) echo "$L_E_NET" ;; dns) echo "$L_E_DNS" ;; broker) echo "$L_E_BROKER" ;; vm) echo "$L_E_VM" ;; udp) echo "$L_E_UDP" ;; *) echo "$L_E_OTHER" ;; esac; }
+err_title(){ case "$1" in net|noaddr) echo "$L_E_NET" ;; dns) echo "$L_E_DNS" ;; broker) echo "$L_E_BROKER" ;; vm) echo "$L_E_VM" ;; udp) echo "$L_E_UDP" ;; *) echo "$L_E_OTHER" ;; esac; }
 # final message after the last attempt: what happened and what to do. Stays 60 s (or until OK).
 show_err(){ local cl=$1 u=$2 before=$3 t sup
   sup=$(cfg SUPPORT_TEXT); [ -z "$sup" ] && sup=$L_CALL_SUPPORT
   case "$cl" in
     net)    t="$L_T_NET" ;;
+    noaddr) t="$L_T_NOADDR\n$sup" ;;
     dns)    t=$(printf "$L_T_DNS" "$(cfg BROKER)")"\n$sup" ;;
     broker) t=$(printf "$L_T_BROKER" "$(cfg BROKER) $(cfg BROKER_FALLBACK)")"\n$sup" ;;
     vm)     t=$(printf "$L_T_VM" "$u")"\n$sup" ;;
@@ -925,7 +929,7 @@ WOL
 # 2 = desktop not available after the attempts, 3 = session DROPPED (the caller reconnects without asking),
 # 4 = session taken over from another device (warn, never reconnect: the two devices would fight)
 session(){
-  local U="$1" P="$2" att=0 max=8 txt="$L_P_CONNECTING" B BRHA st d ec thr xp wp udponly=0 noudp=0 vmfails=0 vmwait=0 vmlog=0 ctmo=150
+  local U="$1" P="$2" att=0 max=8 txt="$L_P_CONNECTING" B BRHA st d ec thr xp wp udponly=0 noudp=0 vmfails=0 vmwait=0 vmlog=0 ctmo=150 ns nw netw0=0 netok=0 msg
   BRHA=${CONN:-$(cfg BROKER)}
   rm -f /tmp/kiosk.cancel /tmp/kiosk.stopped /tmp/kiosk.timeout /tmp/kiosk.disconnect
   [ "$3" = reconnect ] && { max=40; txt="$L_P_RECONNECTING"; }
@@ -938,13 +942,32 @@ session(){
   while [ $att -lt $max ]; do
     att=$((att+1))
     rm -f /tmp/kiosk.noudp
-    # without a network calling the broker is pointless: say so now and retry in 5 s
+    # without a network calling the broker is pointless. Cable in or Wi-Fi on (#197): the address is on its way (DHCP,
+    # a switch port that waits ~30 s after the link before it passes traffic): wait for it up to 2 minutes on a screen
+    # with Cancel, the attempts do not count. No cable and no Wi-Fi: say so and retry in 5 s.
     if ! net_ok; then
-      LAST_ERR=net; LAST_EC=""
-      ev "attempt $att for $U: no network (no address or gateway)"
-      ui message --icon=warn --heading="$(plain "$L_E_NET")" --text="$(plain "$(printf "$L_P_NONET" "$att" "$max")")" --timeout=5
+      ns=$(net_state); LAST_EC=""
+      if [ "$ns" != none ]; then
+        [ $netw0 -eq 0 ] && { netw0=$(date +%s); ev "attempt $att for $U: $([ "$ns" = wifi ] && echo "Wi-Fi on, not connected yet" || echo "cable connected, no address yet"): waiting for the network up to 2 min"; }
+        nw=$(( $(date +%s) - netw0 ))
+        if [ $nw -lt 120 ]; then
+          # one screen that counts the seconds and closes by itself when the address comes (or after 2 minutes)
+          msg=$([ "$ns" = wifi ] && echo "$L_P_WIFIWAIT" || echo "$L_P_ADDRWAIT")
+          { trap '' PIPE
+            while n=$(( $(date +%s) - netw0 )); [ $n -lt 120 ] && ! net_ok; do
+              { echo "$(( n * 100 / 120 ))"; echo "# $(printf "$msg" "$n")"; } 2>/dev/null || break; sleep 1
+            done; echo 100; } 2>/dev/null | ui message --progress --icon=busy --heading="$(plain "$L_P_NETWAIT_T")" \
+               --text="$(plain "$(printf "$msg" "$nw")")" --button="$L_CANCEL:1"
+          [ "${PIPESTATUS[1]}" = 1 ] && { ev "waiting for the network cancelled by the user after $(( $(date +%s) - netw0 )) s"; LAST_ERR=noaddr; break; }
+          att=$((att-1)); continue
+        fi
+        LAST_ERR=noaddr
+      else LAST_ERR=net; fi
+      ev "attempt $att for $U: no network ($([ "$LAST_ERR" = net ] && echo "no cable and no Wi-Fi" || echo "no address after 2 min"))"
+      ui message --icon=warn --heading="$(plain "$L_E_NET")" --text="$(plain "$(printf "$([ "$LAST_ERR" = net ] && echo "$L_P_NONET" || echo "$L_P_NOADDR")" "$att" "$max")")" --timeout=5
       continue
     fi
+    [ $netw0 -gt 0 ] && [ $netok = 0 ] && { netok=1; ev "network ready after $(( $(date +%s) - netw0 )) s of waiting"; }
     # the log of the previous attempt or session stays as kiosk.log.prev: after a drop the next attempt starts at once
     [ -s /tmp/kiosk.log ] && mv -f /tmp/kiosk.log /tmp/kiosk.log.prev; : > /tmp/kiosk.log; rm -f /tmp/kiosk.vm /tmp/kiosk.quality
     [ $att -eq 1 ] && [ "$3" != reconnect ] && { wake_pc || return 5; }
