@@ -5,7 +5,7 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
-## 0.3.5 (unreleased)
+## 0.3.5 (2026-11-13)
 
 - **Waiting for the network, not "check the cable"** ([#197](https://github.com/OpenThinRdp/openthinrdp/issues/197)).
   When the cable is in (or Wi-Fi is on) and the address has not come yet, the sign-in waits on one screen:
