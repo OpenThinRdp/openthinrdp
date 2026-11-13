@@ -5,6 +5,27 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.3.5 (2026-11-13)
+
+- **Waiting for the network, not "check the cable"** ([#197](https://github.com/OpenThinRdp/openthinrdp/issues/197)).
+  When the cable is in (or Wi-Fi is on) and the address has not come yet, the sign-in waits on one screen:
+  *Waiting for the network*, with the seconds and *Cancel*. It waits up to 2 minutes, without spending the attempts,
+  and goes on as soon as the address comes. This is the case of a slow DHCP, or of a switch port that passes traffic
+  only some 30 s after the link. *Check the network cable* now shows only when no cable is in and Wi-Fi is off. If
+  there is still no address after 2 minutes, the message says the cable is fine and the network gives no address. The
+  status line of the settings says *waiting for an address*.
+- A default route on an adapter whose link is down (kept by dhcpcd, marked `linkdown`) no longer counts as a network:
+  with the cable pulled, the sign-in says so instead of trying to connect, or waking the PC, through it.
+- **The sign-in screen right after power on** ([#199](https://github.com/OpenThinRdp/openthinrdp/issues/199)). On a
+  device without a management folder it came up to a minute late: the kiosk first waited for a network (20 s) and for
+  the answer of the update source (45 s, *Checking for updates*). It now shows at once and the check runs in the
+  background (on the test bench: 20 s from power on instead of 42-67 s). A new version found meanwhile is asked as
+  soon as the sign-in screen is idle, or at the next one.
+- The sign-in screen is no longer closed under somebody typing: when a new version is offered, or the settings or the
+  pictures change, it is drawn again only after 10 s without input (before, at once, with the password half typed).
+- The *sign-in screen ready* time in the anonymous data only within 10 minutes of power on: a kiosk restarted by an
+  update from an older version measured how long the device had been on.
+
 ## 0.3.4 (2026-11-10)
 
 - **Back after a power cut** ([#194](https://github.com/OpenThinRdp/openthinrdp/issues/194)). A device with
