@@ -114,8 +114,12 @@ update_watch(){
     # when something changes: a default user that came after the form was drawn), or a new version offered to a
     # device without a management folder (update_question asks before the form): the sign-in screen again (not in a
     # session)
+    # Never under somebody typing (#199): the form is closed only after 10 s without input, else again in 5 s
     nsig=$(stat -c %Y "$OTR_LIB"/branding/*.png "$OTR_CONF" /run/openthinrdp-update-offer 2>/dev/null | tr '\n' ' ')
-    if [ "$nsig" != "$bsig" ]; then bsig=$nsig; pgrep -x xfreerdp3 >/dev/null || pkill -f -- "--class=OtrLogin" 2>/dev/null; fi
+    if [ "$nsig" != "$bsig" ]; then
+      if pgrep -x xfreerdp3 >/dev/null; then bsig=$nsig
+      elif [ "$(xprintidle 2>/dev/null || echo 60000)" -ge 10000 ]; then bsig=$nsig; pkill -f -- "--class=OtrLogin" 2>/dev/null; fi
+    fi
     # not while the full screen power-off notice shows the same progress
     if updating && ! pgrep -x xfreerdp3 >/dev/null && [ ! -f /tmp/openthinrdp-poweroff-pending ]; then
       if [ -z "$y" ] || ! kill -0 "$y" 2>/dev/null; then
@@ -1259,20 +1263,13 @@ update_question(){
   ui message --update --icon=update --heading="$(plain "$L_UPDATE_RUNNING")" --text="$(plain "$L_UPD_INSTALL") (%p%)"
   wait_update
 }
-# At the start of a device without a management folder: the answer of the update source first (45 s at most, with a
-# network within 20 s), so the question comes before anyone signs in. The image does not need rebuilding per release.
+# At the start of a device without a management folder (#199): the sign-in screen at once, never behind the update
+# check (it used to wait up to 20 s for a network and 45 s for the update source: a minute at every power on). The
+# check runs in the background (report.sh at boot). A version offered later: update_watch closes the sign-in screen
+# once nobody has typed for 10 s (not in a session), and the main loop asks (update_question) before drawing it again.
 start_update_check(){
-  local i
   managed || [ "$(cfg UPDATE_FROM)" = off ] && return 0
-  . "$OTR/lib/netif.sh"
-  for i in $(seq 1 40); do ip -4 -o addr show dev "$(main_nic)" 2>/dev/null | grep -q inet && break; sleep 0.5; done
-  ip -4 -o addr show dev "$(main_nic)" 2>/dev/null | grep -q inet || return 0
-  if [ ! -f /run/openthinrdp-update-offer ] && [ ! -f /run/openthinrdp-update-checked ]; then
-    { echo "15"; echo "# $L_UPD_CHECK"
-      for i in $(seq 1 90); do [ -f /run/openthinrdp-update-offer ] || [ -f /run/openthinrdp-update-checked ] && break; sleep 0.5; done
-      echo "100"; } | ui message --progress --icon=busy --heading="$(plain "$L_UPD_CHECK_T")" --text="$(plain "$L_UPD_CHECK")"
-  fi
-  update_question
+  update_question            # an offer already there (the kiosk restarted): asked now
 }
 start_update_check
 # the live system (from the USB stick) tests the hardware at its first start: what anyone trying it wants to know.
@@ -1330,8 +1327,11 @@ while true; do
   IPNOW=$(ipv4)
   # the password remembered: the first sign-in screen after the start signs in by itself (once: after a session or a
   # failure the screen is shown as always)
-  # how long the device took from power on to its first sign-in screen (once per start; /tmp is new at every start)
-  [ -e /tmp/kiosk.bootready ] || { : > /tmp/kiosk.bootready; ev "sign-in screen ready $(cut -d. -f1 /proc/uptime) s after power on"; }
+  # how long the device took from power on to its first sign-in screen (once per start; /tmp is new at every start).
+  # Only within 10 minutes of power on: a kiosk restarted later (an update from a version without the mark) would
+  # measure how long the device has been on (#199)
+  [ -e /tmp/kiosk.bootready ] || { : > /tmp/kiosk.bootready; up=$(cut -d. -f1 /proc/uptime)
+    [ "$up" -lt 600 ] && ev "sign-in screen ready $up s after power on"; }
   AUTOL=""; [ "$AUTO" = 1 ] && { AUTO=0; AUTOL=$(sudo -n "$OTR/remember.sh" get 2>/dev/null); }
   if [ -n "$AUTOL" ]; then OUT="${AUTOL%%$'\t'*}|${AUTOL#*$'\t'}"; rc=10; ev "automatic sign-in of ${AUTOL%%$'\t'*} (password remembered)"
   elif [ $GREETER = 1 ]; then

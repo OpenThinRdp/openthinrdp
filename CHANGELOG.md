@@ -16,6 +16,15 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
   status line of the settings says *waiting for an address*.
 - A default route on an adapter whose link is down (kept by dhcpcd, marked `linkdown`) no longer counts as a network:
   with the cable pulled, the sign-in says so instead of trying to connect, or waking the PC, through it.
+- **The sign-in screen right after power on** ([#199](https://github.com/OpenThinRdp/openthinrdp/issues/199)). On a
+  device without a management folder it came up to a minute late: the kiosk first waited for a network (20 s) and for
+  the answer of the update source (45 s, *Checking for updates*). It now shows at once and the check runs in the
+  background (on the test bench: 20 s from power on instead of 42-67 s). A new version found meanwhile is asked as
+  soon as the sign-in screen is idle, or at the next one.
+- The sign-in screen is no longer closed under somebody typing: when a new version is offered, or the settings or the
+  pictures change, it is drawn again only after 10 s without input (before, at once, with the password half typed).
+- The *sign-in screen ready* time in the anonymous data only within 10 minutes of power on: a kiosk restarted by an
+  update from an older version measured how long the device had been on.
 
 ## 0.3.4 (2026-11-10)
 

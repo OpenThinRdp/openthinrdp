@@ -1105,5 +1105,8 @@ rm -rf $NS
 ok "kiosk: with the cable in it waits for the address up to 2 minutes on one screen with Cancel, the attempts not spent" 'grep -q "if \[ \"\$ns\" != none \]; then" $OTR/kiosk.sh && grep -q "\[ \$n -lt 120 \] && ! net_ok; do" $OTR/kiosk.sh && grep -q "att=\$((att-1)); continue" $OTR/kiosk.sh && grep -q "ui message --progress --icon=busy --heading=\"\$(plain \"\$L_P_NETWAIT_T\")\"" $OTR/kiosk.sh'
 ok "kiosk: still no address after the wait, the message says the cable is fine (noaddr), the cable only without cable" 'grep -q "noaddr) t=\"\$L_T_NOADDR" $OTR/kiosk.sh && grep -q "\[ \"\$LAST_ERR\" = net \] && echo \"\$L_P_NONET\" || echo \"\$L_P_NOADDR\"" $OTR/kiosk.sh && grep -q "IPC=\$L_NO_ADDR" $OTR/kiosk.sh'
 ok "kiosk: a default route on an adapter with its link down (dhcpcd persistent, linkdown) is no network" 'grep -q "net_ok(){ ip -4 route show default 2>/dev/null | grep -v linkdown | grep -q ." $OTR/kiosk.sh'
+# --- 0.3.5: the sign-in screen first on a device without a management folder (#199)
+ok "start: no wait for the network or the update source in front of the sign-in screen; a later offer closes the screen only after 10 s without input (any redraw)" '! grep -q "for i in \$(seq 1 90); do \[ -f /run/openthinrdp-update-offer \]" $OTR/kiosk.sh && grep -q "elif \[ \"\$(xprintidle 2>/dev/null || echo 60000)\" -ge 10000 \]; then bsig=\$nsig; pkill -f -- \"--class=OtrLogin\" 2>/dev/null; fi" $OTR/kiosk.sh && ! grep -q offer_watch $OTR/kiosk.sh'
+ok "start: the sign-in screen ready event only within 10 minutes of power on" 'grep -q "\[ \"\$up\" -lt 600 \] && ev \"sign-in screen ready \$up s after power on\"" $OTR/kiosk.sh'
 echo "passed $PASS, failed $FAIL"
 [ $FAIL = 0 ]
