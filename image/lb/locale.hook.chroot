@@ -1,0 +1,24 @@
+#!/bin/bash
+# live-build hook: the locale of build.conf, put back after live-build's own hooks.
+# /usr/share/live/build/hooks/normal/1020-create-locales-files.hook.chroot writes "LANG=C.UTF-8" into /etc/default/locale
+# unconditionally, and it runs AFTER 0100-openthinrdp.hook.chroot: whatever LOCALE says, the system came up in the C
+# locale (Chinese screens, English messages of every other program, an English date). This hook runs later (1030) and
+# wins. @LOCALE@ is filled in by image/lb/inside.sh: build.env is gone by now (0100 removes it on purpose).
+# No "set -e": a missing locale.gen (an image without the locales package) must not fail the build.
+LOCALE="@LOCALE@"
+printf 'LANG=%s\n' "$LOCALE" > /etc/default/locale
+if grep -q '^LANG=' /etc/environment 2>/dev/null; then
+  sed -i "s|^LANG=.*|LANG=\"$LOCALE\"|" /etc/environment
+else
+  printf 'LANG="%s"\n' "$LOCALE" >> /etc/environment
+fi
+# the locale itself: 0100 uncommented its line of locale.gen and ran locale-gen; this covers an image built without it
+if [ -f /etc/locale.gen ] && ! grep -qx "$LOCALE UTF-8" /etc/locale.gen; then
+  sed -i "s/^# *\(${LOCALE//./\\.}\)/\1/" /etc/locale.gen || true
+  locale-gen >/dev/null 2>&1 || true
+fi
+# without the locales package there is no compiled locale: say it in the build log instead of leaving a LANG that every
+# program answers with "cannot change locale"
+if ! locale -a 2>/dev/null | grep -qx "${LOCALE%%.*}.*"; then
+  echo "W: $LOCALE is not generated in the image (locales package missing?): programs will fall back to C.UTF-8"
+fi

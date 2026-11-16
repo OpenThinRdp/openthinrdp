@@ -25,7 +25,12 @@ ALLIF=$(wired_nics); IF=$(main_nic); MODE=$(cfg NETMODE)
 DOM=$(cfg DOMAIN | tr 'A-Z' 'a-z'); [[ $DOM == *.* ]] || DOM=""
 # Wi-Fi only when enabled, with an adapter and a saved key (written by save-config.sh)
 WCF=/etc/wpa_supplicant/openthinrdp-wifi.conf; WL=""   # a link to the copy in memory when kept in the TPM (lib/secrets.sh)
-if [ "$(cfg WIFI)" = on ] && [ -s "$WCF" ] && command -v wpa_supplicant >/dev/null; then WL=$(wifi_nics | head -1); fi
+if [ "$(cfg WIFI)" = on ] && [ -s "$WCF" ] && command -v wpa_supplicant >/dev/null; then WL=$(wifi_nics | head -1)
+# the key no longer readable (#201: the copy kept in the TPM): the Wi-Fi block stays as it is, so a save does not cut
+# the connection still running; the settings dialog says to connect again from the Wi-Fi page
+elif [ "$(cfg WIFI)" = on ] && [ -n "$(wifi_nics | head -1)" ] && grep -qx "allow-hotplug $(wifi_nics | head -1)" /etc/network/interfaces 2>/dev/null; then
+  WL=$(wifi_nics | head -1)
+fi
 [ "$IF" = "$(wifi_nics | head -1)" ] && [ "$MODE" = static ] && IF=$(wired_nics | head -1)   # static only on a cable
 # 802.1X on the cable (dot1x.sh): before its address every wired adapter waits for its supplicant to authenticate
 D1X=""; [ "$(cfg DOT1X)" != off ] && command -v wpa_supplicant >/dev/null && D1X=1
@@ -62,7 +67,14 @@ for i in $ALLIF $WL $(awk '/^allow-hotplug /{print $2}' $OLD 2>/dev/null); do
   if [ -z "$a" ] && [ "$MODE" != static ] && ip -4 -o addr show dev "$i" 2>/dev/null | grep -q inet; then continue; fi
   CHANGED="$CHANGED $i"; [ -z "$a" ] && [ -n "$b" ] && ADDED="$ADDED $i"
 done
-cmp -s "$NEW" $OLD || cp "$NEW" $OLD
+if ! cmp -s "$NEW" $OLD; then
+  # a file of its own next to it, then mv: a copy straight over the file leaves it truncated if the power goes off
+  # mid-copy (the device switches itself off after a session, and a half-written interfaces file means no network at the
+  # next start). mv within one directory is a rename. (0.3.6, soso192; the copy on disk before the rename)
+  if install -m 644 "$NEW" "$OLD.new" 2>/dev/null && { sync "$OLD.new" 2>/dev/null; mv -f "$OLD.new" "$OLD" 2>/dev/null; }; then
+    sync -f "$OLD" 2>/dev/null
+  else rm -f "$OLD.new"; ev "network: /etc/network/interfaces could not be written (read-only filesystem?): the settings are not in use"; fi
+fi
 rm -f "$NEW"
 
 # --- DNS: the configured servers, or the ones from DHCP when DNS1 is empty
@@ -193,7 +205,10 @@ fi
 # still waiting on an adapter without cable has to go, otherwise ifdown waits for it.
 if [ "$1" = now ]; then
   for i in $CHANGED; do
-    setsid bash -c "pkill -9 -f '^/usr/sbin/ifup .*[ =]$i\$'; timeout -s KILL 20 ifdown --force $i; dhcpcd -x $i; ip addr flush dev $i; grep -qx 'allow-hotplug $i' $OLD && ifup $i" 9>&- >/dev/null 2>&1 < /dev/null &
+    # ifup always, not only when the file has the adapter: an adapter that lost its block above would otherwise be
+    # flushed and never brought up again (no Wi-Fi, no address, until the next reboot). ifup on an interface that the
+    # file does not know says nothing and exits.
+    setsid bash -c "pkill -9 -f '^/usr/sbin/ifup .*[ =]$i\$'; timeout -s KILL 20 ifdown --force $i; dhcpcd -x $i; ip addr flush dev $i; ifup $i" 9>&- >/dev/null 2>&1 < /dev/null &
   done
 elif [ "$1" = boot ]; then
   for i in $ADDED; do setsid ifup "$i" 9>&- >/dev/null 2>&1 < /dev/null & done

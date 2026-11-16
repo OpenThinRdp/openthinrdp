@@ -55,7 +55,7 @@ img_cfg(){ local f
   for f in "$OTR_SITE" "$OTR_DEFAULTS"; do
     [ -f "$f" ] && grep -q "^$1=" "$f" && { sed -n "s/^$1=//p" "$f" | head -1 | tr -d '\r'; return; }
   done; }
-IMG_SPLASH=$OTR/branding/splash.png
+IMG_SPLASH=$(otr_image_splash "$(img_cfg BG_TOP)" "$(img_cfg BG_BOTTOM)")   # the card on light colours (lib/common.sh)
 # what the boot splash should show: picture + colors of the image, as one fingerprint
 splash_want(){ { cat "$IMG_SPLASH"; echo "$(rgb "$(img_cfg BG_TOP)")|$(rgb "$(img_cfg BG_BOTTOM)")"; } | sha256sum | cut -c1-64; }
 # what the theme in the system shows now

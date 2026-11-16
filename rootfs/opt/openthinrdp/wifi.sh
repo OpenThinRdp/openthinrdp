@@ -10,12 +10,21 @@
 #                     invalid (name or password not acceptable) | nowifi | busy | saveerror <message>
 #                     A Wi-Fi also set centrally (central-*.conf) adds "central" to an ok: the manager will put its own
 #                     network back at the next check.
+#                     Several networks (0.3.6): with a main network already set (WIFI_SSID) another one is ADDED to the
+#                     networks of the device (lib/eap.sh wifi_known), the settings untouched: "result added <address>"
+#                     (or noip). One of the other networks of the settings (WIFI_SSID_2..4) gets its key saved again.
+#   wifi.sh known     the networks the device knows: "main|extra|personal<TAB>ssid" per line
+#   wifi.sh forget    one of the device's own networks (name on stdin) forgotten: "result forgotten" | notpersonal | busy
 . /opt/openthinrdp/lib/common.sh
 . "$OTR/lib/netif.sh"
+. "$OTR/lib/secrets.sh"
+. "$OTR/lib/eap.sh"
 WL=$(wifi_nics | head -1)
 # the Wi-Fi started in a scope of its own: wpa_supplicant and the DHCP client must outlive whatever started this script
 # (a transient service kills every process of its group when it ends: the Wi-Fi came up and went down again)
-up(){ systemd-run --scope --quiet --collect ifup "$WL" >/dev/null 2>&1 < /dev/null || ifup "$WL" >/dev/null 2>&1; }
+# 9>&-: the lock of this script does not pass to them. wpa_supplicant kept it open for good, and every later try from
+# the Wi-Fi page in the same power on said "busy" (0.3.6)
+up(){ systemd-run --scope --quiet --collect ifup "$WL" >/dev/null 2>&1 < /dev/null 9>&- || ifup "$WL" >/dev/null 2>&1 9>&-; }
 
 # iw scan output -> the lines above (stdin to stdout); a function on its own for the tests
 parse_scan(){
@@ -42,18 +51,30 @@ case "$1" in
   connect)
     [ -n "$WL" ] || { echo "result nowifi"; exit 0; }
     IFS= read -r SSID; IFS= read -r PSK
-    # the same rules as the settings (save-config.sh): a name of 1-32 characters, a password of 8-63
-    if [ -z "$SSID" ] || [ ${#SSID} -gt 32 ] || [ ${#PSK} -lt 8 ] || [ ${#PSK} -gt 63 ]; then echo "result invalid"; exit 0; fi
+    # the same rules as the settings (save-config.sh): a name of 1-32 characters, a password of 8-63, or the 64 hex
+    # digits of a key already computed (some administrators paste those)
+    if [ -z "$SSID" ] || [ ${#SSID} -gt 32 ]; then echo "result invalid"; exit 0; fi
+    if ! [[ $PSK =~ ^[0-9a-fA-F]{64}$ ]] && { [ ${#PSK} -lt 8 ] || [ ${#PSK} -gt 63 ]; }; then echo "result invalid"; exit 0; fi
     exec 9>/run/openthinrdp-wifi.lock; flock -n 9 || { echo "result busy"; exit 0; }
+    # the settings this will save, checked BEFORE the Wi-Fi of now is stopped: a save refused after the try left the
+    # device without Wi-Fi at every attempt (#201)
+    f=$(mktemp); chmod 600 "$f"
+    printf 'WIFI=on\nWIFI_SSID=%s\nWIFI_SECURITY=psk\nWIFI_PSK=%s\n' "$SSID" "$PSK" > "$f"
+    msg=$("$OTR/save-config.sh" "$f" --print --heal 2>&1); r=$?; rm -f "$f"
+    if [ $r -ne 0 ]; then ev "Wi-Fi from the page: $SSID not tried, the settings would be refused: $(echo "$msg" | tr '\n' ' ')"
+      echo "result saveerror $(echo "$msg" | head -1)"; exit 0; fi
     T=/run/otr-wifi-test; rm -rf "$T"; mkdir -m 700 "$T"
     stop_test(){ [ -s "$T/pid" ] && kill "$(cat "$T/pid")" 2>/dev/null; sleep 0.5; rm -rf "$T"; }
     was_on=$(cfg WIFI)
     echo "step stop"
     ifdown --force "$WL" >/dev/null 2>&1; pkill -f "wpa_supplicant.*-i *$WL( |$)" 2>/dev/null; sleep 1
     ip link set "$WL" up 2>/dev/null
-    # the network for the try: its name in hex (any character is safe), the key as wpa_passphrase computes it
-    hex=$(printf '%s' "$SSID" | od -An -tx1 | tr -d ' \n')
-    key=$(wpa_passphrase "$SSID" "$PSK" 2>/dev/null | sed -n 's/^[[:space:]]*psk=\([0-9a-f]\{64\}\)$/\1/p')
+    # the network for the try: its name in hex (any character is safe), the key as wpa_passphrase computes it.
+    # od -v: without it od folds the repeated lines into "*", and a 32-byte name whose two halves are equal
+    # became 33 characters with a "*" in them (the supplicant refused the file, the page timed out).
+    hex=$(printf '%s' "$SSID" | od -An -v -tx1 | tr -d ' \n')
+    if [[ $PSK =~ ^[0-9a-fA-F]{64}$ ]]; then key=$(printf '%s' "$PSK" | tr 'A-F' 'a-f')
+    else key=$(wpa_passphrase "$SSID" "$PSK" 2>/dev/null | sed -n 's/^[[:space:]]*psk=\([0-9a-f]\{64\}\)$/\1/p'); fi
     [ -n "$key" ] || { echo "result invalid"; rm -rf "$T"; [ "$was_on" = on ] && up; exit 0; }
     ( umask 077; printf 'ctrl_interface=%s/ctrl\ncountry=%s\nnetwork={\n  ssid=%s\n  scan_ssid=1\n  psk=%s\n}\n' "$T" "$(cfg WIFI_COUNTRY)" "$hex" "$key" > "$T/conf" )
     [ -n "$(cfg WIFI_COUNTRY)" ] || sed -i '/^country=$/d' "$T/conf"
@@ -76,18 +97,66 @@ case "$1" in
       echo "result $res"; exit 0
     fi
     echo "step save"
-    f=$(mktemp); chmod 600 "$f"
-    printf 'WIFI=on\nWIFI_SSID=%s\nWIFI_SECURITY=psk\nWIFI_PSK=%s\n' "$SSID" "$PSK" > "$f"
-    msg=$("$OTR/save-config.sh" "$f" 2>&1); r=$?; rm -f "$f"
-    if [ $r -ne 0 ]; then [ "$was_on" = on ] && up; echo "result saveerror $(echo "$msg" | head -1)"; exit 0; fi
-    # save-config.sh applied it, in the group of processes of its caller: started again here in a scope of its own
+    # the main network when there is none yet (or it is this one); one of the other networks of the settings; else one
+    # more network of the device
+    mode=personal slot=""
+    { [ "$(cfg WIFI)" != on ] || [ -z "$(cfg WIFI_SSID)" ] || [ "$(cfg WIFI_SSID)" = "$SSID" ]; } && mode=main
+    for n in 2 3 4; do [ "$(cfg WIFI_SSID_$n)" = "$SSID" ] && slot=$n; done
+    [ $mode = personal ] && [ -n "$slot" ] && mode=extra
+    if [ $mode = personal ]; then
+      wifi_known_add "$SSID" "$key"; WIFI_FORCE=1 wifi_conf_update ""
+      ev "Wi-Fi from the page: $SSID added to the networks of this device ($(wifi_known | grep -c .) of $WIFI_KNOWN_MAX)"
+    else
+      f=$(mktemp); chmod 600 "$f"
+      if [ $mode = main ]; then printf 'WIFI=on\nWIFI_SSID=%s\nWIFI_SECURITY=psk\nWIFI_PSK=%s\n' "$SSID" "$PSK" > "$f"
+      else printf 'WIFI_PSK_%s=%s\n' "$slot" "$PSK" > "$f"; fi
+      msg=$("$OTR/save-config.sh" "$f" --heal 2>&1 9>&-); r=$?; rm -f "$f"
+      if [ $r -ne 0 ]; then [ "$was_on" = on ] && up; echo "result saveerror $(echo "$msg" | head -1)"; exit 0; fi
+    fi
     echo "step dhcp"
-    timeout -s KILL 20 ifdown --force "$WL" >/dev/null 2>&1; up
+    wl_ip(){ ip -4 -o addr show dev "$WL" scope global 2>/dev/null | awk '{print $4}' | head -1; }
+    # The Wi-Fi was stopped for the try. Turned on now (it was off): save-config.sh applied it, and apply.sh restarts
+    # the adapter in the background in a scope of its own: the address is waited for instead of bringing the interface
+    # down a second time underneath that restart (two restarts at once left the Wi-Fi down after "Save", and the device
+    # looked as if it had lost its settings: soso192). Already on, or one more network of the device: nothing restarts
+    # it, so here at once. Still no address after 20 s: one restart of our own.
+    [ "$was_on" = on ] && { timeout -s KILL 20 ifdown --force "$WL" >/dev/null 2>&1; up; }
     ipa=""
-    for i in $(seq 1 40); do ipa=$(ip -4 -o addr show dev "$WL" scope global 2>/dev/null | awk '{print $4}' | head -1); [ -n "$ipa" ] && break; sleep 0.5; done
-    central=""; grep -qs '^WIFI_SSID=' "$OTR_LIB"/central-*.conf && ! grep -qsxF "WIFI_SSID=$SSID" "$OTR_LIB"/central-*.conf && central=" central"
-    if [ -n "$ipa" ]; then ev "Wi-Fi from the page: connected to $SSID, $ipa"; echo "result ok ${ipa%/*}$central"
+    for i in $(seq 1 40); do ipa=$(wl_ip); [ -n "$ipa" ] && break; sleep 0.5; done
+    if [ -z "$ipa" ]; then
+      timeout -s KILL 20 ifdown --force "$WL" >/dev/null 2>&1; up
+      for i in $(seq 1 40); do ipa=$(wl_ip); [ -n "$ipa" ] && break; sleep 0.5; done
+    fi
+    # Several networks around (0.3.6): wpa_supplicant joins the one it prefers, and the page said "connected" to the
+    # one chosen with the address of the other. The one chosen here first, the others enabled again at once (for when
+    # it goes away), and its own address
+    W=(wpa_cli -p /run/wpa_supplicant -i "$WL")
+    for i in $(seq 1 20); do "${W[@]}" status >/dev/null 2>&1 && break; sleep 0.5; done
+    id=$("${W[@]}" list_networks 2>/dev/null | awk -F'\t' -v s="$SSID" 'NR > 1 && $2 == s {print $1; exit}')
+    if [ -n "$id" ] && [ "$(iw dev "$WL" link 2>/dev/null | sed -n 's/^[[:space:]]*SSID: //p')" != "$SSID" ]; then
+      "${W[@]}" select_network "$id" >/dev/null 2>&1
+      for i in $(seq 1 30); do [ "$(iw dev "$WL" link 2>/dev/null | sed -n 's/^[[:space:]]*SSID: //p')" = "$SSID" ] && break; sleep 0.5; done
+      "${W[@]}" enable_network all >/dev/null 2>&1
+      ip -4 addr flush dev "$WL" scope global 2>/dev/null; dhcpcd -n "$WL" >/dev/null 2>&1
+      ipa=""; for i in $(seq 1 40); do ipa=$(wl_ip); [ -n "$ipa" ] && break; sleep 0.5; done
+    fi
+    central=""; [ $mode = main ] && grep -qs '^WIFI_SSID=' "$OTR_LIB"/central-*.conf && ! grep -qsxF "WIFI_SSID=$SSID" "$OTR_LIB"/central-*.conf && central=" central"
+    ok=ok; [ $mode = personal ] && ok=added
+    if [ -n "$ipa" ]; then ev "Wi-Fi from the page: connected to $SSID, $ipa"; echo "result $ok ${ipa%/*}$central"
     else ev "Wi-Fi from the page: joined $SSID, no address from the network"; echo "result noip$central"; fi
     ;;
-  *) echo "usage: $0 scan | connect (name and password on stdin)"; exit 2 ;;
+  known)
+    s=$(cfg WIFI_SSID); [ -n "$s" ] && [ "$(cfg WIFI)" = on ] && printf 'main\t%s\n' "$s"
+    for n in 2 3 4; do s=$(cfg WIFI_SSID_$n); [ -n "$s" ] && printf 'extra\t%s\n' "$s"; done
+    wifi_known_names | while IFS= read -r s; do [ -n "$s" ] && printf 'personal\t%s\n' "$s"; done
+    ;;
+  forget)
+    IFS= read -r SSID
+    exec 9>/run/openthinrdp-wifi.lock; flock -n 9 || { echo "result busy"; exit 0; }
+    wifi_known_names | grep -qxF -- "$SSID" || { echo "result notpersonal"; exit 0; }
+    wifi_known_forget "$SSID"; WIFI_FORCE=1 wifi_conf_update ""
+    sleep 2      # the adapter busy with the new list: a search right after found nothing
+    ev "Wi-Fi from the page: $SSID forgotten"; echo "result forgotten"
+    ;;
+  *) echo "usage: $0 scan | connect (name and password on stdin) | known | forget (name on stdin)"; exit 2 ;;
 esac

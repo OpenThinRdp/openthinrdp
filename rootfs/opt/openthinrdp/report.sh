@@ -159,6 +159,13 @@ HOME=${HOME:-/root} xfreerdp3 --buildconfig 2>/dev/null | grep -q 'WITH_RDPEUDP=
     WM=""; [ -n "$WE" ] && WM=$(eap_missing "$WSEC")
     echo "WIFI_STATUS=on but NOT connected ($(cfg WIFI_SSID))$WE${WM:+: 802.1X settings incomplete, $WM}"
   else echo "WIFI_STATUS=off"; fi
+  # the networks it knows, by name only (never a key): the main one, the other ones of the settings, its own (0.3.6)
+  . "$OTR/lib/eap.sh"
+  WN=$(for n in 2 3 4; do cfg WIFI_SSID_$n; done | grep . | paste -sd '|' | sed 's/|/, /g')
+  WK=$(wifi_known_names | grep . | paste -sd '|' | sed 's/|/, /g')
+  WMN=$(cfg WIFI_SSID); WP=()
+  [ -n "$WMN" ] && WP+=("main: $WMN"); [ -n "$WN" ] && WP+=("settings: $WN"); [ -n "$WK" ] && WP+=("device: $WK")
+  echo "WIFI_NETWORKS=$(printf '%s|' "${WP[@]}" | sed 's/|$//; s/|/; /g')"
   SVA=$(cat /sys/class/rtc/rtc0/wakealarm 2>/dev/null)
   echo "NEXT_POWER_ON=$([ -n "$SVA" ] && date -d "@$SVA" '+%a %d/%m %H:%M' || echo none)"
   # effective settings, for the management tool: CFG_<KEY>=value. Never the Wi-Fi key; the PIN only as
@@ -347,6 +354,6 @@ stats_start(){
 systemctl is-active -q openthinrdp-update.service 2>/dev/null || "$OTR/central-apply.sh"
 # boot splash: always the image's own (a device that took the folder's picture there with 0.1.1 gets it back)
 "$OTR/branding.sh" splash
-# anonymous data for the project, once a week (ANON_STATS full or errors): apart, a slow internet never holds the report
+# anonymous data for the project (ANON_STATS full or errors; stats.sh decides what is due): apart, a slow internet never holds the report
 stats_start ""
 exit 0

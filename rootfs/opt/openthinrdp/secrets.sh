@@ -13,11 +13,20 @@ install -d -m 700 "$OTR_SECRETS"
 [ -e /sys/firmware/acpi/tables/TPM2 ] && [ ! -e /dev/tpmrm0 ] && udevadm wait --timeout=10 /dev/tpmrm0 >/dev/null 2>&1
 ON=0; secret_enabled && ON=1
 OFF=0; [ "$(secret_setting)" = off ] && OFF=1
-moved=""; back=""; lost=""
+moved=""; back=""; lost=""; retry=""
 for n in "${!OTR_SECRET_FILES[@]}"; do
   p=${OTR_SECRET_FILES[$n]}
   if secret_sealed "$n"; then
-    if ! secret_unseal "$n"; then lost="$lost $n"; continue; fi
+    # A TPM may answer late or fail once (a firmware TPM still busy at power on): three tries at this start, and a
+    # secret is given up only after 3 starts in a row without it. Set aside at the first failure, the Wi-Fi key was
+    # lost for good after one bad start, and every save refused it from then on (0.3.6, #201)
+    if ! { secret_unseal "$n" || { sleep 2; secret_unseal "$n"; } || { sleep 5; secret_unseal "$n"; }; }; then
+      f=$(( $(cat "$OTR_SEALED/$n.fails" 2>/dev/null || echo 0) + 1 ))
+      if [ $f -ge 3 ]; then rm -f "$OTR_SEALED/$n.fails"; lost="$lost $n"
+      else echo $f > "$OTR_SEALED/$n.fails"; retry="$retry $n"; fi
+      continue
+    fi
+    rm -f "$OTR_SEALED/$n.fails"
     if [ $OFF = 1 ]; then
       t=$(mktemp); cp "$OTR_SECRETS/$n" "$t" && secret_plain "$n" "$t" && back="$back $n"; rm -f "$t"
     elif secret_linked "$n"; then
@@ -33,6 +42,7 @@ for n in "${!OTR_SECRET_FILES[@]}"; do
 done
 [ -n "$moved" ] && ev "secrets moved into the TPM:$moved (plain files deleted; on flash memory old blocks may survive until overwritten)"
 [ -n "$back" ] && ev "secrets back to root-only files (TPM_SECRETS=off):$back"
+[ -n "$retry" ] && ev "secrets not readable from the TPM at this start:$retry (kept, tried again at the next start; given up after 3 starts in a row)"
 # not readable any more (TPM cleared or replaced, disk moved to another device): set aside, never retried at every
 # start. SSH host keys are created again by apply.sh; the folder password and the Wi-Fi key must be set again.
 if [ -n "$lost" ]; then

@@ -79,7 +79,7 @@ cp "$HERE/install.sh" "$STAGE/"; echo "$V" > "$STAGE/VERSION"
 cp "$ROOT/CHANGELOG.md" "$STAGE/"
 cp "$ROOT/image/lb/packages.list" "$STAGE/packages.list"
 # the project's pictures: install.sh puts them only where a device still shows an older project picture
-mkdir -p "$STAGE/project-branding"; cp "$ROOT"/image/branding/logo.png "$ROOT"/image/branding/splash.png "$STAGE/project-branding/"
+mkdir -p "$STAGE/project-branding"; cp "$ROOT"/image/branding/logo.png "$ROOT"/image/branding/splash.png "$ROOT"/image/branding/splash-card.png "$STAGE/project-branding/"
 if [ -n "$DEBS" ]; then mkdir -p "$STAGE/debs"; cp "$DEBS"/*.deb "$STAGE/debs/"; fi
 for x in $FRDP; do mkdir -p "$STAGE/debs/${x%%:*}"; cp "${x#*:}"/*.deb "$STAGE/debs/${x%%:*}/"; done
 if [ -n "$SITE" ]; then

@@ -120,6 +120,7 @@ stacksidebar row:hover:not(:selected) { background: #f1f5f9; }
 .wifirow { padding: 10px 12px; border-radius: 8px; }
 .wifiname { color: #111827; font-size: 15px; }
 .wifimeta { color: #64748b; font-size: 12px; }
+row:selected .wifimeta, row:selected .wifiname { color: #ffffff; }
 .result-ok { color: #15803d; font-size: 14px; font-weight: bold; }
 .result-err { color: #b91c1c; font-size: 14px; font-weight: bold; }
 .result-busy { color: #1d4ed8; font-size: 14px; }
@@ -130,7 +131,8 @@ COLORS = {'info': (0.15, 0.39, 0.92), 'ok': (0.09, 0.64, 0.29), 'warn': (0.85, 0
           'error': (0.86, 0.15, 0.15), 'power': (0.15, 0.39, 0.92), 'busy': (0.15, 0.39, 0.92),
           'update': (0.15, 0.39, 0.92)}
 
-def icon(kind, size=22, color=(1, 1, 1), alpha=0.92):
+def icon(kind, size=22, color=None, alpha=0.92):
+    if color is None: color = FG     # on the background: white, dark on light background colours
     size = dp(size)
     d = Gtk.DrawingArea(halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER); d.set_size_request(size, size)
     state = {'a': 0.0}
@@ -209,7 +211,8 @@ def bars(dbm):
 
 # the icon of a network, its kind and bars changed later (st['kind'], st['bars']): wifi (arcs, the empty ones faint),
 # wired (a plug), none (a Wi-Fi crossed out)
-def net_icon(kind='none', level=0, size=20, color=(1, 1, 1)):
+def net_icon(kind='none', level=0, size=20, color=None):
+    if color is None: color = FG
     size = dp(size)
     d = Gtk.DrawingArea(valign=Gtk.Align.CENTER); d.set_size_request(size, size)
     st = {'kind': kind, 'bars': level, 'color': color}
@@ -275,6 +278,24 @@ def leave(c, out=None):
         print(out, flush=True)
     Gtk.main_quit()
 
+# light background colours (0.3.6): dark text and icons on the background, as the project's logo goes on its dark card
+# there. The same rule as bg_light in lib/common.sh: the perceived brightness of the two colours, on average, over half
+def light_bg():
+    s = n = 0
+    for h in (A.top or '#1b2733', A.bottom or '#000000'):
+        if re.fullmatch(r'#[0-9a-fA-F]{6}', h):
+            s += 299 * int(h[1:3], 16) + 587 * int(h[3:5], 16) + 114 * int(h[5:7], 16); n += 1
+    return n > 0 and s // n > 127500
+LIGHT = light_bg()
+FG = (0.06, 0.09, 0.16) if LIGHT else (1, 1, 1)
+if LIGHT:
+    CSS += b"""
+.corner, .webbtn, .netpill { background: rgba(15,23,42,0.08); color: #0f172a; }
+.corner:hover, .webbtn:hover, .netpill:hover { background: rgba(15,23,42,0.16); }
+.netpill.down { background: rgba(220,38,38,0.85); color: #ffffff; }
+.clock { color: #0f172a; }
+.date, .device { color: rgba(15,23,42,0.70); }
+"""
 if K != 1.0:
     CSS = re.sub(rb'(\d+(?:\.\d+)?)px', lambda m: b'%dpx' % max(1, round(float(m.group(1)) * K)), CSS)
     # the arrows of the drop-down lists and menus come from the theme, at its own size
@@ -496,7 +517,15 @@ if MODE == 'form':
                 w = Gtk.ComboBoxText()
                 for c in ch.split('|'):
                     v, _, t = c.partition('='); w.append(v, t or v)
-                if not w.set_active_id(val): w.set_active(0)
+                # A stored value the list does not know (a language of a newer version, a mode this build does not offer)
+                # is added as it is and stays selected: selecting the first entry instead showed the dialog with a value
+                # the device does not have, and Save wrote it back — the setting changed without anybody touching it.
+                # (An empty value is the list's first entry, as before.)
+                if not w.set_active_id(val):
+                    if val:
+                        w.append(val, val)
+                        w.set_active_id(val)
+                    else: w.set_active(0)
             elif typ in ('tz', 'combo'):
                 # the time zones of tzdata in a list, with a search while typing ("rome" finds Europe/Rome); combo:
                 # free text with suggestions (the PCs found on the network)
@@ -606,37 +635,49 @@ if MODE == 'wifi':
     res = left_label('', 'text', 90); card.pack_start(res, False, False, 0)
     bar = Gtk.Box(spacing=dp(10))
     bcn = button(t('connect'), 'primary', lambda *_: connect()); bcl = button(t('close'), 'secondary', lambda *_: leave(code))
+    # Forget: only a network the device keeps by itself (added here); the ones of the settings change there (0.3.6)
+    bfg = button(t('forget'), 'secondary', lambda *_: forget()); bfg.set_no_show_all(True)
+    bar.pack_start(bfg, False, False, 0)
     bar.pack_end(bcn, False, False, 0); bar.pack_end(bcl, False, False, 0); card.pack_start(bar, False, False, 0)
-    state = {'busy': False, 'net': None}
+    state = {'busy': False, 'net': None, 'known': {}}
     def say(text, cls):
         res.set_text(text)
         for c in ('result-ok', 'result-err', 'result-busy', 'text'): res.get_style_context().remove_class(c)
         res.get_style_context().add_class(cls)
     def busy(on):
         state['busy'] = on
-        for w in (brf, bcn, bcl, lb, ep, cshow): w.set_sensitive(not on)
+        for w in (brf, bcn, bcl, bfg, lb, ep, cshow): w.set_sensitive(not on)
     def pick(_lb, row):
         if row is None: return
         n = row.net; state['net'] = n
-        if n['sec'] == 'psk':
+        bfg.set_visible(state['known'].get(n['ssid']) == 'personal')
+        if n.get('away'):
+            # a saved network not around now: nothing to join, it can only be forgotten
+            sel.set_text(t('chosen', n['ssid']) + '  —  ' + t('away')); prow.set_sensitive(False); bcn.set_sensitive(False)
+        elif n['sec'] == 'psk':
             sel.set_text(t('chosen', n['ssid'])); prow.set_sensitive(True); bcn.set_sensitive(not state['busy']); ep.grab_focus()
         else:
             sel.set_text(t('chosen', n['ssid']) + '  —  ' + t('sec_' + n['sec'])); prow.set_sensitive(False); bcn.set_sensitive(False)
     lb.connect('row-selected', pick)
     def fill(nets):
         for r in lb.get_children(): lb.remove(r)
-        cur = net_state()[1]
+        cur = net_state()[1]; kn = state['known']
+        # the saved networks not around are listed too, after the others: they can be forgotten from anywhere
+        seen = {n['ssid'] for n in nets}
+        nets = nets + [{'dbm': -100, 'sec': 'psk', 'ssid': s, 'away': True} for s in kn if s not in seen]
         for n in nets:
             row = Gtk.ListBoxRow(); row.net = n; box = Gtk.Box(spacing=dp(12)); box.get_style_context().add_class('wifirow')
-            box.pack_start(net_icon('wifi', bars(n['dbm']), 20, (0.15, 0.39, 0.92)), False, False, 0)
+            box.pack_start(net_icon('wifi', 0 if n.get('away') else bars(n['dbm']), 20, (0.15, 0.39, 0.92)), False, False, 0)
             col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
             nm = Gtk.Label(label=n['ssid'], xalign=0); nm.get_style_context().add_class('wifiname'); col.pack_start(nm, False, False, 0)
-            meta = t('sec_' + n['sec']) + ('  ·  ' + t('current') if n['ssid'] == cur else '')
+            k = kn.get(n['ssid'])
+            meta = (t('away') if n.get('away') else t('sec_' + n['sec'])) + ('  ·  ' + t('known_' + k) if k else '') + ('  ·  ' + t('current') if n['ssid'] == cur else '')
             mt = Gtk.Label(label=meta, xalign=0); mt.get_style_context().add_class('wifimeta'); col.pack_start(mt, False, False, 0)
             box.pack_start(col, True, True, 0); row.add(box); lb.add(row)
             if n['ssid'] == cur: lb.select_row(row)
         lb.show_all()
         if not nets: say(t('nonefound'), 'result-err')
+        elif state.get('msg'): say(*state.pop('msg'))     # what was just done stays on the page after the new search
         elif res.get_text() == t('scanning'): say('', 'text')
         busy(False)
         if state['net'] is None or state['net']['sec'] != 'psk': bcn.set_sensitive(False)
@@ -650,9 +691,37 @@ if MODE == 'wifi':
                 for l in p.stdout.splitlines():
                     f = l.split('\t', 2)
                     if len(f) == 3: nets.append({'dbm': int(f[0]), 'sec': f[1], 'ssid': f[2]})
+                state['nets'] = nets
+                # the networks the device knows: main (settings), extra (settings), personal (added here)
+                kn = {}
+                q = subprocess.run(WIFI + ['known'], capture_output=True, text=True, timeout=20)
+                for l in q.stdout.splitlines():
+                    k, _, s = l.partition('\t')
+                    if s and s not in kn: kn[s] = k
+                state['known'] = kn
             except Exception:
                 pass
             GLib.idle_add(lambda: fill(nets) and False)
+        threading.Thread(target=run, daemon=True).start()
+    def forget():
+        n = state['net']
+        if not n or state['known'].get(n['ssid']) != 'personal': return
+        busy(True)
+        def run():
+            out = 'result busy'
+            try:
+                p = subprocess.run(WIFI + ['forget'], input=n['ssid'] + '\n', capture_output=True, text=True, timeout=60)
+                out = ([l for l in p.stdout.splitlines() if l.startswith('result ')] or [out])[-1]
+            except Exception:
+                pass
+            def after():
+                global code
+                if out.split()[1:2] == ['forgotten']:
+                    state['msg'] = (t('forgotten', n['ssid']), 'result-ok'); code = 0; bfg.hide(); state['net'] = None; sel.set_text(t('choose')); scan()
+                else:
+                    say(t('busy'), 'result-err'); busy(False)
+                return False
+            GLib.idle_add(after)
         threading.Thread(target=run, daemon=True).start()
     def connect():
         n = state['net']
@@ -679,6 +748,10 @@ if MODE == 'wifi':
         f = out.split()[1:] or ['timeout']; r = f[0]
         if r == 'ok':
             say(t('ok', state['net']['ssid'], f[1] if len(f) > 1 else '-') + ('\n' + t('central') if 'central' in f else ''), 'result-ok'); code = 0
+        elif r == 'added':
+            # the list drawn again with the network now saved (and Forget for it), without a new search
+            s = state['net']['ssid']; state['known'][s] = 'personal'
+            state['msg'] = (t('added', s, f[1] if len(f) > 1 else '-'), 'result-ok'); code = 0; fill(state.get('nets', []))
         elif r == 'noip':
             say(t('noip', state['net']['ssid']) + ('\n' + t('central') if 'central' in f else ''), 'result-err'); code = 0
         elif r == 'saveerror':
@@ -826,15 +899,19 @@ bs.connect('clicked', sign_in); ep.connect('activate', sign_in); eu.connect('act
 # day and month in the language of the kiosk (LANGUAGE), not of the system: a system installed in English with
 # LANGUAGE=it would show "Monday 12 October"
 DAYS = {'it': ('lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato', 'domenica'),
-        'nl': ('maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag')}
+        'nl': ('maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'),
+        'zh': ('星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日')}
 MONTHS = {'it': ('gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre',
                  'ottobre', 'novembre', 'dicembre'),
           'nl': ('januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september',
-                 'oktober', 'november', 'december')}
+                 'oktober', 'november', 'december'),
+          'zh': ('1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月')}
 def today():
     t = time.localtime()
     if A.lang in DAYS:
-        return f"{DAYS[A.lang][t.tm_wday].capitalize()} {t.tm_mday} {MONTHS[A.lang][t.tm_mon - 1]}"
+        d = DAYS[A.lang][t.tm_wday]; m = MONTHS[A.lang][t.tm_mon - 1]
+        # Chinese writes the date as 星期一 16 11月: no capital to add, the month follows the day
+        return f"{d} {t.tm_mday} {m}" if A.lang == 'zh' else f"{d.capitalize()} {t.tm_mday} {m}"
     s = time.strftime('%A %d %B', t); return s[:1].upper() + s[1:]   # capitalize() would lower "October"
 
 def corner_button(kind, tip, cb):
@@ -865,7 +942,10 @@ if A.t_net:
         txt = tn[0] if k == 'wired' else ('%s · %s' % (tn[1], ssid) if ssid else tn[1]) if k == 'wifi' else tn[2]
         if k != 'none' and not ip: txt += ' · ' + tn[3]
         nlb.set_text(txt); nb.set_tooltip_text(ip or txt)
-        ctx = nb.get_style_context(); (ctx.add_class if k == 'none' or not ip else ctx.remove_class)('down')
+        down = k == 'none' or not ip
+        ctx = nb.get_style_context(); (ctx.add_class if down else ctx.remove_class)('down')
+        # on the red pill the icon is always white (also on light background colours, where it is dark otherwise)
+        nic.st['color'] = (1, 1, 1) if down else FG
         return True
     net_tick(); GLib.timeout_add_seconds(5, net_tick)
     tr.pack_start(nb, False, False, 0)

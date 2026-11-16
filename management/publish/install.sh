@@ -91,6 +91,12 @@ if [ -d site ]; then
   [ -f site/update-key.asc ] && install -m644 site/update-key.asc /etc/openthinrdp/update-key.asc
   [ -f site/authorized_keys ] && install -m644 site/authorized_keys /etc/openthinrdp/authorized_keys
 fi
+# the project's boot picture on its own dark card (0.3.6), for light background colours (otr_splash): only next to
+# the project's own splash, never next to a picture of the site
+if [ -f project-branding/splash-card.png ]; then
+  if cmp -s project-branding/splash.png $OTR/branding/splash.png; then install -m644 project-branding/splash-card.png $OTR/branding/splash-card.png
+  else rm -f $OTR/branding/splash-card.png; fi
+fi
 
 prog 88
 # 5) services, rules and settings applied again

@@ -213,9 +213,9 @@ See [security.md](security.md) and [SECURITY.md](../SECURITY.md).
 ### Does it send anything to the project?
 
 You choose at the first start: *Full* (the default) sends once a week anonymous data on what the device is (model,
-processor, memory, versions), how it is set up and used, how fast it signs in and what went wrong; *Errors only* sends
-only in a week when something went wrong; *Off* sends nothing. Never names, addresses, users, servers, log text or
-anything typed. It can be changed any time (`ANON_STATS`); [privacy.md](privacy.md) lists everything, item by item.
+processor, memory, versions), how it is set up and used and how fast it signs in, and what went wrong as soon as it
+happens; *Errors only* sends only what went wrong, as soon as it happens; *Off* sends nothing. Never names, addresses,
+users, servers, log text or anything typed. It can be changed any time (`ANON_STATS`); [privacy.md](privacy.md) lists everything, item by item.
 
 ### Does it boot over the network (PXE)?
 

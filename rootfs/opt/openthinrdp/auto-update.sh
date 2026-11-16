@@ -140,7 +140,7 @@ case "$1" in
     # after boot, it simply tries again at the next run); a changed UPDATE_TO is asked at once
     # (an open offer is not held back: the answer from the device is waited for)
     # (OTR_UPDATE_NOW: a scheduled job of the manager asks now)
-    [ -z "$OTR_UPDATE_NOW" ] && [ -f $W/github-checked ] && [ "$(cat $W/github-checked)" = "$TO" ] && [ ! -f $OFFER ] && [ $(( $(date +%s) - $(stat -c %Y $W/github-checked) )) -lt 10800 ] && exit 0 ;;
+    [ -z "$OTR_UPDATE_NOW" ] && [ -f $W/github-checked ] && [ "$(cat $W/github-checked)" = "$TO" ] && [ ! -f $OFFER ] && [ $(( $(date +%s) - $(stat -c %Y $W/github-checked) )) -lt 10800 ] && { touch /run/openthinrdp-update-checked; exit 0; } ;;
   *) echo "usage: $0 check <mounted folder> | check-github | install <version> [downgrade]"; exit 2 ;;
 esac
 [ -s "${KEYS[0]}" ] || [ -s "${KEYS[1]:-}" ] || { echo "updates disabled: no signing key" > $ST; exit 0; }

@@ -11,15 +11,34 @@ OTR_EVENTS=$OTR_LOG/events.log
 OTR_KIOSK_USER=kiosk
 
 # cfg KEY: value of a setting. The first file that defines the key wins (device, then site, then defaults),
-# so an empty value in the device file deliberately clears a site default.
+# so an empty value in the device file deliberately clears a site default. The spaces around the value are dropped,
+# as save-config.sh does: a site.conf edited on Windows ("WIFI=on ") otherwise made [ "$(cfg WIFI)" = on ] false,
+# and the setting looked saved while nothing used it.
 cfg(){
   local f
   for f in "$OTR_CONF" "$OTR_SITE" "$OTR_DEFAULTS"; do
-    [ -f "$f" ] && grep -q "^$1=" "$f" && { sed -n "s/^$1=//p" "$f" | head -1 | tr -d '\r'; return; }
+    [ -f "$f" ] && grep -q "^$1=" "$f" && { sed -n "s/^$1=//p" "$f" | head -1 | tr -d '\r' | sed 's/^ *//; s/ *$//'; return; }
   done
 }
 # cfg_num KEY DEFAULT: a number, or DEFAULT when the value is missing or not a number
 cfg_num(){ local v; v=$(cfg "$1"); [[ $v =~ ^[0-9]{1,6}$ ]] && echo $((10#$v)) || echo "$2"; }
+# cfgsrc KEY: the file a setting comes from (device, site or defaults), for a message that has to say where a value that
+# the validator refuses was set; empty when no file defines it
+cfgsrc(){
+  local f
+  for f in "$OTR_CONF" "$OTR_SITE" "$OTR_DEFAULTS"; do
+    [ -f "$f" ] && grep -q "^$1=" "$f" && { echo "$f"; return; }
+  done
+}
+# cfg_base KEY: what the device would have if it did not set the key itself (site file, then defaults). save-config.sh
+# stores a key only when its value differs from this one, so the device file holds the choices of this device and not a
+# copy of every default: a new site.conf still reaches the device for everything it did not change.
+cfg_base(){
+  local f
+  for f in "$OTR_SITE" "$OTR_DEFAULTS"; do
+    [ -f "$f" ] && grep -q "^$1=" "$f" && { sed -n "s/^$1=//p" "$f" | head -1 | tr -d '\r' | sed 's/^ *//; s/ *$//'; return; }
+  done
+}
 # The environment (0.3.0): domain (an Active Directory domain: brokers, collections, central management) or workgroup
 # (computers not in a domain: one PC or virtual machine). SETUP when set, else guessed from what is there: a device
 # with a domain keeps every setting in view, one in a workgroup sees only what applies. Empty = nothing set yet (the
@@ -43,7 +62,15 @@ cfg_keys(){ echo HOSTNAME; grep -oE '^[A-Z][A-Z0-9_]*=' "$OTR_DEFAULTS" | tr -d 
 # logo and background picture in use: the ones of the management folder (branding.sh) when there, otherwise LOGO and
 # the image's own
 otr_logo(){ if [ -f "$OTR_LIB/branding/logo.png" ]; then echo "$OTR_LIB/branding/logo.png"; else cfg LOGO; fi; }
-otr_splash(){ if [ -f "$OTR_LIB/branding/splash.png" ]; then echo "$OTR_LIB/branding/splash.png"; else echo "$OTR/branding/splash.png"; fi; }
+otr_splash(){ if [ -f "$OTR_LIB/branding/splash.png" ]; then echo "$OTR_LIB/branding/splash.png"; else otr_image_splash "$(cfg BG_TOP)" "$(cfg BG_BOTTOM)"; fi; }
+# bg_light TOP BOTTOM: the two background colours (#rrggbb) are light on average (perceived brightness over half)
+bg_light(){ local c s=0 n=0; for c in "$1" "$2"; do [[ $c =~ ^#[0-9a-fA-F]{6}$ ]] || continue
+  s=$(( s + 299 * 16#${c:1:2} + 587 * 16#${c:3:2} + 114 * 16#${c:5:2} )); n=$((n + 1)); done
+  [ $n -gt 0 ] && [ $(( s / n )) -gt 127500 ]; }
+# the image's own boot picture for these colours: the project's logo is white and blue with a glow, transparent for
+# the dark backgrounds; on light ones it is washed out, so there the same logo on its dark card (0.3.6). A picture of
+# the site has no card next to it and is always used as it is.
+otr_image_splash(){ if [ -f "$OTR/branding/splash-card.png" ] && bg_light "$1" "$2"; then echo "$OTR/branding/splash-card.png"; else echo "$OTR/branding/splash.png"; fi; }
 
 # event log: one line per event, English, sent to the management folder by report.sh
 ev(){ echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$OTR_EVENTS" 2>/dev/null; }

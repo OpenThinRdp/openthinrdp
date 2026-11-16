@@ -353,6 +353,11 @@ connect(){
   elif [ $HASUDP = 1 ]; then o+=(/network:lan -multitransport)
   else o+=(/network:lan); fi
   v=$(cfg RDP_KEYBOARD); [ -n "$v" ] && o+=(/kbd:layout:"$v")
+  # ways to close the session from the device (0.3.6, both off by default: in an office people leave from Windows):
+  # FreeRDP's bar at the top of the screen (SESSION_BAR) with its close button, and a key combination of the site's
+  # choice (SESSION_CLOSE_KEY, rdp-action.sh). Either ends like a disconnect from Windows (see the end of session())
+  [ "$(cfg SESSION_BAR)" = on ] && o+=(/floatbar:sticky:off,default:visible,show:fullscreen)
+  [ -n "$(cfg SESSION_CLOSE_KEY)" ] && o+=(/action-script:"$OTR/rdp-action.sh")
   # every monitor when more than one is connected (with /f the session is full screen on all of them)
   [ "$(cfg MULTIMON)" != off ] && [ "$(xrandr --current 2>/dev/null | grep -c ' connected')" -gt 1 ] && o+=(/multimon)
   # the scale of the screens as the display scale of Windows (#183): the desktop as chosen, the device scale (store
@@ -379,7 +384,10 @@ connect(){
   # setsid, input from /dev/null: no console for FreeRDP. Missing a user or a password it would ask for them on tty1,
   # where nobody can answer: stopped by the kernel (SIGTTOU), the screen stuck on "connecting" until switched off.
   # Without a console the question fails at once and the attempt ends with its error.
-  setsid -w xfreerdp3 "${o[@]}" /gdi:hw /bpp:32 /dynamic-resolution /f /smartcard /drive:hotplug,'*' \
+  # -toggle-fullscreen: Ctrl+Alt+Enter no longer takes the session out of full screen (0.3.6, #201). Out of it the
+  # window had a title bar: its X closed the session and the device switched off, its minimize hid the session.
+  # RDP_EXTRA=+toggle-fullscreen gives it back
+  setsid -w xfreerdp3 "${o[@]}" /gdi:hw /bpp:32 /dynamic-resolution /f -toggle-fullscreen /smartcard /drive:hotplug,'*' \
     "$snd" /clipboard "${extra[@]}" < /dev/null > /tmp/kiosk.log 2>&1
 }
 
@@ -387,11 +395,19 @@ connect(){
 # prefix /23 -> 255.255.254.0
 pfx2mask(){ local p=$1 m="" i o; for i in 1 2 3 4; do if [ $p -ge 8 ]; then o=255; p=$((p-8)); else o=$(( 256 - (1 << (8-p)) )); [ $p -eq 0 ] && o=0; p=0; fi; m="$m${m:+.}$o"; done; echo $m; }
 # combo VALUE VALUES_ARRAY LABELS_ARRAY: yad list "a!^b!c" with the label of VALUE selected
-combo(){ local cur=$1 i out=""; local -n vs=$2 ls=$3
-  for i in "${!vs[@]}"; do out+="${out:+!}$([ "${vs[$i]}" = "$cur" ] && echo '^')${ls[$i]}"; done; echo "$out"; }
+combo(){ local cur=$1 i out=""; local -n vs=$2 ls=$3; local seen=0
+  for i in "${!vs[@]}"; do out+="${out:+!}$([ "${vs[$i]}" = "$cur" ] && echo '^')${ls[$i]}"; [ "${vs[$i]}" = "$cur" ] && seen=1; done
+  # a value the list does not know stays in the list as itself: yad would select the first entry and unlabel() would give
+  # it back, so a Save wrote a value the device did not have (a language of a newer version, a mode of a newer manager)
+  # (soso192). An empty value is the first entry, as before
+  [ $seen = 1 ] || [ -z "$cur" ] || out+="${out:+!}^${cur}"
+  echo "$out"; }
 # unlabel LABEL VALUES_ARRAY LABELS_ARRAY: the value behind a label chosen in a combo
 unlabel(){ local lab=$1 i; local -n vs=$2 ls=$3
-  for i in "${!ls[@]}"; do [ "${ls[$i]}" = "$lab" ] && { echo "${vs[$i]}"; return; }; done; echo "${vs[0]}"; }
+  for i in "${!ls[@]}"; do [ "${ls[$i]}" = "$lab" ] && { echo "${vs[$i]}"; return; }; done
+  # a label no entry carries is the value combo() added as itself: given back unchanged, never the first entry (that
+  # silently replaced a value this build does not know with another one at the next Save)
+  if [ -n "$lab" ]; then echo "$lab"; else echo "${vs[0]}"; fi; }
 # the settings can be protected by a PIN (SETTINGS_PIN_SHA256): anyone at the device could change the broker.
 # The value is pbkdf2-sha256:<iterations>:<salt>:<key> (salted and slow: a short PIN is not reversed in seconds
 # by whoever gets the settings file) or, as set by 0.1.4 and earlier, the plain SHA-256 of the PIN.
@@ -451,6 +467,8 @@ settings_spec(){
     fld SESSION_THRESHOLD text "$L_F_THRESHOLD" "$thr" "" "$L_H_THRESHOLD"
   fi
   fld SHUTDOWN_SECS text "$L_F_SHUTDOWN" "$off" "" "$L_H_SHUTDOWN"
+  fld SESSION_BAR choice "$L_F_SESSIONBAR" "$sbar" "$(chs ONV ONL)" "$L_H_SESSIONBAR"
+  fld SESSION_CLOSE_KEY text "$L_F_CLOSEKEY" "$ckey" "" "$L_H_CLOSEKEY"
   # the screen (#183): the resolutions the main monitor offers, the scale, every monitor or the main one only
   sec "$L_SEC_SCREEN"
   fld DISPLAY_RESOLUTION choice "$L_F_RESOLUTION" "$dres" "$(chs RESV RESL)" "$L_H_RESOLUTION"
@@ -524,7 +542,7 @@ settings_read(){
     case ${l%%=*} in
       HOSTNAME) h=$v ;; DEFAULT_USER) u=$v ;; BROKER) br=$v ;; BROKER_FALLBACK) brf=$v ;; DOMAIN) dom=$v ;;
       LOAD_BALANCE_INFO) lbi=$v ;; NETMODE) nm=$v ;; IPADDR) ip=$v ;; NETMASK) mask=$v ;; GATEWAY) gw=$v ;;
-      DNS1) d1=$v ;; DNS2) d2=$v ;; NTP) ntp=$v ;; SHUTDOWN_SECS) off=$v ;; SESSION_THRESHOLD) thr=$v ;;
+      DNS1) d1=$v ;; DNS2) d2=$v ;; NTP) ntp=$v ;; SHUTDOWN_SECS) off=$v ;; SESSION_THRESHOLD) thr=$v ;; SESSION_BAR) sbar=$v ;; SESSION_CLOSE_KEY) ckey=$v ;;
       TRANSPORT) tr=$v ;; LANGUAGE) ln=$v ;; MGMT_SHARE) share=$v ;; MGMT_USER) mu=$v ;; MGMT_PASSWORD) mp=$v ;;
       USB_MODE) um=$v ;; USB_REDIRECT) ur=$v ;; USB_LOCAL) ul=$v ;; SECURITY_UPDATES) su=$v ;; ANON_STATS) an=$v ;; TIMEZONE) tz=$v ;; WEB_BUTTON) wb=$v ;; WEB_URL) wu=$v ;;
       KIOSK_URL) ku=$v ;; KIOSK_RELOAD_MIN) kr=$v ;; POWER_ON_TIME) pon=$v ;; POWER_OFF_TIME) poff=$v ;;
@@ -548,6 +566,8 @@ wifi_page(){
     step_stop "$L_WP_STEP_STOP" step_test "$L_WP_STEP_TEST" step_save "$L_WP_STEP_SAVE" step_dhcp "$L_WP_STEP_DHCP" \
     ok "$L_WP_OK" noip "$L_WP_NOIP" wrongkey "$L_WP_WRONGKEY" notfound "$L_WP_NOTFOUND" timeout "$L_WP_TIMEOUT" \
     invalid "$L_WP_INVALID" nowifi "$L_WP_NOWIFI" busy "$L_WP_BUSY" saveerror "$L_WP_SAVEERROR" central "$L_WP_CENTRAL" \
+    added "$L_WP_ADDED" forget "$L_WP_FORGET" forgotten "$L_WP_FORGOTTEN" away "$L_WP_AWAY" \
+    known_main "$L_WP_KNOWN_MAIN" known_extra "$L_WP_KNOWN_EXTRA" known_personal "$L_WP_KNOWN_PERSONAL" \
     | ui wifi --heading="$(plain "$L_WP_HEADING")"
 }
 
@@ -579,7 +599,11 @@ settings_dialog(){
   [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" = yes ] && sync=$L_TIME_SYNC || sync=$L_TIME_NOSYNC
   wli=$(wifi_nics | head -1)
   if [ -z "$wli" ]; then wst=$L_WIFI_NONE
-  elif iw dev "$wli" link 2>/dev/null | grep -q Connected; then wst=$(printf "$L_WIFI_CONNECTED" "$(iw dev "$wli" link | sed -n 's/^[[:space:]]*SSID: //p') $(iw dev "$wli" link | sed -n 's/^[[:space:]]*signal: //p')")
+  # iw is in /usr/sbin, outside the path of the kiosk user: the line said "not connected" on a connected Wi-Fi.
+  # One %s in the text (the name): the signal is added after it (soso192)
+  elif /usr/sbin/iw dev "$wli" link 2>/dev/null | grep -q Connected; then
+    wst=$(printf "$L_WIFI_CONNECTED" "$(/usr/sbin/iw dev "$wli" link | sed -n 's/^[[:space:]]*SSID: //p')")
+    wst="$wst · $(/usr/sbin/iw dev "$wli" link | sed -n 's/^[[:space:]]*signal: //p')"
   else wst=$L_WIFI_DISCONNECTED; fi
   rep=$(tail -1 "$OTR_LOG/report.log" 2>/dev/null | cut -c1-60)
   [ -z "$IPC" ] && [ "$(net_state)" != none ] && IPC=$L_NO_ADDR
@@ -589,7 +613,9 @@ settings_dialog(){
   local -a ONV=(on off) ONL=("$L_ON" "$L_OFF") TRV=(auto udp tcp) TRL=("$L_TR_AUTO" "$L_TR_UDP" "$L_TR_TCP")
   local -a STV=(full errors off) STL=("$L_STATS_FULL" "$L_STATS_ERRORS" "$L_STATS_OFF")
   local -a WEBV=(none app browser kiosk) WEBL=("$L_WEB_NONE" "$L_WEB_APP" "$L_WEB_BROWSER" "$L_WEB_KIOSK")
-  local -a LNV=(en it) LNL=(English Italiano)
+  # every language that has a file in lang/. A value the list does not know falls back to the first (en): a language
+  # missing here was silently turned into English at the first Save of the settings dialog.
+  local -a LNV=(en it nl zh) LNL=(English Italiano Nederlands 简体中文)
   local -a WSECV=(psk peap tls) WSECL=("$L_WSEC_PSK" "$L_WSEC_PEAP" "$L_WSEC_TLS") D1XV=(off peap tls) D1XL=("$L_OFF" "$L_D1X_PEAP" "$L_D1X_TLS")
   local h u br brf dom lbi nm ip mask gw d1 d2 ntp off thr share mu mp um ur su an tz tr wb wu ku kr pon poff pdays wf ws wp ln
   local wsec d1x d1xs eid ean epw eca esn kind kind0 rem wmac conns vpn tss found="" bro
@@ -610,6 +636,7 @@ settings_dialog(){
   if [ "$nm" = static ]; then ip=$(cfg IPADDR); mask=$(cfg NETMASK); gw=$(cfg GATEWAY)
   else ip=$IPC; mask=$([ -n "$IPC" ] && pfx2mask "$PFX" || cfg NETMASK); gw=${GWC:-$(cfg GATEWAY)}; fi
   d1=$(cfg DNS1); d2=$(cfg DNS2); ntp=$(cfg NTP); off=$(cfg_num SHUTDOWN_SECS 10); thr=$(cfg_num SESSION_THRESHOLD 10)
+  sbar=$(cfg SESSION_BAR); ckey=$(cfg SESSION_CLOSE_KEY)
   share=$(cfg MGMT_SHARE); um=$(cfg USB_MODE); ur=$(cfg USB_REDIRECT); ul=$(cfg USB_LOCAL); su=$(cfg SECURITY_UPDATES); an=$(anon_level); tz=$(cfg TIMEZONE); tr=$(cfg TRANSPORT)
   wb=$(cfg WEB_BUTTON); wu=$(cfg WEB_URL); ku=$(cfg KIOSK_URL); kr=$(cfg_num KIOSK_RELOAD_MIN 10)
   pon=$(cfg POWER_ON_TIME); poff=$(cfg POWER_OFF_TIME); pdays=$(cfg POWER_ON_DAYS); wf=$(cfg WIFI); ws=$(cfg WIFI_SSID); ln=$(cfg LANGUAGE)
@@ -646,7 +673,7 @@ settings_dialog(){
       case $r in
         0) wp=""; mp=""; epw=""; settings_read "$out" ;;
         11) break ;;
-        13) wifi_page; settings_dialog; return ;;
+        13) wifi_page; first_update; settings_dialog; return ;;
         14) bt_page; settings_dialog; return ;;
         12) xterm -fa Monospace -fs 11 2>/dev/null; break ;;
         *) ev "settings: the settings screen failed (exit $r), the earlier dialog instead" ;;
@@ -686,7 +713,7 @@ settings_dialog(){
     tmp=$(mktemp)
     printf '%s\n' "HOSTNAME=$h" "DEFAULT_USER=$u" "BROKER=$br" "BROKER_FALLBACK=$brf" "DOMAIN=$dom" \
       "LOAD_BALANCE_INFO=$lbi" "NETMODE=$nm" "IPADDR=$ip" "NETMASK=$mask" "GATEWAY=$gw" "DNS1=$d1" "DNS2=$d2" \
-      "NTP=$ntp" "SHUTDOWN_SECS=$off" "SESSION_THRESHOLD=$thr" "MGMT_SHARE=$share" "MGMT_USER=$mu" "USB_MODE=$um" \
+      "NTP=$ntp" "SHUTDOWN_SECS=$off" "SESSION_THRESHOLD=$thr" "SESSION_BAR=$sbar" "SESSION_CLOSE_KEY=$ckey" "MGMT_SHARE=$share" "MGMT_USER=$mu" "USB_MODE=$um" \
       "USB_REDIRECT=$ur" "USB_LOCAL=$ul" "SECURITY_UPDATES=$su" "ANON_STATS=$an" "TIMEZONE=$tz" "TRANSPORT=$tr" "WEB_BUTTON=$wb" "WEB_URL=$wu" "KIOSK_URL=$ku" \
       "KIOSK_RELOAD_MIN=$kr" "POWER_ON_TIME=$pon" "POWER_OFF_TIME=$poff" "POWER_ON_DAYS=$pdays" "LANGUAGE=$ln" \
       "WIFI=$wf" "WIFI_SSID=$ws" "WIFI_SECURITY=$wsec" "DOT1X=$d1x" "EAP_IDENTITY=$eid" "EAP_ANONYMOUS=$ean" \
@@ -695,13 +722,19 @@ settings_dialog(){
     [ -n "$wp" ] && printf 'WIFI_PSK=%s\n' "$wp" >> "$tmp"
     [ -n "$mp" ] && printf 'MGMT_PASSWORD=%s\n' "$mp" >> "$tmp"
     [ -n "$epw" ] && printf 'EAP_PASSWORD=%s\n' "$epw" >> "$tmp"
-    msg=$(sudo -n "$OTR/save-config.sh" "$tmp" 2>&1); r=$?
+    msg=$(sudo -n "$OTR/save-config.sh" "$tmp" --heal 2>&1); r=$?
     rm -f "$tmp"
     if [ $r -eq 0 ]; then
       ev "settings saved from the dialog: hostname=$h user=$u network=$nm ip=$ip broker=$br"
       otr_lang     # the language may have changed
       if [ $GREETER = 1 ]; then ui message --icon=ok --heading="$(plain "$L_SAVED")" --timeout=2 >/dev/null
       else yad --center --undecorated --skip-taskbar --no-buttons --timeout=2 --width=$(pxs 300) --text="<b>$L_SAVED</b>" 2>/dev/null; fi
+      # saved, with something to know: saved values back to their default, the Wi-Fi key no longer readable (#201)
+      note=$(printf '%s\n' "$msg" | sed -n 's/^NOTE: //p')
+      if [ -n "$note" ]; then
+        if [ $GREETER = 1 ]; then ui message --icon=warn --heading="$(plain "$L_SAVED")" --text="$(plain "$note")" --button="$L_OK:0" --primary=0 --default=0 >/dev/null
+        else yad --center --width=$(pxs 480) --title="$L_SAVED" --text="$note" --button="$L_OK:0" 2>/dev/null; fi
+      fi
       # another kind of setup: the settings again at once, with the fields of that kind
       [ "$kind" != "$kind0" ] && [ $GREETER = 1 ] && { ev "kind of setup: $kind0 -> $kind"; settings_dialog; return; }
       # the password remembered no more: forgotten now
@@ -854,8 +887,10 @@ show_err(){ local cl=$1 u=$2 before=$3 t sup
   case "$cl" in
     net)    t="$L_T_NET" ;;
     noaddr) t="$L_T_NOADDR\n$sup" ;;
-    dns)    t=$(printf "$L_T_DNS" "$(cfg BROKER)")"\n$sup" ;;
-    broker) t=$(printf "$L_T_BROKER" "$(cfg BROKER) $(cfg BROKER_FALLBACK)")"\n$sup" ;;
+    # the computer of this connection: the one chosen on the sign-in screen (CONN), else the broker or remote computer
+    # (the message named BROKER also when another computer of the list was the one not found, 0.3.6)
+    dns)    t=$(printf "$L_T_DNS" "${CONN:-$(cfg BROKER)}")"\n$sup" ;;
+    broker) t=$(printf "$L_T_BROKER" "${CONN:-$(cfg BROKER) $(cfg BROKER_FALLBACK)}")"\n$sup" ;;
     vm)     t=$(printf "$L_T_VM" "$u")"\n$sup" ;;
     udp)    t="$L_T_UDP\n$sup" ;;
     *)      t=$(printf "$L_T_OTHER" "$LAST_EC")"\n$sup" ;;
@@ -935,7 +970,7 @@ WOL
 session(){
   local U="$1" P="$2" att=0 max=8 txt="$L_P_CONNECTING" B BRHA st d ec thr xp wp udponly=0 noudp=0 vmfails=0 vmwait=0 vmlog=0 ctmo=150 ns nw netw0=0 netok=0 msg
   BRHA=${CONN:-$(cfg BROKER)}
-  rm -f /tmp/kiosk.cancel /tmp/kiosk.stopped /tmp/kiosk.timeout /tmp/kiosk.disconnect
+  rm -f /tmp/kiosk.cancel /tmp/kiosk.stopped /tmp/kiosk.timeout /tmp/kiosk.disconnect /tmp/kiosk.userclose
   [ "$3" = reconnect ] && { max=40; txt="$L_P_RECONNECTING"; }
   LAST_ERR=""; LAST_EC=""
   thr=$(cfg_num SESSION_THRESHOLD 10)
@@ -1021,6 +1056,11 @@ session(){
         # and the session is reopened like after any drop.
         [ $((n % 12)) -eq 0 ] || continue
         fp=$(pgrep -P $xp -x xfreerdp3 | head -1); [ -n "$fp" ] || continue
+        # a session minimized (the button of FreeRDP's bar, or of the title bar once out of full screen with
+        # Ctrl+Alt+Enter): with no taskbar it would never come back
+        if [ $s3 -eq 1 ]; then
+          for w in $(xdotool search --pid "$fp" 2>/dev/null); do xprop -id "$w" WM_STATE 2>/dev/null | grep -q Iconic && xdotool windowactivate "$w" 2>/dev/null; done
+        fi
         # Watchdog 4: the clock changed (daylight saving time): the session is opened again at once, like after a
         # drop (code 137, a few seconds, the programs stay open on the server), so Windows shows the new time
         if [ $s3 -eq 1 ] && [ "$(date +%z)" != "$tzo" ]; then ev "session of $U: the time changed ($tzo to $(date +%z), daylight saving time), opened again so Windows shows the new time"; tzo=$(date +%z); kill -9 "$fp"; continue; fi
@@ -1102,6 +1142,13 @@ session(){
     # disconnected by an administrator from the manager (the flag, then FreeRDP ended): the session stays open on its
     # desktop, this device goes back to the sign-in and does not reconnect
     if [ -f /tmp/kiosk.disconnect ]; then rm -f /tmp/kiosk.disconnect; ev "session of $U disconnected from the manager after $(duration $d)"; return 5; fi
+    # closed on purpose on this device (0.3.6): the key combination of SESSION_CLOSE_KEY (rdp-action.sh leaves the
+    # flag) or the close button of FreeRDP's bar (SESSION_BAR; it aborts the connection: 145, CONNECT_CANCELLED). As a
+    # disconnect from Windows: the session stays open on its desktop, the end page here, no reconnection
+    if [ -f /tmp/kiosk.userclose ] || { [ "$(cfg SESSION_BAR)" = on ] && [ "$ec" = 145 ] && grep -q CONNECT_CANCELLED /tmp/kiosk.log; }; then
+      ev "session of $U ended after $(duration $d) (closed on the device with $([ -f /tmp/kiosk.userclose ] && echo 'the key' || echo 'the bar'))"
+      rm -f /tmp/kiosk.userclose; return 0
+    fi
     if [ -f /tmp/kiosk.stopped ] || [ -f /tmp/kiosk.timeout ]; then
       if [ -f /tmp/kiosk.stopped ]; then STOP_MSG=$L_E_STOPPED; else STOP_MSG=$(printf "$L_E_TIMEOUT" "$ctmo"); fi
       rm -f /tmp/kiosk.stopped /tmp/kiosk.timeout; return 6
@@ -1220,8 +1267,29 @@ power_off(){
     ui message --update --icon=update --heading="$(plain "$L_UPDATE_RUNNING")" --text="$(plain "$L_WAIT_UPDATE") (%p%)"
     wait_update
   fi
+  # apply.sh writes /etc/network/interfaces and the other files of the system in the background: switching off in the
+  # middle of one of them is how a device comes back with a half-written file (no Wi-Fi, settings that look lost). Wait
+  # for its lock, then flush what is on the disk. 10 s at most: a power off must not hang on a stuck script. (soso192;
+  # the lock opened for reading: the file is root's, this runs as the kiosk user, and flock needs no more)
+  local i
+  if [ -r /run/openthinrdp-apply.lock ]; then
+    exec 8</run/openthinrdp-apply.lock
+    for i in $(seq 1 20); do flock -n 8 && break; sleep 0.5; done
+    exec 8<&-
+  fi
+  sync
+  # the live system from a USB stick: what was set and installed goes to the stick now and while it switches off (the
+  # first time the partition made at this start is filled then, persist.sh seed). Said on the screen: the stick stays in
+  if live_stick; then
+    ui message --icon=busy --heading="$(plain "$L_LIVE_SAVING_T")" --text="$(plain "$L_LIVE_SAVING")" --timeout=4 >/dev/null &
+    sync; sleep 4
+  fi
   sleep 1; systemctl $act; exit 0
 }
+# the live system started from a USB stick (not installed), and one that cannot keep its settings (Ventoy or another
+# boot manager, a CD, no room on the stick: persist.sh): everything set on it is lost at power off
+live_stick(){ [ -d /run/live/medium ] && ! otr_installed; }
+live_unsaved(){ live_stick && case "$(cat /run/openthinrdp-persist 2>/dev/null)" in "not a live stick"|"no room") true ;; *) false ;; esac; }
 # the sign-in screen (login.py, GTK); without the Python GTK bindings (a device updated without the Debian mirror)
 # the yad form of the earlier versions
 GREETER=0
@@ -1255,8 +1323,12 @@ update_question(){
   if [ $rc != 1 ] && [ $rc != 70 ]; then
     : > /tmp/openthinrdp-update-declined; ev "software update $v not now, on the device: staying on $cur until the next start"; return 0
   fi
-  # the event starts report.sh, which installs it; the install restarts this kiosk with the new version
-  echo "$v" > /tmp/openthinrdp-update-accepted; ev "software update $v chosen on the device$([ -n "$maj" ] && echo ' (major update)')"
+  update_install "$v" "on the device$([ -n "$maj" ] && echo ' (major update)')"
+}
+# update_install VERSION WHY: the event starts report.sh, which installs it; the install restarts this kiosk with it
+update_install(){
+  local v=$1 i
+  echo "$v" > /tmp/openthinrdp-update-accepted; ev "software update $v chosen $2"
   { echo "10"; echo "# $(printf "$L_UPD_GET" "$v")"
     for i in $(seq 1 120); do updating && break; sleep 0.5; done
     echo "100"; } | ui message --progress --icon=update --heading="$(plain "$L_UPDATE_RUNNING")" --text="$(plain "$(printf "$L_UPD_GET" "$v")")"
@@ -1269,7 +1341,32 @@ update_question(){
 # once nobody has typed for 10 s (not in a session), and the main loop asks (update_question) before drawing it again.
 start_update_check(){
   managed || [ "$(cfg UPDATE_FROM)" = off ] && return 0
+  first_update               # the first start: the newest version before anything else
   update_question            # an offer already there (the kiosk restarted): asked now
+}
+# The FIRST start of a device without a management folder (nothing set up yet: the ISO someone is trying, a new
+# install): the newest version is installed before the hardware test and the setup, without asking. Whoever tries
+# OpenThinRDP tries the current version, not the one of the ISO with what was fixed since (#201). Only with a
+# network: a cable within 10 s; on Wi-Fi this runs again as soon as the Wi-Fi page connects. Once per start (the
+# install restarts the kiosk with the new version); the other starts never wait for the check (#199).
+first_update(){
+  local i v cur maj
+  [ -z "$(cfg BROKER)" ] || return 0
+  managed || [ "$(cfg UPDATE_FROM)" = off ] && return 0
+  [ -f /tmp/openthinrdp-first-update ] && return 0
+  for i in $(seq 1 20); do net_ok && break; sleep 0.5; done
+  net_ok || return 0
+  : > /tmp/openthinrdp-first-update
+  if [ ! -f /run/openthinrdp-update-offer ]; then
+    # the event starts report.sh at once, which asks the update source (an answer in seconds; 45 s at most)
+    ev "first start: looking for a newer version"
+    { echo "15"; echo "# $L_UPD_CHECK"
+      for i in $(seq 1 90); do [ -f /run/openthinrdp-update-offer ] || [ -f /run/openthinrdp-update-checked ] && break; sleep 0.5; done
+      echo "100"; } | ui message --progress --icon=busy --heading="$(plain "$L_UPD_CHECK_T")" --text="$(plain "$L_UPD_CHECK")"
+  fi
+  [ -f /run/openthinrdp-update-offer ] || { ev "first start: no newer version found"; return 0; }
+  read -r v cur maj < /run/openthinrdp-update-offer; [ -n "$v" ] || return 0
+  update_install "$v" "at the first start (from $cur)"
 }
 start_update_check
 # the live system (from the USB stick) tests the hardware at its first start: what anyone trying it wants to know.
@@ -1291,7 +1388,7 @@ if [ -z "$(cfg BROKER)" ]; then
     ui message --icon=info --heading="$(plain "$L_SETUP_ASK_T")" --text="$(plain "$L_SETUP_ASK")" \
        --button="$L_SETUP_DOMAIN:22" --button="$L_SETUP_WORKGROUP:21" --primary=21 --default=21 >/dev/null
     case $? in 22) k=domain ;; *) k=workgroup ;; esac
-    tmp=$(mktemp); printf 'SETUP=%s\n' "$k" > "$tmp"; sudo -n "$OTR/save-config.sh" "$tmp" >/dev/null 2>&1; rm -f "$tmp"
+    tmp=$(mktemp); printf 'SETUP=%s\n' "$k" > "$tmp"; sudo -n "$OTR/save-config.sh" "$tmp" --heal >/dev/null 2>&1; rm -f "$tmp"
     ev "kind of setup chosen at the first start: $k"
   fi
   # the anonymous data for the project, asked once too, when neither the device nor its site chose: what each level
@@ -1300,7 +1397,7 @@ if [ -z "$(cfg BROKER)" ]; then
     ui message --icon=info --heading="$(plain "$L_STATS_ASK_T")" --text="$(plain "$L_STATS_ASK")" \
        --button="$L_STATS_OFF:33" --button="$L_STATS_ERRORS:32" --button="$L_STATS_FULL:31" --primary=31 --default=31 >/dev/null
     case $? in 33) k=off ;; 32) k=errors ;; *) k=full ;; esac
-    tmp=$(mktemp); printf 'ANON_STATS=%s\n' "$k" > "$tmp"; sudo -n "$OTR/save-config.sh" "$tmp" >/dev/null 2>&1; rm -f "$tmp"
+    tmp=$(mktemp); printf 'ANON_STATS=%s\n' "$k" > "$tmp"; sudo -n "$OTR/save-config.sh" "$tmp" --heal >/dev/null 2>&1; rm -f "$tmp"
     ev "anonymous data chosen at the first start: $k"
   fi
   ev "no broker configured: settings dialog opened"; settings_dialog
@@ -1317,6 +1414,7 @@ while true; do
   case "$WEB" in app|browser) WEBBTN=(--button="$(cfg WEB_LABEL):7") ;; kiosk) WEBBTN=(--button="$L_KIOSK:7") ;; esac
   KTXT=""; KPID=""; rm -f $KEXP
   [ -z "$(cfg BROKER)" ] && KTXT="\n<small>$L_NO_BROKER</small>"
+  live_unsaved && KTXT="$KTXT\n<small>$L_LIVE_UNSAVED</small>"
   if [ "$WEB" = kiosk ]; then
     if [ -z "$(cfg KIOSK_URL)" ]; then KTXT="\n<small>$L_K_NOPAGE</small>"
     elif [ $KSTOPPED -eq 0 ]; then KTXT="\n<small>$L_K_COUNTDOWN</small>"; kiosk_countdown & KPID=$!
@@ -1371,7 +1469,7 @@ while true; do
   fi
   [ $rc -eq 3 ] && { settings_dialog; continue; }
   # the network on the sign-in screen pressed: the Wi-Fi page, behind the PIN of the settings
-  [ $rc -eq 8 ] && { pin_ok && wifi_page; continue; }
+  [ $rc -eq 8 ] && { pin_ok && { wifi_page; first_update; }; continue; }
   [ $rc -eq 4 ] && { diag_dialog; continue; }
   if [ $rc -eq 7 ]; then
     [ "$WEB" = kiosk ] && { KSTOPPED=0; kiosk_page; continue; }
@@ -1426,11 +1524,14 @@ while true; do
       break
     fi
     if [ $res -eq 0 ]; then
-      OFF=$(cfg_num SHUTDOWN_SECS 10); TOPT=(); TXT=$L_END_ASK
+      OFF=$(cfg_num SHUTDOWN_SECS 10); TOPT=(); TXT=$L_END_ASK; BOPT=()
+      # the live system from a USB stick (someone trying OpenThinRDP, a laptop at home): no countdown, it is
+      # switched off only when asked, with the settings written to the stick first (power_off)
+      if live_stick; then OFF=0; BOPT=(--button="$L_BACK_LOGIN:1"); fi
       [ "$OFF" -gt 0 ] && { TOPT=(--timeout="$OFF"); TXT=$(printf "$L_END_COUNTDOWN" "$OFF"); }
       # Enter = Connect. 10/0 = Connect, 5 = Shut down, 70 = countdown expired, anything else = login
       ui message --icon=power --heading="$(plain "$L_END_TITLE")" --text="$(plain "$TXT")" "${TOPT[@]}" \
-         --button="$L_SHUTDOWN:5" --button="$L_CONNECT:10" --primary=10 --default=10
+         --button="$L_SHUTDOWN:5" "${BOPT[@]}" --button="$L_CONNECT:10" --primary=10 --default=10
       rc=$?
       { [ $rc -eq 10 ] || [ $rc -eq 0 ]; } && continue
       { [ $rc -eq 5 ] || [ $rc -eq 70 ]; } && power_off "after the session ended"

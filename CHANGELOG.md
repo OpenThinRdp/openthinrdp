@@ -5,6 +5,78 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.3.6 (2026-11-16)
+
+- **The new logo** ([#206](https://github.com/OpenThinRdp/openthinrdp/issues/206)), everywhere: boot, sign-in screen,
+  dialogs, the boot menu of the ISO, the manager, the site. On the devices it is transparent on the dark background
+  colours (the default) and on its own dark card when a site chooses light ones (`BG_TOP`, `BG_BOTTOM`); with light
+  colours the clock, the date, the buttons and the icons on the background turn dark as well, by the same rule. A
+  device still showing the previous project picture gets the new one with the update; the pictures of a site stay.
+- **One saved value no longer valid blocked every save** ([#201](https://github.com/OpenThinRdp/openthinrdp/issues/201)).
+  A save checks again the values it does not change. One of them no longer valid made every save fail, and nothing in
+  the settings could clear it. The typical case is Wi-Fi on with its password no longer readable on the device (the
+  copy kept in the TPM): *Wi-Fi password missing for the network* at every save, a restart did not help. Now, from
+  the settings and the Wi-Fi page, such a value goes back to its default and the rest is saved, and a message says
+  which one. With the Wi-Fi password lost, the other settings are saved, the Wi-Fi is left as it is (the connection
+  still running is not cut) and the message says to connect again from the Wi-Fi page. A value typed now and not valid
+  is still refused, and the central settings stay strict: one not valid is refused and reported to the manager.
+- The Wi-Fi page checks the settings it will save **before** it stops the Wi-Fi of now: a save refused after the try
+  left the device without Wi-Fi at every attempt (#201).
+- **A secret the TPM does not give back at one start is no longer thrown away** (#201). It was set aside for good at
+  the first start where the TPM did not answer in time (a firmware TPM still busy at power on): the Wi-Fi key was lost,
+  and from then on every save was refused. Now three tries at each start, and a secret is given up only after three
+  starts in a row.
+- **Simplified Chinese**, and a set of fixes, by @soso192 (zhouqi) (#201). Thank you!
+  - The screens in Simplified Chinese (`LANGUAGE=zh`, `lang/zh.sh`), with a Chinese font in every image
+    (`fonts-wqy-microhei`, 5 MB). The language list of the settings knew only English and Italian: a device set to
+    Dutch (or Chinese) was turned back to English at the first *Save*.
+  - The device file holds only what differs from `site.conf` and the defaults: the first *Save* froze them all on the
+    device for good, and an old copy is now dropped. A value a choice list does not know stays as it is (it was
+    replaced by the first item of the list).
+  - The settings already stored are read without a process substitution (where `/dev/fd` is missing the device file
+    was rewritten with only the keys of that save), and a write that fails says so instead of "settings saved".
+  - `/etc/network/interfaces` is written atomically, `apply.sh` always brings an adapter up again after a restart, and
+    a power off waits for `apply.sh` and syncs: a device that switches off after a session came back with a
+    half-written file. After *Save* the Wi-Fi page no longer restarts the adapter while `apply.sh` does.
+  - A computer or broker may be an IPv6 address (`fd00::1`, `[fd00::1]:3390`) or a name with the trailing dot; the
+    message of a value refused names it; a backslash or `-n` in a value no longer cuts or empties the messages; spaces
+    around a value in `site.conf` no longer turn a setting off. The Wi-Fi page accepts a 64-digit key, and a 32-byte
+    network name whose halves are equal.
+  - Building the image: `MIRROR` and `MIRROR_SECURITY` in `build.conf`; the two Broadcom firmware installers, which
+    download from the internet during the build, are left out; an image built in Chinese has its locale (`docs/building.md`).
+- **More Wi-Fi networks** ([#208](https://github.com/OpenThinRdp/openthinrdp/issues/208)). The Wi-Fi page adds a
+  network to the networks of the device (up to 10) instead of replacing the main one, marks the saved ones in the list
+  (also when they are not around) and forgets the device's own ones (*Forget*). Up to three more networks for every
+  device from the settings and the manager (`WIFI_SSID_2..4`, `WIFI_PSK_2..4`), e.g. two buildings. The device joins
+  whichever is around, the strongest when more are, and the one chosen on the page at once. The keys stay in the TPM;
+  the status file names the networks, never a key; the anonymous data only counts them.
+- **Closing the session from the device** ([#209](https://github.com/OpenThinRdp/openthinrdp/issues/209)), both off
+  by default: FreeRDP's bar at the top of the session (`SESSION_BAR`) and a key combination of your choice
+  (`SESSION_CLOSE_KEY`, e.g. Ctrl+Alt+Q). Either ends like *Disconnect* in Windows: the session stays open on the
+  computer. Ctrl+Alt+Enter no longer takes the session out of full screen (out of it, the X of the window closed the
+  session and an installed device switched off; `RDP_EXTRA=+toggle-fullscreen` gives it back), and a minimized session
+  comes back by itself.
+- The error after the last attempt names the computer of this connection (the one chosen in the list, not always the
+  first), with words that fit a broker and a single PC.
+- **The Wi-Fi page said *busy* at every try after the first one**, until a restart: the `wpa_supplicant` it started
+  kept its lock. The status line of the settings said *Wi-Fi: not connected* on a connected Wi-Fi (`iw` is outside the
+  path of the kiosk user) ([#202](https://github.com/OpenThinRdp/openthinrdp/issues/202)).
+- **The first start installs the newest version first** ([#203](https://github.com/OpenThinRdp/openthinrdp/issues/203)).
+  At the first start of a device without a management folder (nothing set up yet: the ISO someone is trying, a new
+  install), with a network, OpenThinRDP looks for a newer version and installs it before the hardware test and the
+  setup, without a question (on the test bench 7 s, from the check to the setup on the new version). On Wi-Fi, as soon
+  as the Wi-Fi page connects. Every other start stays as fast as in 0.3.5.
+- **Anonymous data: what went wrong, as soon as it happens** ([#204](https://github.com/OpenThinRdp/openthinrdp/issues/204)).
+  Errors are sent at the next report (at most one send every 10 minutes), the week every 7 days and at once after an
+  update. Before, everything once a week: an error reached the project up to 7 days late, and a device updated from
+  0.3.2 or earlier sent nothing for a week. What is sent does not change ([privacy](docs/privacy.md)).
+- **The live system on a USB stick** ([#205](https://github.com/OpenThinRdp/openthinrdp/issues/205)). No countdown at
+  the end of a session: *Shut down*, *Back to sign-in* or *Connect*, as the person chooses. Power off shows *Saving the
+  settings on the USB stick* and writes them before the screen goes dark (the first time, the settings partition made
+  at this start is filled then). A stick that cannot keep the settings (Ventoy or another boot manager, a CD, no room)
+  is said on the sign-in screen, with how to write the ISO so that it does. Installed devices and devices with a
+  management folder do as before.
+
 ## 0.3.5 (2026-11-13)
 
 - **Waiting for the network, not "check the cable"** ([#197](https://github.com/OpenThinRdp/openthinrdp/issues/197)).
