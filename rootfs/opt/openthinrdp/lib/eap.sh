@@ -72,7 +72,7 @@ eap_block(){
 }
 
 # a network name in hex (any character is safe in the file of wpa_supplicant) and back
-wifi_hex(){ printf '%s' "$1" | od -An -tx1 | tr -d ' \n'; }
+wifi_hex(){ printf '%s' "$1" | od -An -v -tx1 | tr -d ' \n'; }   # -v: od folds repeated lines into "*" (soso192)
 wifi_unhex(){ printf "$(printf '%s' "$1" | sed 's/../\\x&/g')"; }
 
 # wifi_saved_psk SSID: the WPA key of that network in the Wi-Fi configuration (named in clear or in hex)

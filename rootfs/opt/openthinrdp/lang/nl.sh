@@ -254,6 +254,7 @@ L_JOB_IN60="Over 60 seconden. Annuleren laat het apparaat zoals het is."
 
 # settings validation (save-config.sh): one line per problem
 V_NODATA="Instellingen data mist"
+V_WRITE="De instellingen konden niet worden geschreven (%s): de schijf is alleen-lezen of vol. Er is niets opgeslagen"
 V_HOSTNAME="Hostnaam is niet geldig (alleen letters, cijfers en minteken; niet alleen cijfers)"
 V_USER="Standaard gebruiker niet geldig"
 V_BROKER="Server niet geldig (naam of adres, eventueel :poort)"

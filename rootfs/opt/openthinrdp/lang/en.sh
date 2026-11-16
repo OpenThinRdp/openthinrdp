@@ -254,6 +254,7 @@ L_JOB_IN60="In 60 seconds. Cancel keeps the device as it is."
 
 # settings validation (save-config.sh): one line per problem
 V_NODATA="Settings data missing"
+V_WRITE="The settings could not be written (%s): the disk is read-only or full. Nothing was saved"
 V_HOSTNAME="Hostname not valid (letters, digits and hyphen; not only digits)"
 V_USER="Default user not valid"
 V_BROKER="Broker not valid (name or address, optionally :port)"

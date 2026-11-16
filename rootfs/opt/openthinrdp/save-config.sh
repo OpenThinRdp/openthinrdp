@@ -17,7 +17,9 @@ PRINT=""; HEALOK=""; for a in "${@:2}"; do case "$a" in --print) PRINT=1 ;; --he
 has(){ grep -q "^$1=" "$F"; }
 # value from the input file if present, else the current setting
 get(){ if has "$1"; then sed -n "s/^$1=//p" "$F" | head -1 | tr -d '\r' | sed 's/^ *//; s/ *$//'; else cfg "$1"; fi; }
-low(){ echo "$1" | tr 'A-Z' 'a-z'; }
+# a value in lower case. printf, not echo: a value of "-n" or "-e" would otherwise vanish (POWER_ON_DAYS=-n was
+# accepted as "all days" instead of being refused) (soso192)
+low(){ printf '%s\n' "$1" | tr 'A-Z' 'a-z'; }
 onoff(){ case "$(low "$1")" in on|yes|true|1|si|sì|attivo|acceso) echo on ;; *) echo off ;; esac; }
 
 ipok(){
@@ -27,10 +29,42 @@ ipok(){
 ip2int(){ local a b c d; IFS=. read -r a b c d <<< "$1"; echo $(( (10#$a<<24) | (10#$b<<16) | (10#$c<<8) | 10#$d )); }
 maskok(){ ipok "$1" || return 1; local m inv; m=$(ip2int "$1"); inv=$(( ~m & 0xFFFFFFFF )); [ "$m" -ne 0 ] && [ $(( inv & (inv + 1) )) -eq 0 ]; }
 hostok(){ [[ $1 =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$ ]] && ! [[ $1 =~ ^[0-9]+$ ]]; }
-nameok(){ [[ $1 =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,252})$ ]]; }
-# a name or an address, optionally :port (1-65535): the remote computer or broker, the fallbacks, the other computers
-hostportok(){ local h=${1%:*} p=${1##*:}; [ "$h" = "$1" ] && p=3389
-  { ipok "$h" || nameok "$h"; } && [[ $p =~ ^[0-9]{1,5}$ ]] && [ $((10#$p)) -ge 1 ] && [ $((10#$p)) -le 65535 ]; }
+# a DNS name: letters, digits, dots and hyphens, and the trailing dot of a fully qualified name as it is copied from
+# DNS. Never an underscore (not a host name, whatever the record) and never a bare number (a truncated address).
+nameok(){ [[ $1 =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?\.?$ ]]; }
+# an IPv6 address as it is typed: hex groups separated by colons, one "::" at most and eight groups at most. Strict
+# enough that a value with a stray colon (a mistyped name:port) is refused instead of passing as an address. It is not
+# resolved here: a wrong address fails to connect and the sign-in screen says why. (soso192)
+ipv6ok(){ local a=$1 pre post g n=0
+  [[ $a =~ ^[0-9A-Fa-f:]+$ ]] && [[ $a == *:* ]] && [ ${#a} -le 45 ] || return 1
+  case "$a" in
+    *::*)
+      pre=${a%%::*}; post=${a#*::}
+      [[ $post == *::* ]] && return 1
+      for g in ${pre//:/ }; do [[ $g =~ ^[0-9A-Fa-f]{1,4}$ ]] || return 1; n=$((n + 1)); done
+      for g in ${post//:/ }; do [[ $g =~ ^[0-9A-Fa-f]{1,4}$ ]] || return 1; n=$((n + 1)); done
+      [ $n -le 6 ] ;;
+    *)
+      local -a G; IFS=: read -ra G <<< "$a"
+      [ ${#G[@]} -eq 8 ] || return 1
+      for g in "${G[@]}"; do [[ $g =~ ^[0-9A-Fa-f]{1,4}$ ]] || return 1; done ;;
+  esac; }
+# a name or an address, optionally :port (1-65535): the remote computer or broker, the fallbacks, the other computers.
+# An IPv6 address may be written as it is (fd00::1) or in brackets with a port ([fd00::1]:3389): its own colons are not
+# a port, so a value with more than one colon and no brackets is the address alone. (soso192)
+hostportok(){ local h=$1 p="" port=""
+  case "$h" in
+    \[*\]:*) port=1; p=${h##*]:}; h=${h%%\]:*}; h=${h#\[} ;;
+    \[*\])   h=${h%\]}; h=${h#\[} ;;
+    *:*)     case "${h#*:}" in
+               *:*) ;;                                        # more than one colon: an IPv6 address, no port
+               *)   port=1; p=${h##*:}; h=${h%:*} ;;          # one colon: name:port
+             esac ;;
+  esac
+  [ -n "$h" ] || return 1
+  { ipok "$h" || ipv6ok "$h" || nameok "$h"; } || return 1
+  [ -n "$port" ] || return 0
+  [[ $p =~ ^[0-9]{1,5}$ ]] && [ $((10#$p)) -ge 1 ] && [ $((10#$p)) -le 65535 ]; }
 userok(){ [[ $1 =~ ^[A-Za-z0-9._@\\-]{1,104}$ ]]; }
 URLRE='^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~:/?#@!$&()*+,;=%-]*)?$'
 urlok(){ [[ $1 =~ $URLRE ]]; }
@@ -48,10 +82,12 @@ E=""; HEAL=""; WKEYLOST=""
 changed(){ has "$1" && [ "$(get "$1")" != "$(cfg "$1" | sed 's/^ *//; s/ *$//')" ]; }
 err(){ local k
   if [ -n "$HEALOK" ] && [ -z "${OTR_HEALING+x}" ]; then
-    for k in $1; do changed "$k" && { E+="- $2\n"; return; }; done
+    for k in $1; do changed "$k" && { E+="- $2"$'\n'; return; }; done
     HEAL+=" $1"; return
   fi
-  E+="- $2\n"; }
+  # a real newline, printed with %s below: with \n and printf %b a backslash in a refused value (\c) cut every message
+  # after it (soso192)
+  E+="- $2"$'\n'; }
 declare -A V
 
 # --- remote desktop
@@ -63,7 +99,7 @@ case "$(low "$(get SETUP)")" in domain|dominio) V[SETUP]=domain ;; workgroup|gru
 # without a domain the field is the remote computer, and the message says so: there is no broker (#182)
 V[BROKER]=$(get BROKER)
 if [ -n "${V[BROKER]}" ] && ! hostportok "${V[BROKER]}"; then
-  if [ "${V[SETUP]:-$(setup_kind)}" = workgroup ]; then err "BROKER" "$V_PC"; else err "BROKER" "$V_BROKER"; fi
+  if [ "${V[SETUP]:-$(setup_kind)}" = workgroup ]; then err "BROKER" "$V_PC ${V[BROKER]}"; else err "BROKER" "$V_BROKER ${V[BROKER]}"; fi
 fi
 V[BROKER_FALLBACK]=$(get BROKER_FALLBACK | tr -s ' ,;' ' ' | sed 's/^ //; s/ $//')
 for t in ${V[BROKER_FALLBACK]}; do hostportok "$t" || err "BROKER_FALLBACK" "$V_FALLBACK $t"; done
@@ -82,12 +118,9 @@ V[LOAD_BALANCE_INFO]=$(get LOAD_BALANCE_INFO); [[ ${V[LOAD_BALANCE_INFO]} =~ $RE
 case "$(low "$(get TRANSPORT)")" in udp) V[TRANSPORT]=udp ;; tcp) V[TRANSPORT]=tcp ;; *) V[TRANSPORT]=auto ;; esac
 case "$(low "$(get RDP_AUTH)")" in ntlm) V[RDP_AUTH]=ntlm ;; kerberos) V[RDP_AUTH]=kerberos ;; *) V[RDP_AUTH]=negotiate ;; esac
 case "$(low "$(get RDP_CERT)")" in ignore) V[RDP_CERT]=ignore ;; verify) V[RDP_CERT]=verify ;; *) V[RDP_CERT]=tofu ;; esac
-# RD Gateway: a name or an address, optionally :port (1-65535)
 V[RDP_GATEWAY]=$(get RDP_GATEWAY | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
-if [ -n "${V[RDP_GATEWAY]}" ]; then
-  gh=${V[RDP_GATEWAY]%:*}; gp=${V[RDP_GATEWAY]##*:}; [ "$gh" = "${V[RDP_GATEWAY]}" ] && gp=443
-  { { ipok "$gh" || nameok "$gh"; } && [[ $gp =~ ^[0-9]{1,5}$ ]] && [ "$gp" -ge 1 ] && [ "$gp" -le 65535 ]; } || err "RDP_GATEWAY" "$V_RDP_GATEWAY"
-fi
+# RD Gateway: a name or an address, optionally :port (1-65535; 443 when there is none)
+if [ -n "${V[RDP_GATEWAY]}" ] && ! hostportok "${V[RDP_GATEWAY]}"; then err "RDP_GATEWAY" "$V_RDP_GATEWAY ${V[RDP_GATEWAY]}"; fi
 case "$(low "$(get RDP_GATEWAY_USE)")" in detect|rileva|auto) V[RDP_GATEWAY_USE]=detect ;; *) V[RDP_GATEWAY_USE]=always ;; esac
 V[RDP_GFX]=$(get RDP_GFX); [[ ${V[RDP_GFX]} =~ ^[A-Za-z0-9:,]*$ ]] || err "RDP_GFX" "$V_GFX"
 V[RDP_KEYBOARD]=$(get RDP_KEYBOARD); [[ ${V[RDP_KEYBOARD]} =~ ^(0x[0-9a-fA-F]{8})?$ ]] || err "RDP_KEYBOARD" "$V_RDPKBD"
@@ -160,10 +193,7 @@ V[REPORT_INTERVAL]=$(get REPORT_INTERVAL | tr -d ' '); [ -z "${V[REPORT_INTERVAL
 cidrok(){ local a=${1%/*} p=${1#*/}; [ "$p" != "$1" ] && ipok "$a" && [[ $p =~ ^[0-9]{1,2}$ ]] && [ "$p" -le 32 ]; }
 case "$(low "$(get VPN)")" in wireguard|wg) V[VPN]=wireguard ;; openvpn|ovpn) V[VPN]=openvpn ;; tailscale|ts) V[VPN]=tailscale ;; *) V[VPN]=off ;; esac
 V[VPN_SERVER]=$(get VPN_SERVER | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
-if [ -n "${V[VPN_SERVER]}" ]; then
-  vh=${V[VPN_SERVER]%:*}; vp=${V[VPN_SERVER]##*:}; [ "$vh" = "${V[VPN_SERVER]}" ] && vp=51820
-  { { ipok "$vh" || nameok "$vh"; } && [[ $vp =~ ^[0-9]{1,5}$ ]] && [ "$vp" -ge 1 ] && [ "$vp" -le 65535 ]; } || err "VPN_SERVER" "$V_VPN_SERVER"
-fi
+if [ -n "${V[VPN_SERVER]}" ] && ! hostportok "${V[VPN_SERVER]}"; then err "VPN_SERVER" "$V_VPN_SERVER ${V[VPN_SERVER]}"; fi
 V[VPN_SERVER_KEY]=$(get VPN_SERVER_KEY | tr -d '[:space:]')
 [ -z "${V[VPN_SERVER_KEY]}" ] || [[ ${V[VPN_SERVER_KEY]} =~ ^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$ ]] || err "VPN_SERVER_KEY" "$V_VPN_KEY"
 V[VPN_ADDRESS]=$(get VPN_ADDRESS | tr -d '[:space:]')
@@ -196,7 +226,7 @@ if [ "${V[WIFI]}" = on ]; then
   # no key for the network: an error when the Wi-Fi is set now. When it was on already (the key kept in the TPM no
   # longer readable, #201) the other settings are saved, the Wi-Fi is left as it is and the dialog says to connect again
   if [ "${V[WIFI_SECURITY]}" = psk ] && [ -z "$WHEX" ] && [ -z "$OLDHEX" ]; then
-    if [ -z "$HEALOK" ] || changed WIFI || changed WIFI_SSID || changed WIFI_SECURITY; then E+="- $V_WIFIMISSING ${V[WIFI_SSID]}\n"
+    if [ -z "$HEALOK" ] || changed WIFI || changed WIFI_SSID || changed WIFI_SECURITY; then E+="- $V_WIFIMISSING ${V[WIFI_SSID]}"$'\n'
     else WKEYLOST=1; fi
   fi
 fi
@@ -286,8 +316,8 @@ V[KIOSK_RELOAD_MIN]=$(get KIOSK_RELOAD_MIN)
 # --- power schedule
 V[POWER_ON_TIME]=$(get POWER_ON_TIME); [ -z "${V[POWER_ON_TIME]}" ] || [[ ${V[POWER_ON_TIME]} =~ $TIMERE ]] || err "POWER_ON_TIME" "$V_POWERON"
 V[POWER_OFF_TIME]=$(get POWER_OFF_TIME); [ -z "${V[POWER_OFF_TIME]}" ] || [[ ${V[POWER_OFF_TIME]} =~ $TIMERE ]] || err "POWER_OFF_TIME" "$V_POWEROFF"
-d=$(get POWER_ON_DAYS); [ -z "$(echo "$d" | tr -d '1-7 ,;')" ] || err "POWER_ON_DAYS" "$V_DAYS"
-V[POWER_ON_DAYS]=$(echo "$d" | tr -cd '1-7' | fold -w1 | sort -u | tr -d '\n'); [ -z "${V[POWER_ON_DAYS]}" ] && V[POWER_ON_DAYS]=1234567
+d=$(get POWER_ON_DAYS); [ -z "$(printf '%s' "$d" | tr -d '1-7 ,;')" ] || err "POWER_ON_DAYS" "$V_DAYS"
+V[POWER_ON_DAYS]=$(printf '%s' "$d" | tr -cd '1-7' | fold -w1 | sort -u | tr -d '\n'); [ -z "${V[POWER_ON_DAYS]}" ] && V[POWER_ON_DAYS]=1234567
 
 # --- look and language
 V[LANGUAGE]=$(low "$(get LANGUAGE)"); { [[ ${V[LANGUAGE]} =~ ^[a-z]{2}$ ]] && [ -f "$OTR/lang/${V[LANGUAGE]}.sh" ]; } || err "LANGUAGE" "$V_LANGUAGE"
@@ -298,7 +328,7 @@ V[LOGO]=$(get LOGO); [[ ${V[LOGO]} =~ ^(/[A-Za-z0-9._/-]+\.png)?$ ]] || err "LOG
 for k in BG_TOP BG_BOTTOM; do V[$k]=$(get $k); [[ ${V[$k]} =~ ^#[0-9a-fA-F]{6}$ ]] || err "$k" "$V_COLOR $k"; done
 V[SETTINGS_PIN_SHA256]=$(low "$(get SETTINGS_PIN_SHA256)"); [[ ${V[SETTINGS_PIN_SHA256]} =~ ^([0-9a-f]{64}|pbkdf2-sha256:[0-9]{4,7}:[0-9a-f]{32}:[0-9a-f]{64})?$ ]] || err "SETTINGS_PIN_SHA256" "$V_PIN"
 
-if [ -n "$E" ]; then printf '%b' "$E"; exit 1; fi
+if [ -n "$E" ]; then printf '%s' "$E"; exit 1; fi
 # saved values no longer valid: once more with the project default in their place (a default that is not valid
 # either is then an error, as any other)
 if [ -n "$HEAL" ]; then
@@ -319,23 +349,35 @@ if [ -n "$PRINT" ]; then
   exit 0
 fi
 
-# --- save: the device file keeps the keys it already had, plus the ones given now that differ from what the device
-# inherits; the others keep following site.conf and the project defaults. The settings screen sends every field: all
-# of them written froze site.conf and the defaults on the device at its first Save, for good (0.3.6, found by soso192
-# in #201). ANON_STATS always: its presence says the question of the first start was answered.
-mkdir -p "$OTR_ETC"
+# --- save: the device file holds the choices of THIS device, not a copy of the site file and the defaults. A key is
+# stored when its value differs from what the site file and the defaults already give (cfg_base), and dropped when it
+# no longer does. Before, the settings dialog sent every field back and the first Save froze all of them into the device
+# file: from then on a new site.conf (a newer image, the settings the manager writes) had no effect on that device, and a
+# value the site file had got wrong became the device's own (0.3.6, soso192, #201). ANON_STATS always: its presence says
+# the question of the first start was answered. Here-string, not a process substitution: this runs as root on a device
+# where /dev/fd may not be there (a chroot, an early boot), and a missing /dev/fd lost every stored key.
+mkdir -p "$OTR_ETC" 2>/dev/null
 declare -A OUT
-[ -f "$OTR_CONF" ] && while IFS='=' read -r k v; do [ -n "$k" ] && OUT[$k]=$v; done < <(grep -E '^[A-Z][A-Z0-9_]*=' "$OTR_CONF")
-inherited(){ local f; for f in "$OTR_SITE" "$OTR_DEFAULTS"; do [ -f "$f" ] && grep -q "^$1=" "$f" && { sed -n "s/^$1=//p" "$f" | head -1 | tr -d '\r'; return; }; done; }
+[ -f "$OTR_CONF" ] && while IFS='=' read -r k v; do [ -n "$k" ] && OUT[$k]=$v; done <<< "$(grep -E '^[A-Z][A-Z0-9_]*=' "$OTR_CONF")"
 for k in $(cfg_keys); do
   [ "$k" = HOSTNAME ] && continue
-  if [ -n "${OUT[$k]+x}" ]; then OUT[$k]=${V[$k]}
-  elif has "$k" && { [ "$k" = ANON_STATS ] || [ "${V[$k]}" != "$(inherited "$k")" ]; }; then OUT[$k]=${V[$k]}; fi
+  # not being set now and not in the device file: it keeps following the site file and the defaults
+  { has "$k" || [ -n "${OUT[$k]+x}" ]; } || continue
+  if [ "$k" != ANON_STATS ] && [ "${V[$k]}" = "$(cfg_base "$k")" ]; then unset "OUT[$k]"; else OUT[$k]=${V[$k]}; fi
 done
-T=$(mktemp "$OTR_ETC/.conf.XXXXXX")
-{ echo "# Settings of this device, written by save-config.sh. See /opt/openthinrdp/defaults.conf."
-  for k in $(cfg_keys); do [ -n "${OUT[$k]+x}" ] && echo "$k=${OUT[$k]}"; done; } > "$T"
-chmod 644 "$T"; mv -f "$T" "$OTR_CONF"
+# A write that fails must be said, not swallowed: with a read-only or full filesystem (an ext4 that remounted itself
+# read-only after an I/O error, a full overlay) everything here failed and the script still ended with 0, so the dialog
+# said "settings saved" while nothing was on the disk and the settings came back as before at the next start. (soso192)
+T=$(mktemp "$OTR_ETC/.conf.XXXXXX" 2>/dev/null)
+if [ -z "$T" ]; then printf "$V_WRITE\n" "$OTR_ETC"; exit 1; fi
+# "true" closes the block: without it the status of the group is the status of the last test in the loop, which is false
+# whenever the last setting is not set, and a save that wrote everything said it could not write
+if ! { echo "# Settings of this device, written by save-config.sh. See /opt/openthinrdp/defaults.conf."
+  for k in $(cfg_keys); do [ -n "${OUT[$k]+x}" ] && echo "$k=${OUT[$k]}"; done; true; } > "$T"; then
+  rm -f "$T"; printf "$V_WRITE\n" "$OTR_ETC"; exit 1
+fi
+chmod 644 "$T"; sync "$T" 2>/dev/null
+mv -f "$T" "$OTR_CONF" 2>/dev/null || { rm -f "$T"; printf "$V_WRITE\n" "$OTR_CONF"; exit 1; }
 
 # the 802.1X password (before the Wi-Fi file, which holds it for an enterprise network)
 if [ -n "$EPW" ] && [ "$EPW" != "$OLDEPW" ]; then

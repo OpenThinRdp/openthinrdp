@@ -26,11 +26,24 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
   the first start where the TPM did not answer in time (a firmware TPM still busy at power on): the Wi-Fi key was lost,
   and from then on every save was refused. Now three tries at each start, and a secret is given up only after three
   starts in a row.
-- Found by @soso192 (#201), fixed: the settings wrote every field into the device file at the first *Save*, freezing
-  the values of `site.conf` and of the defaults on that device for good (now only what differs from them); a value a
-  choice list does not know (a language added, a value set centrally) was replaced on save by the first item of the
-  list (now kept, as it is); `/etc/network/interfaces` was not written atomically, and a power cut in the middle left
-  it cut short (now written next to it, then renamed).
+- **Simplified Chinese**, and a set of fixes, by @soso192 (zhouqi) (#201). Thank you!
+  - The screens in Simplified Chinese (`LANGUAGE=zh`, `lang/zh.sh`), with a Chinese font in every image
+    (`fonts-wqy-microhei`, 5 MB). The language list of the settings knew only English and Italian: a device set to
+    Dutch (or Chinese) was turned back to English at the first *Save*.
+  - The device file holds only what differs from `site.conf` and the defaults: the first *Save* froze them all on the
+    device for good, and an old copy is now dropped. A value a choice list does not know stays as it is (it was
+    replaced by the first item of the list).
+  - The settings already stored are read without a process substitution (where `/dev/fd` is missing the device file
+    was rewritten with only the keys of that save), and a write that fails says so instead of "settings saved".
+  - `/etc/network/interfaces` is written atomically, `apply.sh` always brings an adapter up again after a restart, and
+    a power off waits for `apply.sh` and syncs: a device that switches off after a session came back with a
+    half-written file. After *Save* the Wi-Fi page no longer restarts the adapter while `apply.sh` does.
+  - A computer or broker may be an IPv6 address (`fd00::1`, `[fd00::1]:3390`) or a name with the trailing dot; the
+    message of a value refused names it; a backslash or `-n` in a value no longer cuts or empties the messages; spaces
+    around a value in `site.conf` no longer turn a setting off. The Wi-Fi page accepts a 64-digit key, and a 32-byte
+    network name whose halves are equal.
+  - Building the image: `MIRROR` and `MIRROR_SECURITY` in `build.conf`; the two Broadcom firmware installers, which
+    download from the internet during the build, are left out; an image built in Chinese has its locale (`docs/building.md`).
 - **More Wi-Fi networks** ([#208](https://github.com/OpenThinRdp/openthinrdp/issues/208)). The Wi-Fi page adds a
   network to the networks of the device (up to 10) instead of replacing the main one, marks the saved ones in the list
   (also when they are not around) and forgets the device's own ones (*Forget*). Up to three more networks for every

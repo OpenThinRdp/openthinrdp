@@ -251,6 +251,7 @@ L_JOB_IN60="Tra 60 secondi. Annulla lascia la postazione com'è."
 
 # validazione della configurazione (save-config.sh): una riga per problema
 V_NODATA="Dati della configurazione mancanti"
+V_WRITE="Impossibile scrivere le impostazioni (%s): il disco è in sola lettura o pieno. Non è stato salvato niente"
 V_HOSTNAME="Nome macchina non valido (lettere, cifre e trattino; non solo cifre)"
 V_USER="Utente predefinito non valido"
 V_BROKER="Broker non valido (nome o indirizzo, eventualmente :porta)"

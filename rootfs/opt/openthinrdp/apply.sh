@@ -67,10 +67,13 @@ for i in $ALLIF $WL $(awk '/^allow-hotplug /{print $2}' $OLD 2>/dev/null); do
   if [ -z "$a" ] && [ "$MODE" != static ] && ip -4 -o addr show dev "$i" 2>/dev/null | grep -q inet; then continue; fi
   CHANGED="$CHANGED $i"; [ -z "$a" ] && [ -n "$b" ] && ADDED="$ADDED $i"
 done
-# written whole or not at all: a copy over the file left it cut short when the power went in the middle, as when a
-# device switches off right after a session (0.3.6, found by soso192). A copy next to it, on disk, then renamed
 if ! cmp -s "$NEW" $OLD; then
-  cp "$NEW" $OLD.new && chmod 644 $OLD.new && sync $OLD.new 2>/dev/null; mv -f $OLD.new $OLD && sync -f $OLD 2>/dev/null
+  # a file of its own next to it, then mv: a copy straight over the file leaves it truncated if the power goes off
+  # mid-copy (the device switches itself off after a session, and a half-written interfaces file means no network at the
+  # next start). mv within one directory is a rename. (0.3.6, soso192; the copy on disk before the rename)
+  if install -m 644 "$NEW" "$OLD.new" 2>/dev/null && { sync "$OLD.new" 2>/dev/null; mv -f "$OLD.new" "$OLD" 2>/dev/null; }; then
+    sync -f "$OLD" 2>/dev/null
+  else rm -f "$OLD.new"; ev "network: /etc/network/interfaces could not be written (read-only filesystem?): the settings are not in use"; fi
 fi
 rm -f "$NEW"
 
@@ -202,7 +205,10 @@ fi
 # still waiting on an adapter without cable has to go, otherwise ifdown waits for it.
 if [ "$1" = now ]; then
   for i in $CHANGED; do
-    setsid bash -c "pkill -9 -f '^/usr/sbin/ifup .*[ =]$i\$'; timeout -s KILL 20 ifdown --force $i; dhcpcd -x $i; ip addr flush dev $i; grep -qx 'allow-hotplug $i' $OLD && ifup $i" 9>&- >/dev/null 2>&1 < /dev/null &
+    # ifup always, not only when the file has the adapter: an adapter that lost its block above would otherwise be
+    # flushed and never brought up again (no Wi-Fi, no address, until the next reboot). ifup on an interface that the
+    # file does not know says nothing and exits.
+    setsid bash -c "pkill -9 -f '^/usr/sbin/ifup .*[ =]$i\$'; timeout -s KILL 20 ifdown --force $i; dhcpcd -x $i; ip addr flush dev $i; ifup $i" 9>&- >/dev/null 2>&1 < /dev/null &
   done
 elif [ "$1" = boot ]; then
   for i in $ADDED; do setsid ifup "$i" 9>&- >/dev/null 2>&1 < /dev/null & done

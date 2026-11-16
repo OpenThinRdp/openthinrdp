@@ -54,7 +54,9 @@ ok "SSID with a quote refused" '! check x "$(printf "WIFI_SSID=a\"b")"'
 ok "SSID with a pipe refused" '! check x "$(printf "WIFI_SSID=a|b")"'
 ok "Wi-Fi password without SSID refused" '! check x "WIFI_PSK=password123"'
 ok "Wi-Fi on with SSID and password accepted (no adapter needed)" 'check x "$(printf "WIFI=on\nWIFI_SSID=Office\nWIFI_PSK=password123")"'
-ok "Wi-Fi on without a key refused" '! check x "$(printf "WIFI=on\nWIFI_SSID=Office")"'
+# a network set now without its key could never be joined: refused, the password is asked for. A Wi-Fi that was on and
+# whose key is lost later (TPM) is saved with the rest by the settings dialog (--heal): see the tests of 0.3.6 below
+ok "Wi-Fi set now without a key: refused" '! check x "$(printf "WIFI=on\nWIFI_SSID=Office")"'
 ok "threshold out of range refused" '! check x "SESSION_THRESHOLD=200"'
 ok "bad days refused" '! check x "POWER_ON_DAYS=1289"'
 ok "bad time refused" '! check x "POWER_ON_TIME=25:00"'
@@ -172,6 +174,22 @@ ok "save works" '$OTR/save-config.sh "$T" >/dev/null 2>&1'
 ok "device file has the given keys" 'grep -qx "BROKER=rdbroker.example.com" $OTR_CONF && grep -qx "DEFAULT_USER=alice" $OTR_CONF'
 ok "device file has no other keys" '[ "$(grep -c "^[A-Z]" $OTR_CONF)" = 2 ]'
 
+# The device file holds the choices of this device, not a copy of the site file and the defaults: a key whose value is
+# the one they already give is not stored, so a new site.conf (a newer image, the manager) still reaches the device for
+# everything it did not change. The settings dialog sends every field back, which used to freeze all the defaults on the
+# first Save and made a wrong value of the site file the device's own.
+: > /etc/openthinrdp/openthinrdp.conf
+printf 'LANGUAGE=zh\nKEYBOARD=cn\nTIMEZONE=Asia/Shanghai\nTITLE=远程桌面\n' > /etc/openthinrdp/site.conf
+: > "$T"; $OTR/save-config.sh "$T" --print > /tmp/all-fields.conf 2>/dev/null
+ok "a whole screen sent back unchanged stores nothing (ANON_STATS only: the question of the first start answered)" '$OTR/save-config.sh /tmp/all-fields.conf >/dev/null 2>&1; [ "$(grep "^[A-Z]" $OTR_CONF | grep -vc "^ANON_STATS=")" = 0 ]'
+printf 'BROKER=rdbroker.example.com:3390\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
+ok "a key that differs from the site file is stored" 'grep -qx "BROKER=rdbroker.example.com:3390" $OTR_CONF && [ "$(grep "^[A-Z]" $OTR_CONF | grep -vc "^ANON_STATS=")" = 1 ]'
+printf 'LANGUAGE=zh\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
+ok "a value equal to the site file is not stored (and an old copy is dropped)" '! grep -q "^LANGUAGE=" $OTR_CONF && [ "$(cfg LANGUAGE)" = zh ]'
+printf 'BROKER=\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
+ok "clearing a key removes it from the device file" '! grep -q "^BROKER=" $OTR_CONF'
+: > /etc/openthinrdp/site.conf
+
 # --- account of the management folder: the password only in smb.cred (600), never in the settings
 CRED=/etc/openthinrdp/smb.cred
 printf 'MGMT_USER=EXAMPLE\\svc-tc\nMGMT_PASSWORD=p|w=x y\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
@@ -212,7 +230,7 @@ ok "host file may set HOSTNAME" 'grep -q "^applied" $OTR_LIB/central-status'
 printf 'USB_MODE=all\r\nSHUTDOWN_SECS=45\r\nHOSTNAME=from-group\r\nDEVICE_GROUP=other\r\n' > $OTR_LIB/central-group.conf
 printf 'HOSTNAME=kiosk-test\r\nSHUTDOWN_SECS=50\r\n' > $OTR_LIB/central-host.conf
 $OTR/central-apply.sh
-ok "group: its values win over common.conf" 'grep -qx "USB_MODE=all" $OTR_CONF'
+ok "group: its values win over common.conf (all = the default: in effect, not stored in the device file)" '[ "$(cfg USB_MODE)" = all ]'
 ok "group: the file of the device wins over the group" 'grep -qx "SHUTDOWN_SECS=50" $OTR_CONF'
 ok "group: may not set HOSTNAME or DEVICE_GROUP" '[ "$(hostname)" != from-group ] && ! grep -q "^DEVICE_GROUP=other" $OTR_CONF'
 rm -f $OTR_LIB/central-group.conf; printf 'HOSTNAME=kiosk-test\r\n' > $OTR_LIB/central-host.conf; $OTR/central-apply.sh
@@ -482,6 +500,20 @@ ok "make-update refuses to build without the manager as released (-m)" '! /src/m
 # --- RD Gateway: validation, and the options connect() of the kiosk gives FreeRDP (FreeRDP replaced by a stub)
 ok "RD Gateway: a name, a name:port and an address are accepted" 'check x "RDP_GATEWAY=rdg.example.com" && check x "RDP_GATEWAY=rdg.example.com:8443" && check x "RDP_GATEWAY=192.0.2.10"'
 ok "RD Gateway: a bad name or port is refused" '! check x "RDP_GATEWAY=rdg example" && ! check x "RDP_GATEWAY=rdg.example.com:0" && ! check x "RDP_GATEWAY=rdg.example.com:70000"'
+# a computer or broker: the ports of the real networks (3389, 3390, ...), IPv6 (plain, and in brackets with a port) and a
+# fully qualified name copied with its trailing dot. A value with a stray colon is refused, never read as an address.
+ok "computer or broker: an IPv6 address, plain or in brackets with a port, and a name with a trailing dot" 'check x "BROKER=fd00::1" && check x "BROKER=[fd00::1]:3390" && check x "BROKER=pc.example.test." && check x "BROKER=192.168.1.50:3390"'
+ok "computer or broker: an address that is no IPv6 address is refused (a:b:c, two groups and a port)" '! check x "BROKER=a:b:c" && ! check x "BROKER=a:b:3390"'
+# the message says which value it refused: "Broker not valid" alone said nothing on the phone
+ok "broker refused: the message names the value" 'printf "BROKER=not a host\n" > "$T"; $OTR/save-config.sh "$T" 2>&1 | grep -q "Broker not valid.*not a host"'
+# the messages are printed with %s, not %b: a backslash in a refused value no longer cuts what follows it
+ok "save-config: a backslash in a refused value does not cut the messages after it" 'printf "BROKER_FALLBACK=x\\\\c\nLANGUAGE=xx\n" > "$T"; $OTR/save-config.sh "$T" 2>&1 | grep -q "Language not available"'
+# echo treated "-n" as an option and printed nothing: POWER_ON_DAYS=-n was accepted as all days
+ok "days: a value that looks like an echo option is refused, not read as all days" '! check x "POWER_ON_DAYS=-n"'
+# cfg() drops the spaces around a value, as save-config.sh does: a site.conf edited on Windows must still apply
+ok "cfg drops the spaces a hand-edited site.conf leaves around a value" 'printf "WIFI=on \n" > /etc/openthinrdp/site.conf; q="$(cfg WIFI)"; : > /etc/openthinrdp/site.conf; [ "$q" = on ]'
+# od without -v folds repeated lines into "*": a 32-byte name whose halves are equal lost half of its hex digits
+ok "wifi.sh: the name goes to wpa_supplicant in hex, od must not fold it" 'SSID=ABCDEFGHIJKLMNOPABCDEFGHIJKLMNOP; hex=$(printf "%s" "$SSID" | od -An -v -tx1 | tr -d " \n"); [ ${#hex} = 64 ] && grep -q "od -An -v -tx1" $OTR/wifi.sh'
 ok "RD Gateway: use always, detect (rileva), anything else always" 'printf "RDP_GATEWAY_USE=Rileva\n" > "$T"; $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "RDP_GATEWAY_USE=detect" && printf "RDP_GATEWAY_USE=x\n" > "$T" && $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "RDP_GATEWAY_USE=always"'
 (
   eval "$(sed -n '/^connect(){/,/^}/p; /^vm_alive(){/,/^  sleep 5/p' $OTR/kiosk.sh)"
@@ -616,7 +648,11 @@ ok "802.1X: peap, tls (eap-tls) and off, anything else off; Wi-Fi psk, peap, tls
 ok "802.1X: identities DOMAIN\\user, user@domain, host/name, a computer account; quotes and ; refused" 'check x "EAP_IDENTITY=EXAMPLE\\thin-1" && check x "EAP_IDENTITY=host/pc1.example.com" && check x "EAP_IDENTITY=PC1\$" && check x "EAP_ANONYMOUS=anonymous@example.com" && ! check x "EAP_IDENTITY=a\"b" && ! check x "EAP_ANONYMOUS=a;b"'
 ok "802.1X: the CA is system (also when empty) or a .crt name of the site folder, never a path" 'printf "EAP_CA=\n" > "$T"; $OTR/save-config.sh "$T" --print 2>&1 | grep -qx EAP_CA=system && check x "EAP_CA=System" && check x "EAP_CA=corp-root.crt" && ! check x "EAP_CA=../corp.crt" && ! check x "EAP_CA=/etc/ssl/corp.crt" && ! check x "EAP_CA=corp.pem"'
 ok "802.1X: server names normalized, a bad one refused" 'printf "EAP_SERVER_NAME=nps1.example.com, nps2.example.com;\n" > "$T"; $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "EAP_SERVER_NAME=nps1.example.com nps2.example.com" && ! check x "EAP_SERVER_NAME=nps_1.example.com"'
-ok "802.1X: a missing password or certificate is no error (the device reports it)" 'check x "DOT1X=peap" && check x "DOT1X=tls" && check x "$(printf "WIFI=on\nWIFI_SSID=Corp\nWIFI_SECURITY=peap")" && ! check x "$(printf "WIFI=on\nWIFI_SSID=Corp\nWIFI_SECURITY=psk")"'
+ok "802.1X: a missing password or certificate is no error (the device reports it)" 'check x "DOT1X=peap" && check x "DOT1X=tls" && check x "$(printf "WIFI=on\nWIFI_SSID=Corp\nWIFI_SECURITY=peap")"'
+# A Wi-Fi whose key is lost (TPM cleared, manager never sent it) used to refuse every save for ever: the settings
+# dialog and the Wi-Fi page (--heal) now save the rest and leave the Wi-Fi as it is (tests of 0.3.6 below). Set now
+# without a key it is still refused.
+ok "Wi-Fi set now with no key: refused" '! check x "$(printf "WIFI=on\nWIFI_SSID=Corp\nWIFI_SECURITY=psk")"'
 ok "802.1X password: 256 characters at most, printed only as a hash" '! check x "EAP_PASSWORD=$(printf "%0257d" 0)" && printf "EAP_PASSWORD=Pw|with=all \$tuff\n" > "$T" && P=$($OTR/save-config.sh "$T" --print 2>&1) && ! echo "$P" | grep -q "tuff" && echo "$P" | grep -qx "EAP_PASSWORD=$(printf "Pw|with=all \$tuff" | sha256sum | cut -c1-64)"'
 # a test CA, a client of it, and the CA in the site folder
 X=/tmp/x509; mkdir -p $X /etc/openthinrdp/ca
@@ -709,7 +745,8 @@ ok "Wi-Fi Enterprise EAP-TLS: WPA2/WPA3 (WPA-EAP and SHA256, PMF when offered), 
 printf 'WIFI_SECURITY=peap\nEAP_IDENTITY=EXAMPLE\\thin\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
 ok "Wi-Fi Enterprise PEAP: the 802.1X password, read by the real wpa_supplicant" 'grep -qx "	eap=PEAP" $W && grep -q "^	password=$(printf New-Pw2 | od -An -v -tx1 | tr -d " \n")$" $W && ! timeout 3 /usr/sbin/wpa_supplicant -D nl80211 -i lo -c $W 2>&1 | grep -qE "Failed to read or parse|^Line [0-9]+:"'
 printf 'WIFI_SECURITY=psk\n' > "$T"
-ok "Wi-Fi back to a password: it must be given again" '! $OTR/save-config.sh "$T" >/dev/null 2>&1'
+# the key is not there any more: it must be given again
+ok "Wi-Fi back to a password: the key must be given again" '! check x "$(printf "WIFI=on\nWIFI_SSID=Corp\nWIFI_SECURITY=psk")"'
 printf 'WIFI_SECURITY=psk\nWIFI_PSK=password123\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
 ok "Wi-Fi personal: the file exactly as before" '[ "$(cat $W)" = "$(printf "ctrl_interface=/run/wpa_supplicant\ncountry=IT\nnetwork={\n\tssid=\"Corp\"\n\tpsk=%s\n\tkey_mgmt=WPA-PSK\n\tieee80211w=1\n}" "$(wpa_passphrase Corp password123 | sed -n "s/^[[:space:]]*psk=//p")")" ]'
 # central settings: the password applied once, compared by hash; a Wi-Fi key left there does not loop on enterprise
@@ -1110,10 +1147,10 @@ ok "start: no wait for the network or the update source in front of the sign-in 
 ok "start: the sign-in screen ready event only within 10 minutes of power on" 'grep -q "\[ \"\$up\" -lt 600 \] && ev \"sign-in screen ready \$up s after power on\"" $OTR/kiosk.sh'
 # --- 0.3.6: a saved value no longer valid blocked every save, and the Wi-Fi page dropped the Wi-Fi (#201)
 printf 'SHUTDOWN_SECS=abc\nDEFAULT_USER=anna\n' > $OTR_CONF; printf 'SHUTDOWN_SECS=abc\nDEFAULT_USER=bruno\n' > "$T"
-ok "settings: a saved value not valid any more and not changed now is back to the default, the rest saved, said with NOTE" 'out=$($OTR/save-config.sh "$T" --heal 2>&1) && grep -qx "DEFAULT_USER=bruno" $OTR_CONF && grep -qx "SHUTDOWN_SECS=10" $OTR_CONF && echo "$out" | grep -q "^NOTE: .*SHUTDOWN_SECS" && grep -q "back to the project default: SHUTDOWN_SECS" $OTR_EVENTS'
+ok "settings: a saved value not valid any more and not changed now is back to the default, the rest saved, said with NOTE" 'out=$($OTR/save-config.sh "$T" --heal 2>&1) && grep -qx "DEFAULT_USER=bruno" $OTR_CONF && ! grep -q "^SHUTDOWN_SECS=" $OTR_CONF && [ "$(cfg SHUTDOWN_SECS)" = 10 ] && echo "$out" | grep -q "^NOTE: .*SHUTDOWN_SECS" && grep -q "back to the project default: SHUTDOWN_SECS" $OTR_EVENTS'
 printf 'SHUTDOWN_SECS=abc\n' > $OTR_CONF; printf 'DEFAULT_USER=bruno\n' > "$T"
 ok "settings: without --heal (central settings, first boot) a saved value not valid still refuses the save" '! $OTR/save-config.sh "$T" >/dev/null 2>&1 && grep -qx "SHUTDOWN_SECS=abc" $OTR_CONF'
-ok "settings: also when the saved value is not in the input at all (the Wi-Fi page)" '$OTR/save-config.sh "$T" --heal >/dev/null 2>&1 && grep -qx "SHUTDOWN_SECS=10" $OTR_CONF'
+ok "settings: also when the saved value is not in the input at all (the Wi-Fi page)" '$OTR/save-config.sh "$T" --heal >/dev/null 2>&1 && ! grep -q "^SHUTDOWN_SECS=" $OTR_CONF && [ "$(cfg SHUTDOWN_SECS)" = 10 ]'
 printf 'SHUTDOWN_SECS=abc\n' > $OTR_CONF; printf 'SHUTDOWN_SECS=xyz\nDEFAULT_USER=bruno\n' > "$T"
 ok "settings: a value not valid typed now is still refused, nothing saved" '! $OTR/save-config.sh "$T" --heal >/dev/null 2>&1 && grep -qx "SHUTDOWN_SECS=abc" $OTR_CONF && ! grep -q bruno $OTR_CONF'
 printf 'SHUTDOWN_SECS=abc\n' > $OTR_CONF; printf 'DEFAULT_USER=bruno\n' > "$T"
@@ -1163,10 +1200,10 @@ ok "logo: the pictures replaced by 0.3.6 are known to install.sh (a device still
 : > $OTR_CONF; printf 'SHUTDOWN_SECS=10\nDEFAULT_USER=dora\nANON_STATS=full\nTRANSPORT=auto\n' > "$T"
 ok "settings: a value equal to what the device inherits is not written into the device file (site.conf and the defaults keep counting); ANON_STATS always" '$OTR/save-config.sh "$T" >/dev/null 2>&1 && grep -qx "DEFAULT_USER=dora" $OTR_CONF && ! grep -q "^SHUTDOWN_SECS=" $OTR_CONF && ! grep -q "^TRANSPORT=" $OTR_CONF && grep -qx "ANON_STATS=full" $OTR_CONF'
 printf 'SHUTDOWN_SECS=30\n' > $OTR_CONF; printf 'SHUTDOWN_SECS=10\n' > "$T"
-ok "settings: a key already in the device file is still written, also back to the inherited value" '$OTR/save-config.sh "$T" >/dev/null 2>&1 && grep -qx "SHUTDOWN_SECS=10" $OTR_CONF'
+ok "settings: a key of the device file set back to the inherited value is dropped from it (it follows site.conf and the defaults again)" '$OTR/save-config.sh "$T" >/dev/null 2>&1 && ! grep -q "^SHUTDOWN_SECS=" $OTR_CONF && [ "$(cfg SHUTDOWN_SECS)" = 10 ]'
 : > $OTR_CONF
-ok "screens: a value a choice list does not know stays selected as it is (ui.py and the yad dialog), never the first item" 'grep -q "if val: w.append(val, val); w.set_active_id(val)" $OTR/ui.py && ( eval "$(sed -n "/^combo(){/,/; }$/p;/^unlabel(){/,/; fi; }$/p" $OTR/kiosk.sh)"; LV=(en it nl); LL=(English Italiano Nederlands); [ "$(combo zh LV LL)" = "English!Italiano!Nederlands!^zh" ] && [ "$(combo it LV LL)" = "English!^Italiano!Nederlands" ] && [ "$(unlabel zh LV LL)" = zh ] && [ "$(unlabel Italiano LV LL)" = it ] && [ "$(unlabel "" LV LL)" = en ] )'
-ok "apply.sh: /etc/network/interfaces written whole or not at all (a copy next to it, then renamed)" 'grep -q "cp \"\$NEW\" \$OLD.new && chmod 644 \$OLD.new && sync \$OLD.new 2>/dev/null; mv -f \$OLD.new \$OLD" /src/rootfs/opt/openthinrdp/apply.sh && ! grep -q "|| cp \"\$NEW\" \$OLD$" /src/rootfs/opt/openthinrdp/apply.sh'
+ok "screens: a value a choice list does not know stays selected as it is (ui.py and the yad dialog), never the first item" 'grep -A3 "if not w.set_active_id(val):" $OTR/ui.py | grep -q "w.append(val, val)" && ( eval "$(sed -n "/^combo(){/,/; }$/p;/^unlabel(){/,/; fi; }$/p" $OTR/kiosk.sh)"; LV=(en it nl); LL=(English Italiano Nederlands); [ "$(combo zh LV LL)" = "English!Italiano!Nederlands!^zh" ] && [ "$(combo it LV LL)" = "English!^Italiano!Nederlands" ] && [ "$(unlabel zh LV LL)" = zh ] && [ "$(unlabel Italiano LV LL)" = it ] && [ "$(unlabel "" LV LL)" = en ] )'
+ok "apply.sh: /etc/network/interfaces written whole or not at all (a copy next to it, then renamed)" 'grep -q "if install -m 644 \"\$NEW\" \"\$OLD.new\" 2>/dev/null && { sync \"\$OLD.new\" 2>/dev/null; mv -f \"\$OLD.new\" \"\$OLD\" 2>/dev/null; }; then" /src/rootfs/opt/openthinrdp/apply.sh && ! grep -q "|| cp \"\$NEW\" \$OLD$" /src/rootfs/opt/openthinrdp/apply.sh'
 # --- 0.3.6: closing the session from the device, both off by default
 ck(){ printf 'SESSION_CLOSE_KEY=%s\n' "$1" > "$T"; $OTR/save-config.sh "$T" --print 2>/dev/null | sed -n 's/^SESSION_CLOSE_KEY=//p'; }
 ok "session bar and close key: off and empty by default" '[ "$(cfg SESSION_BAR)" = off ] && [ -z "$(cfg SESSION_CLOSE_KEY)" ]'

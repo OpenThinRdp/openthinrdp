@@ -15,6 +15,8 @@ sed -i -e 's|-efi-boot-part --efi-boot-image"|-partition_offset 16 -append_parti
   -e 's|^\(\t*\)\(XORRISO_OPTIONS="${XORRISO_OPTIONS} -isohybrid-gpt-basdat -isohybrid-apm-hfsplus"\)|\1[ -n "${OTR_MBR:-}" ] \|\| \2|' $L
 . "$S/build.conf"
 V=$(cat $B/VERSION)
+# live-build's firmware list includes two packages that download their firmware in the postinst: see the script
+bash $B/image/lb/patch-chroot-firmware.sh
 get(){ sed -n "s/^$1=//p" "$S/site.conf" "$B/rootfs/opt/openthinrdp/defaults.conf" 2>/dev/null | grep -v '^$' | head -1; }
 # #rrggbb -> "r, g, b" between 0 and 1, as Plymouth wants it
 rgb(){ local h=${1#\#}
@@ -38,7 +40,24 @@ CFG=(--distribution trixie --architectures amd64
   --bootappend-live "boot=live components persistence quiet splash loglevel=3 systemd.show_status=false username=kiosk hostname=thinclient vt.global_cursor_default=0")
 if [ "${AUTO_INSTALL:-yes}" = yes ]; then
   L=${LOCALE%%.*}
-  CFG+=(--bootappend-install "auto=true priority=critical preseed/file=/cdrom/install/preseed.cfg language=${L%%_*} country=${L#*_} locale=$LOCALE keymap=$KEYBOARD")
+  # keymap= is the CONSOLE keymap of the installer, not the X11 layout of KEYBOARD (that one reaches the installed
+  # system through /etc/default/keyboard, image/lb/hook.chroot): the console has no Chinese keymap, a Chinese keyboard
+  # is a US one (XKB "cn" includes "us(basic)"), so it asks for us and does not fail on a name kbd does not have.
+  KKEY=$KEYBOARD; case "$KKEY" in zh|cn) KKEY=us ;; esac
+  CFG+=(--bootappend-install "auto=true priority=critical preseed/file=/cdrom/install/preseed.cfg language=${L%%_*} country=${L#*_} locale=$LOCALE keymap=$KKEY")
+fi
+# MIRROR / MIRROR_SECURITY (build.conf): your own Debian mirror, e.g. https://mirrors.ustc.edu.cn/debian, for a build
+# from a place where deb.debian.org is slow. Empty = what live-build uses by default. Both the mirror that ends up in
+# the image (--mirror-*) and the parent mirror the packages are fetched from (--parent-mirror-*, used by the debootstrap
+# stage in live-build 2025: setting only the first left the bootstrap on deb.debian.org). The security archive has its
+# own address, so it needs its own setting (MIRROR_SECURITY, e.g. https://mirrors.ustc.edu.cn/debian-security).
+if [ -n "${MIRROR:-}" ]; then
+  CFG+=(--mirror-bootstrap "$MIRROR" --mirror-chroot "$MIRROR" --mirror-binary "$MIRROR"
+        --parent-mirror-bootstrap "$MIRROR" --parent-mirror-chroot "$MIRROR" --parent-mirror-binary "$MIRROR")
+fi
+if [ -n "${MIRROR_SECURITY:-}" ]; then
+  CFG+=(--mirror-chroot-security "$MIRROR_SECURITY" --mirror-binary-security "$MIRROR_SECURITY"
+        --parent-mirror-chroot-security "$MIRROR_SECURITY" --parent-mirror-binary-security "$MIRROR_SECURITY")
 fi
 lb config "${CFG[@]}"
 C=config/includes.chroot
@@ -50,7 +69,10 @@ cp $B/image/lb/packages.list config/package-lists/openthinrdp.list.chroot
   for f in ${EXTRA_FIRMWARE:-}; do echo "$f"; done; } > config/package-lists/openthinrdp-site.list.chroot
 # no documentation, manuals or translations a thin client never shows (licenses and the build languages
 # kept). In place before the packages are installed, and kept in the system for later updates.
-LANGS="en it ${LOCALE%%_*}"
+# ${LOCALE%%.*} as well as ${LOCALE%%_*}: the gettext folder of a language is named after the whole locale (zh_CN,
+# pt_BR), so "zh" alone kept no Chinese message at all and the system stayed English with LANG=zh_CN.UTF-8;
+# the two-letter form keeps the folders of the languages that have only that (it, nl).
+LANGS="en it ${LOCALE%%.*} ${LOCALE%%_*}"
 mkdir -p config/includes.chroot_before_packages/etc/dpkg/dpkg.cfg.d $C/etc/dpkg/dpkg.cfg.d
 { echo "# OpenThinRDP: no documentation, manuals or translations on a thin client (licenses kept)"
   # quoted: these are dpkg patterns, the shell must not expand them against the build container
@@ -96,6 +118,11 @@ fi
 # %q: the password hash is full of "$" and the hook sources this file (with %s the live system got a broken hash)
 printf 'LOCALE=%q\nTIMEZONE=%q\nKEYBOARD=%q\nFREERDP_FROM=%q\nADMIN_PASSWORD_HASH=%q\n' "$LOCALE" "$TIMEZONE" "$KEYBOARD" "$FREERDP_FROM" "${ADMIN_PASSWORD_HASH:-}" > $C/etc/openthinrdp/build.env
 cp $B/image/lb/hook.chroot config/hooks/normal/0100-openthinrdp.hook.chroot
+# after live-build's own 1020-create-locales-files, which writes LANG=C.UTF-8 into /etc/default/locale. The locale is
+# substituted here: the 0100 hook removes /etc/openthinrdp/build.env on purpose, so this one cannot read it.
+# Only for an image in Chinese (soso192): elsewhere the system keeps the C locale of live-build, which the scripts that
+# read the numbers of other programs expect (a decimal comma under it_IT, for one)
+[ "${LOCALE%%_*}" = zh ] && sed -e "s|@LOCALE@|$LOCALE|" $B/image/lb/locale.hook.chroot > config/hooks/normal/1030-openthinrdp-locale.hook.chroot
 sed -e "s|@LOCALE@|$LOCALE|" -e "s|@KEYBOARD@|$KEYBOARD|" -e "s|@TIMEZONE@|$TIMEZONE|" -e "s|@ADMIN_HASH@|${ADMIN_PASSWORD_HASH:-!}|" \
   $B/image/lb/preseed.cfg.in > config/includes.binary/install/preseed.cfg
 chmod +x config/hooks/normal/*.hook.chroot

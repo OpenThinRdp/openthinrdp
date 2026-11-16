@@ -517,10 +517,14 @@ if MODE == 'form':
                 w = Gtk.ComboBoxText()
                 for c in ch.split('|'):
                     v, _, t = c.partition('='); w.append(v, t or v)
-                # a value the list does not know (set centrally, by another version, or by hand) stays as it is, shown
-                # as it is: choosing the first item instead saved a value nobody chose (0.3.6, found by soso192)
+                # A stored value the list does not know (a language of a newer version, a mode this build does not offer)
+                # is added as it is and stays selected: selecting the first entry instead showed the dialog with a value
+                # the device does not have, and Save wrote it back — the setting changed without anybody touching it.
+                # (An empty value is the list's first entry, as before.)
                 if not w.set_active_id(val):
-                    if val: w.append(val, val); w.set_active_id(val)
+                    if val:
+                        w.append(val, val)
+                        w.set_active_id(val)
                     else: w.set_active(0)
             elif typ in ('tz', 'combo'):
                 # the time zones of tzdata in a list, with a search while typing ("rome" finds Europe/Rome); combo:
@@ -895,15 +899,19 @@ bs.connect('clicked', sign_in); ep.connect('activate', sign_in); eu.connect('act
 # day and month in the language of the kiosk (LANGUAGE), not of the system: a system installed in English with
 # LANGUAGE=it would show "Monday 12 October"
 DAYS = {'it': ('lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato', 'domenica'),
-        'nl': ('maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag')}
+        'nl': ('maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'),
+        'zh': ('星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日')}
 MONTHS = {'it': ('gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre',
                  'ottobre', 'novembre', 'dicembre'),
           'nl': ('januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september',
-                 'oktober', 'november', 'december')}
+                 'oktober', 'november', 'december'),
+          'zh': ('1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月')}
 def today():
     t = time.localtime()
     if A.lang in DAYS:
-        return f"{DAYS[A.lang][t.tm_wday].capitalize()} {t.tm_mday} {MONTHS[A.lang][t.tm_mon - 1]}"
+        d = DAYS[A.lang][t.tm_wday]; m = MONTHS[A.lang][t.tm_mon - 1]
+        # Chinese writes the date as 星期一 16 11月: no capital to add, the month follows the day
+        return f"{d} {t.tm_mday} {m}" if A.lang == 'zh' else f"{d.capitalize()} {t.tm_mday} {m}"
     s = time.strftime('%A %d %B', t); return s[:1].upper() + s[1:]   # capitalize() would lower "October"
 
 def corner_button(kind, tip, cb):

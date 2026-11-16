@@ -22,6 +22,11 @@ x11vnc
 # hides the pointer on the kiosk screens while the mouse is still
 unclutter-xfixes
 fonts-dejavu-core
+# Chinese, Japanese and Korean text of the kiosk screens and the web page (LANGUAGE=zh): DejaVu and Liberation have no
+# ideographs, the screens would show empty boxes (soso192). WenQuanYi Micro Hei: 5 MB installed, made for screens, every
+# character in common use; Noto CJK (91 MB) is not worth it on a thin client. NOT inside a "#if ARCHITECTURES", the
+# Raspberry Pi image uses this list too
+fonts-wqy-microhei
 libgl1-mesa-dri
 plymouth
 plymouth-themes
