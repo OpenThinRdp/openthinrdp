@@ -1,9 +1,10 @@
 # OpenThinRDP for companies: free thin clients for Remote Desktop Services and VDI
 
-OpenThinRDP is a thin client operating system for organisations that publish Windows desktops with Remote Desktop:
-RDS session hosts, VDI collections behind an RD Connection Broker, or Windows VMs on Hyper-V, Proxmox, VMware or
-any cloud. It runs on the PCs and thin clients you already own, is managed from a shared folder you already have,
-and costs nothing per device.
+OpenThinRDP is the first open source thin client with RDP over UDP, made for organisations that publish Windows
+desktops with Remote Desktop: RDS session hosts, VDI collections behind an RD Connection Broker, or Windows VMs on
+Hyper-V, Proxmox, VMware or any cloud. Sessions keep moving on Wi-Fi, VPNs and lossy lines, webcams keep up in
+Teams and Zoom, and signature keys and instruments reach Windows whole. It runs on the thin clients and PCs you
+already own, is managed from a shared folder you already have, and costs nothing per device.
 
 - [What your users get](#what-your-users-get)
 - [What IT gets](#what-it-gets)
@@ -71,8 +72,8 @@ OpenThinRDP adds none of its own. The hardware is often what you already have.
 OpenThinRDP runs the whole thin client fleet of the company that built it: Dell OptiPlex 3000 Thin Clients at desks,
 tills, a laboratory, weighing stations and a wall screen on Wi-Fi, on a Windows 11 VDI on Hyper-V behind two RD
 Connection Brokers. Every release reaches them through their management folder. Rollback, an interrupted update,
-a network cut and zero-touch were tested on a device of that fleet: [production readiness](../maturity.md), and what
-is still missing: [status](../status.md).
+a network cut and zero-touch were tested on a device of that fleet: [production readiness](../maturity.md), area by
+area.
 
 ## Rolling it out
 

@@ -2,7 +2,8 @@
 
 **Looking for a free alternative to IGEL OS or Dell ThinOS for Windows Remote Desktop?** OpenThinRDP is free for any
 number of devices, with no licence, subscription or account, and open source; it runs on the same used thin clients
-([which ones](guides/used-thin-client.md)). It speaks RDP only: for Citrix or Horizon, the products below still win.
+([which ones](guides/used-thin-client.md)). It is built for RDP, and it is the first open source thin client with RDP over UDP. For Citrix or Horizon, see the
+products below.
 
 What OpenThinRDP does differently from the other ways of turning PCs into Remote Desktop clients, and when another
 choice is better. The facts about other products are public information as we understand it; corrections are
@@ -26,9 +27,8 @@ For a fleet of Remote Desktop clients, here is what it means.
 with OpenThinRDP too. Neither side has a driver advantage.
 
 **No RDP over UDP.** Remmina and the `xfreerdp` of the distributions use the distribution's FreeRDP. FreeRDP merged
-its UDP transport on 20 October 2026 ([#13608](https://github.com/FreeRDP/FreeRDP/pull/13608)), but no release has it
-yet, and it is built switched off unless asked for (it is marked experimental): the packages of the distributions do
-not have it. OpenThinRDP ships FreeRDP built with it on. Without it, on a busy server, on Wi-Fi or through a VPN the
+its UDP transport on 20 October 2026 ([#13608](https://github.com/FreeRDP/FreeRDP/pull/13608)); FreeRDP 3.33 has it,
+built switched off and marked experimental, so the packages of the distributions do not have it. OpenThinRDP ships FreeRDP built with it on. Without it, on a busy server, on Wi-Fi or through a VPN the
 session runs over TCP. On a line that loses packets, TCP queues the screen while UDP keeps it moving
 ([the numbers](udp.md#on-a-lossy-line)).
 
@@ -77,14 +77,14 @@ fleet it comes from is Dell OptiPlex 3000 Thin Clients that ran ThinOS before. I
 ## Stratodesk NoTouch
 
 A commercial thin client operating system with a licence per device, managed by NoTouch Center. It runs on x86-64
-PCs and on Raspberry Pi, with many protocols. **Better for:** many protocols, Raspberry Pi today (OpenThinRDP's
-Raspberry Pi support is [in preparation](https://github.com/OpenThinRdp/openthinrdp/issues/61)), vendor support.
+PCs and on Raspberry Pi, with many protocols. **Better for:** many protocols, a Raspberry Pi fleet today (OpenThinRDP
+has a [new Raspberry Pi 4 image](guides/raspberry-pi-thin-client.md)), vendor support.
 
 ## ThinStation
 
 An open source, long-standing thin client toolkit. You build your own image with the protocols you need, and the
 devices boot it over the network (PXE) or from a USB stick or disk; the settings are files on a network server.
-**Better for:** network boot (OpenThinRDP has no PXE yet), protocols other than RDP, and very old or very small
+**Better for:** network boot (PXE is on OpenThinRDP's list of what comes next), protocols other than RDP, and very old or very small
 devices. **OpenThinRDP gives you:**
 - a ready image, installed or live;
 - the RDP UDP transport;
