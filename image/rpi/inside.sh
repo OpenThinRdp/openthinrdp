@@ -25,7 +25,7 @@ PK="$PK ${EXTRA_FIRMWARE:-}"
 
 # no documentation, manuals or translations a thin client never shows: the same dpkg filter as image/lb/inside.sh,
 # in place before the first package is unpacked
-LANGS="en it ${LOCALE%%_*}"
+LANGS="en it ${LOCALE%%.*} ${LOCALE%%_*}"
 { echo "# OpenThinRDP: no documentation, manuals or translations on a thin client (licenses kept)"
   printf 'path-exclude=%s\n' '/usr/share/doc/*' '/usr/share/man/*' '/usr/share/info/*' '/usr/share/help/*' \
     '/usr/share/locale/*' '/usr/lib/chromium/locales/*'

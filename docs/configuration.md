@@ -372,8 +372,8 @@ own to test on. Reports are welcome in the [Discussions](https://github.com/Open
 
 | Key | Default | Meaning |
 |---|---|---|
-| `LANGUAGE` | `en` | `en`, `it`, `nl` (a file in `/opt/openthinrdp/lang/`) |
-| `KEYBOARD` | `us` | X11 layout |
+| `LANGUAGE` | `en` | `en`, `it`, `nl`, `zh` (Simplified Chinese; any file in `/opt/openthinrdp/lang/`). A translation that misses a string falls back to English. `zh` needs `fonts-noto-cjk` in the image (it is in `image/lb/packages.list`) |
+| `KEYBOARD` | `us` | X11 layout, e.g. `us`, `it`, `de`, `cn`. `cn` is a US keyboard with Chinese labels (the Chinese input method runs inside the Windows session). The text installer always gets `us` as its console keymap |
 | `TITLE` | `Remote desktop` | window titles |
 | `LOGO` | `/opt/openthinrdp/branding/logo.png` | logo in the dialogs. A logo in the management folder wins, see [management.md](management.md#logo-and-background-picture) |
 | `BG_TOP`, `BG_BOTTOM` | `#1b2733`, `#000000` | background gradient (boot splash and behind the form) |

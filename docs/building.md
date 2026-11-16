@@ -16,6 +16,20 @@ With `FREERDP_FROM=openthinrdp` the build first needs the FreeRDP packages of `i
 it downloads the prebuilt ones (checked against `image/freerdp/SHA256SUMS`) or, when they are not published,
 builds them with `image/freerdp/build-debs.sh` (15-40 minutes, once: they stay in `out/freerdp/`).
 
+## A Chinese image
+
+`image/site` in this repository is already set up for Simplified Chinese (`LOCALE=zh_CN.UTF-8`,
+`TIMEZONE=Asia/Shanghai`, `KEYBOARD=cn`, `LANGUAGE=zh`, `TITLE=远程桌面`). What makes it work, if you build your own:
+
+- `fonts-noto-cjk` in `image/lb/packages.list` (about 45-50 MB in the ISO): without it the screens show empty boxes,
+  because DejaVu and Liberation have no ideographs;
+- `lang/zh.sh` (398 strings, the same keys as `lang/en.sh`); `tests/run-tests.sh` checks the file's format, that every
+  key exists in `en.sh` and that `%s` count matches, for every language;
+- `LOCALE` also keeps the gettext folders of the language (`inside.sh`: `/usr/share/locale/zh_CN`), otherwise the
+  system is Chinese but the programs still print English.
+
+The installer is then in Chinese too (`language=zh`), but GRUB's menu stays English: GRUB has no CJK glyphs.
+
 The Raspberry Pi 4 SD card image (arm64) is built by `image/build-rpi.sh` from the same site folder, package list and
 image hook: see [arm.md](arm.md). Its FreeRDP is the arm64 build of the same commit (`ARCH=arm64
 image/freerdp/build-debs.sh`, checked against `image/freerdp/SHA256SUMS.arm64`).
@@ -27,7 +41,9 @@ See [image/site.example/README.md](../image/site.example/README.md). In short:
 - `build.conf`: `FIRMWARE` (`all`, the default: runs on any PC; `thinclient`: only the usual thin client firmware,
   about 600 MB less), `INCLUDE_BROWSER`, installer language (`LOCALE`), `TIMEZONE`, `KEYBOARD`, `ADMIN_PASSWORD_HASH` (password
   of `otradmin` for `su` in the Terminal of the settings dialog, from `mkpasswd -m yescrypt`; empty = SSH key only), `FREERDP_FROM` (`openthinrdp`, the
-  default: FreeRDP with UDP, see [udp.md](udp.md); `backports`, `debian` or `site`), `AUTO_INSTALL`.
+  default: FreeRDP with UDP, see [udp.md](udp.md); `backports`, `debian` or `site`), `AUTO_INSTALL`, and `MIRROR` /
+  `MIRROR_SECURITY` (your own Debian mirror for a faster build, e.g. `https://mirrors.ustc.edu.cn/debian`; empty = the
+  mirror live-build uses).
 - `site.conf`: default settings of every device.
 - `logo.png` (~200 px, dialogs), `splash.png` (~640 px, transparent, boot screen).
 - `ca/*.crt`: certificate authorities for the web button.
