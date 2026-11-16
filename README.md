@@ -6,6 +6,8 @@ Light, made for Windows Remote Desktop, and your desktop keeps moving when the n
 <p align="center">
 <a href="https://github.com/OpenThinRdp/openthinrdp/releases/latest"><b>⬇ Download the ISO</b></a>
 &nbsp;·&nbsp; <a href="#try-it-in-five-minutes">Try it live, nothing installed</a>
+&nbsp;·&nbsp; <a href="#the-free-manager-know-what-is-broken-before-your-users-call">The free manager</a>
+&nbsp;·&nbsp; <a href="docs/guides.md">Guides</a>
 &nbsp;·&nbsp; <a href="https://openthinrdp.github.io/">Website</a>
 &nbsp;·&nbsp; <a href="docs/faq.md">FAQ</a>
 &nbsp;·&nbsp; <a href="README.it.md">Italiano</a>
@@ -49,6 +51,33 @@ client, a mini PC or any PC from 2 GB of RAM. The first start asks one question:
 > system tests run on every commit ([CI](https://github.com/OpenThinRdp/openthinrdp/actions/workflows/tests.yml)).
 > What runs in production today and what comes next: **[production readiness](docs/maturity.md)**.
 
+## The free manager: know what is broken before your users call
+
+The [OpenThinRDP Manager](https://openthinrdp.github.io/manager.html) is a free Windows application that checks
+**your whole infrastructure in 30 seconds**: Hyper-V hosts and failover clusters, Storage Spaces Direct, Proxmox,
+vSphere, Remote Desktop brokers and session hosts, Citrix, domain controllers and DNS, SQL Server Always On, Veeam
+and VM backups, Dell iDRAC and every certificate. Each problem in a plain sentence, the worst first, with a repair
+you confirm. It is useful also without any OpenThinRDP device.
+
+- *"Nobody can sign in."* **Who cannot sign in right now, and why**: the broker, the VM, the desktop.
+- *"The cluster went down when we patched one host."* It tells you **before**: the witness is offline, one host
+  cannot carry the VMs of the other.
+- *"The backup failed last week and nobody noticed."* Failed Veeam jobs and Proxmox backups on the first page,
+  every morning.
+- *"The certificate expired on Saturday."* **Every certificate of every server**, and when it expires.
+
+And it **runs the whole fleet**: the state of each device, central settings, signed updates on pilot devices first
+and a way back, Wake-on-LAN, the screen of any device from your desk. No agent, no server, no database, and it
+updates itself.
+
+<p align="center">
+<img src="docs/screenshots/manager-health.png" alt="Health Center: hosts, cluster, VMs, domain controllers, SQL and backups in one tree" width="49%">
+<img src="docs/screenshots/manager-devices.png" alt="Manager: every device, its state, user and version, and its settings" width="49%">
+</p>
+
+**[⬇ Download the free manager](https://github.com/OpenThinRdp/openthinrdp-manager/releases/latest)** ·
+[its page](https://openthinrdp.github.io/manager.html) · [page by page](docs/manager.md)
+
 ## Try it in five minutes
 
 1. [Download the ISO](https://github.com/OpenThinRdp/openthinrdp/releases/latest) and write it to a USB stick (Rufus
@@ -63,23 +92,6 @@ client, a mini PC or any PC from 2 GB of RAM. The first start asks one question:
 |---|---|
 | The device | any 64-bit x86 PC or thin client, UEFI (Secure Boot or not) or legacy BIOS, 2 GB of RAM, 8 GB of storage (none to run it live). TPM 2.0 optional ([hardware](docs/hardware.md)) |
 | The Windows side | an RD Connection Broker (RDS session hosts or VDI), or any Windows PC, server or VM with Remote Desktop on (Pro, Enterprise, Education or Server) |
-
-## The manager: the servers and the fleet, from one window
-
-The [OpenThinRDP Manager](https://openthinrdp.github.io/manager.html) is a free Windows application (nothing to
-install, English and Italian). Its first part is a **Health Center for the infrastructure behind the desktops**,
-useful also without any OpenThinRDP device: Hyper-V hosts and clusters, Storage Spaces Direct, RD Connection Brokers,
-VMs, domain controllers, DNS, SQL Server Always On, backups, Dell iDRAC, Proxmox, vSphere, Veeam, Citrix and
-certificates, with a plain sentence and a repair you confirm for each problem. Its second part **manages the
-devices**: state of each one, central settings, signed updates on pilot devices first and a way back, Wake-on-LAN,
-remote screen. No server, no agent, no database. At home, one computer runs fine without it.
-
-<p align="center">
-<img src="docs/screenshots/manager-health.png" alt="Health Center: hosts, cluster, VMs, domain controllers, SQL and backups in one tree" width="49%">
-<img src="docs/screenshots/manager-devices.png" alt="Manager: every device, its state, user and version, and its settings" width="49%">
-</p>
-
-Page by page: [docs/manager.md](docs/manager.md). Its releases: [openthinrdp-manager](https://github.com/OpenThinRdp/openthinrdp-manager/releases).
 
 ## How it compares
 
@@ -101,6 +113,8 @@ or Ubuntu with Remmina: [the alternatives](docs/alternatives.md).
 > sound alike, nothing else is shared.
 
 ## Guides
+
+Every guide by what you want to do, step by step: **[the guides](docs/guides.md)**.
 
 **At home and for one PC**
 - [OpenThinRDP at home](docs/guides/home.md): an old laptop as a terminal for your Windows PC

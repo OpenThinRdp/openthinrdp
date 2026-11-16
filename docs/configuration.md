@@ -324,13 +324,12 @@ provider are set up as on premises: `BROKER` is the broker or the machine, `LOAD
   outside with no VPN use `RDP_AUTH=negotiate` or `ntlm`.
 - **Management folder:** an SMB share the devices can reach, usually on a file server through the VPN. Devices without
   a management folder work too, set up on the device (settings dialog) and updated from GitHub.
-- **Not supported yet: Azure Virtual Desktop and Windows 365.** Their clients sign in with Microsoft Entra ID and
-  connect through Microsoft's own gateway and broker, which the kiosk does not do (FreeRDP has experimental support,
-  OpenThinRDP does not use it). Services with their own protocol (Citrix, Omnissa Horizon, Amazon WorkSpaces) are
-  not RDP.
+- **Azure Virtual Desktop and Windows 365** sign in with Microsoft Entra ID through Microsoft's own gateway and
+  broker: they are on the list of what comes next. Services with their own protocol (Citrix, Omnissa Horizon, Amazon
+  WorkSpaces) are not RDP.
 
-OpenThinRDP runs in production on premises; it is the same RDP in the cloud, but we have no cloud deployment of our
-own to test on. Reports are welcome in the [Discussions](https://github.com/OpenThinRdp/openthinrdp/discussions).
+It is the same RDP as on premises, where OpenThinRDP runs in production every day. Running it in the cloud? Tell us
+how it goes in the [Discussions](https://github.com/OpenThinRdp/openthinrdp/discussions).
 
 ## Management
 
