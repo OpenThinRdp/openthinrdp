@@ -387,11 +387,18 @@ connect(){
 # prefix /23 -> 255.255.254.0
 pfx2mask(){ local p=$1 m="" i o; for i in 1 2 3 4; do if [ $p -ge 8 ]; then o=255; p=$((p-8)); else o=$(( 256 - (1 << (8-p)) )); [ $p -eq 0 ] && o=0; p=0; fi; m="$m${m:+.}$o"; done; echo $m; }
 # combo VALUE VALUES_ARRAY LABELS_ARRAY: yad list "a!^b!c" with the label of VALUE selected
-combo(){ local cur=$1 i out=""; local -n vs=$2 ls=$3
-  for i in "${!vs[@]}"; do out+="${out:+!}$([ "${vs[$i]}" = "$cur" ] && echo '^')${ls[$i]}"; done; echo "$out"; }
+combo(){ local cur=$1 i out=""; local -n vs=$2 ls=$3; local seen=0
+  for i in "${!vs[@]}"; do out+="${out:+!}$([ "${vs[$i]}" = "$cur" ] && { seen=1; echo '^'; })${ls[$i]}"; done
+  # a value the list does not know stays in the list as itself: yad would select the first entry and unlabel() would give
+  # it back, so a Save wrote a value the device did not have (a language of a newer version, a mode of a newer manager)
+  [ $seen = 1 ] || out+="${out:+!}^${cur}"
+  echo "$out"; }
 # unlabel LABEL VALUES_ARRAY LABELS_ARRAY: the value behind a label chosen in a combo
 unlabel(){ local lab=$1 i; local -n vs=$2 ls=$3
-  for i in "${!ls[@]}"; do [ "${ls[$i]}" = "$lab" ] && { echo "${vs[$i]}"; return; }; done; echo "${vs[0]}"; }
+  for i in "${!ls[@]}"; do [ "${ls[$i]}" = "$lab" ] && { echo "${vs[$i]}"; return; }; done
+  # a label no entry carries is the value combo() added as itself: give it back unchanged, never the first entry (that
+  # silently replaced a value this build does not know with another one at the next Save)
+  echo "$lab"; }
 # the settings can be protected by a PIN (SETTINGS_PIN_SHA256): anyone at the device could change the broker.
 # The value is pbkdf2-sha256:<iterations>:<salt>:<key> (salted and slow: a short PIN is not reversed in seconds
 # by whoever gets the settings file) or, as set by 0.1.4 and earlier, the plain SHA-256 of the PIN.
@@ -579,7 +586,10 @@ settings_dialog(){
   [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" = yes ] && sync=$L_TIME_SYNC || sync=$L_TIME_NOSYNC
   wli=$(wifi_nics | head -1)
   if [ -z "$wli" ]; then wst=$L_WIFI_NONE
-  elif iw dev "$wli" link 2>/dev/null | grep -q Connected; then wst=$(printf "$L_WIFI_CONNECTED" "$(iw dev "$wli" link | sed -n 's/^[[:space:]]*SSID: //p') $(iw dev "$wli" link | sed -n 's/^[[:space:]]*signal: //p')")
+  elif iw dev "$wli" link 2>/dev/null | grep -q Connected; then
+    # one %s in the text (the name): the signal is added after it, or printf would print the whole line again for it
+    wst=$(printf "$L_WIFI_CONNECTED" "$(iw dev "$wli" link | sed -n 's/^[[:space:]]*SSID: //p')")
+    wst="$wst · $(iw dev "$wli" link | sed -n 's/^[[:space:]]*signal: //p')"
   else wst=$L_WIFI_DISCONNECTED; fi
   rep=$(tail -1 "$OTR_LOG/report.log" 2>/dev/null | cut -c1-60)
   [ -z "$IPC" ] && [ "$(net_state)" != none ] && IPC=$L_NO_ADDR
@@ -589,7 +599,9 @@ settings_dialog(){
   local -a ONV=(on off) ONL=("$L_ON" "$L_OFF") TRV=(auto udp tcp) TRL=("$L_TR_AUTO" "$L_TR_UDP" "$L_TR_TCP")
   local -a STV=(full errors off) STL=("$L_STATS_FULL" "$L_STATS_ERRORS" "$L_STATS_OFF")
   local -a WEBV=(none app browser kiosk) WEBL=("$L_WEB_NONE" "$L_WEB_APP" "$L_WEB_BROWSER" "$L_WEB_KIOSK")
-  local -a LNV=(en it) LNL=(English Italiano)
+  # every language that has a file in lang/. A value the list does not know falls back to the first (en): a language
+  # missing here was silently turned into English at the first Save of the settings dialog.
+  local -a LNV=(en it nl zh) LNL=(English Italiano Nederlands 简体中文)
   local -a WSECV=(psk peap tls) WSECL=("$L_WSEC_PSK" "$L_WSEC_PEAP" "$L_WSEC_TLS") D1XV=(off peap tls) D1XL=("$L_OFF" "$L_D1X_PEAP" "$L_D1X_TLS")
   local h u br brf dom lbi nm ip mask gw d1 d2 ntp off thr share mu mp um ur su an tz tr wb wu ku kr pon poff pdays wf ws wp ln
   local wsec d1x d1xs eid ean epw eca esn kind kind0 rem wmac conns vpn tss found="" bro
@@ -1220,6 +1232,14 @@ power_off(){
     ui message --update --icon=update --heading="$(plain "$L_UPDATE_RUNNING")" --text="$(plain "$L_WAIT_UPDATE") (%p%)"
     wait_update
   fi
+  # apply.sh writes /etc/network/interfaces and the other files of the system in the background: switching off in the
+  # middle of one of them is how a device comes back with a half-written file (no Wi-Fi, settings that look lost). Wait
+  # for its lock, then flush what is on the disk. 10 s at most: a power off must not hang on a stuck script.
+  local i
+  exec 8>/run/openthinrdp-apply.lock
+  for i in $(seq 1 20); do flock -n 8 && break; sleep 0.5; done
+  exec 8>&-
+  sync
   sleep 1; systemctl $act; exit 0
 }
 # the sign-in screen (login.py, GTK); without the Python GTK bindings (a device updated without the Debian mirror)
