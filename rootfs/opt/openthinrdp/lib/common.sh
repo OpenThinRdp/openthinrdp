@@ -11,15 +11,34 @@ OTR_EVENTS=$OTR_LOG/events.log
 OTR_KIOSK_USER=kiosk
 
 # cfg KEY: value of a setting. The first file that defines the key wins (device, then site, then defaults),
-# so an empty value in the device file deliberately clears a site default.
+# so an empty value in the device file deliberately clears a site default. The spaces around the value are dropped,
+# as save-config.sh does: a site.conf edited on Windows ("WIFI=on ") otherwise made [ "$(cfg WIFI)" = on ] false,
+# and the setting looked saved while nothing used it.
 cfg(){
   local f
   for f in "$OTR_CONF" "$OTR_SITE" "$OTR_DEFAULTS"; do
-    [ -f "$f" ] && grep -q "^$1=" "$f" && { sed -n "s/^$1=//p" "$f" | head -1 | tr -d '\r'; return; }
+    [ -f "$f" ] && grep -q "^$1=" "$f" && { sed -n "s/^$1=//p" "$f" | head -1 | tr -d '\r' | sed 's/^ *//; s/ *$//'; return; }
   done
 }
 # cfg_num KEY DEFAULT: a number, or DEFAULT when the value is missing or not a number
 cfg_num(){ local v; v=$(cfg "$1"); [[ $v =~ ^[0-9]{1,6}$ ]] && echo $((10#$v)) || echo "$2"; }
+# cfgsrc KEY: the file a setting comes from (device, site or defaults), for a message that has to say where a value that
+# the validator refuses was set; empty when no file defines it
+cfgsrc(){
+  local f
+  for f in "$OTR_CONF" "$OTR_SITE" "$OTR_DEFAULTS"; do
+    [ -f "$f" ] && grep -q "^$1=" "$f" && { echo "$f"; return; }
+  done
+}
+# cfg_base KEY: what the device would have if it did not set the key itself (site file, then defaults). save-config.sh
+# stores a key only when its value differs from this one, so the device file holds the choices of this device and not a
+# copy of every default: a new site.conf still reaches the device for everything it did not change.
+cfg_base(){
+  local f
+  for f in "$OTR_SITE" "$OTR_DEFAULTS"; do
+    [ -f "$f" ] && grep -q "^$1=" "$f" && { sed -n "s/^$1=//p" "$f" | head -1 | tr -d '\r' | sed 's/^ *//; s/ *$//'; return; }
+  done
+}
 # The environment (0.3.0): domain (an Active Directory domain: brokers, collections, central management) or workgroup
 # (computers not in a domain: one PC or virtual machine). SETUP when set, else guessed from what is there: a device
 # with a domain keeps every setting in view, one in a workgroup sees only what applies. Empty = nothing set yet (the

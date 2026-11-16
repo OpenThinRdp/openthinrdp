@@ -11,9 +11,15 @@
 otr_lang
 F="$1"; [ -f "$F" ] || { echo "$V_NODATA"; exit 1; }
 has(){ grep -q "^$1=" "$F"; }
-# value from the input file if present, else the current setting
-get(){ if has "$1"; then sed -n "s/^$1=//p" "$F" | head -1 | tr -d '\r' | sed 's/^ *//; s/ *$//'; else cfg "$1"; fi; }
-low(){ echo "$1" | tr 'A-Z' 'a-z'; }
+# value from the input file if present, else the current setting. A key just healed below (a stored value the validator
+# refused, dropped from the device file) is taken from the site file and the defaults for this run: the settings dialog
+# sends every field back, so the refused value would come back as if the user had typed it now.
+get(){
+  if [ -n "${OTR_HEALED_KEYS:-}" ] && [[ $OTR_HEALED_KEYS == *" $1 "* ]]; then cfg "$1"; return; fi
+  if has "$1"; then sed -n "s/^$1=//p" "$F" | head -1 | tr -d '\r' | sed 's/^ *//; s/ *$//'; else cfg "$1"; fi; }
+# a value in lower case. printf, not echo: a value of "-n" or "-e" would otherwise vanish (POWER_ON_DAYS=-n was
+# accepted as "all days" instead of being refused)
+low(){ printf '%s\n' "$1" | tr 'A-Z' 'a-z'; }
 onoff(){ case "$(low "$1")" in on|yes|true|1|si|sì|attivo|acceso) echo on ;; *) echo off ;; esac; }
 
 ipok(){
@@ -23,10 +29,42 @@ ipok(){
 ip2int(){ local a b c d; IFS=. read -r a b c d <<< "$1"; echo $(( (10#$a<<24) | (10#$b<<16) | (10#$c<<8) | 10#$d )); }
 maskok(){ ipok "$1" || return 1; local m inv; m=$(ip2int "$1"); inv=$(( ~m & 0xFFFFFFFF )); [ "$m" -ne 0 ] && [ $(( inv & (inv + 1) )) -eq 0 ]; }
 hostok(){ [[ $1 =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$ ]] && ! [[ $1 =~ ^[0-9]+$ ]]; }
-nameok(){ [[ $1 =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,252})$ ]]; }
-# a name or an address, optionally :port (1-65535): the remote computer or broker, the fallbacks, the other computers
-hostportok(){ local h=${1%:*} p=${1##*:}; [ "$h" = "$1" ] && p=3389
-  { ipok "$h" || nameok "$h"; } && [[ $p =~ ^[0-9]{1,5}$ ]] && [ $((10#$p)) -ge 1 ] && [ $((10#$p)) -le 65535 ]; }
+# a DNS name: letters, digits, dots and hyphens, and the trailing dot of a fully qualified name as it is copied from
+# DNS. Never an underscore (not a host name, whatever the record) and never a bare number (a truncated address).
+nameok(){ [[ $1 =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?\.?$ ]]; }
+# an IPv6 address as it is typed: hex groups separated by colons, one "::" at most and eight groups at most. Strict
+# enough that a value with a stray colon (a mistyped name:port) is refused instead of passing as an address. It is not
+# resolved here: a wrong address fails to connect and the sign-in screen says why.
+ipv6ok(){ local a=$1 pre post g n=0
+  [[ $a =~ ^[0-9A-Fa-f:]+$ ]] && [[ $a == *:* ]] && [ ${#a} -le 45 ] || return 1
+  case "$a" in
+    *::*)
+      pre=${a%%::*}; post=${a#*::}
+      [[ $post == *::* ]] && return 1
+      for g in ${pre//:/ }; do [[ $g =~ ^[0-9A-Fa-f]{1,4}$ ]] || return 1; n=$((n + 1)); done
+      for g in ${post//:/ }; do [[ $g =~ ^[0-9A-Fa-f]{1,4}$ ]] || return 1; n=$((n + 1)); done
+      [ $n -le 6 ] ;;
+    *)
+      local -a G; IFS=: read -ra G <<< "$a"
+      [ ${#G[@]} -eq 8 ] || return 1
+      for g in "${G[@]}"; do [[ $g =~ ^[0-9A-Fa-f]{1,4}$ ]] || return 1; done ;;
+  esac; }
+# a name or an address, optionally :port (1-65535): the remote computer or broker, the fallbacks, the other computers.
+# An IPv6 address may be written as it is (fd00::1) or in brackets with a port ([fd00::1]:3389): its own colons are not
+# a port, so a value with more than one colon and no brackets is the address alone.
+hostportok(){ local h=$1 p="" port=""
+  case "$h" in
+    \[*\]:*) port=1; p=${h##*]:}; h=${h%%\]:*}; h=${h#\[} ;;
+    \[*\])   h=${h%\]}; h=${h#\[} ;;
+    *:*)     case "${h#*:}" in
+               *:*) ;;                                        # more than one colon: an IPv6 address, no port
+               *)   port=1; p=${h##*:}; h=${h%:*} ;;          # one colon: name:port
+             esac ;;
+  esac
+  [ -n "$h" ] || return 1
+  { ipok "$h" || ipv6ok "$h" || nameok "$h"; } || return 1
+  [ -n "$port" ] || return 0
+  [[ $p =~ ^[0-9]{1,5}$ ]] && [ $((10#$p)) -ge 1 ] && [ $((10#$p)) -le 65535 ]; }
 userok(){ [[ $1 =~ ^[A-Za-z0-9._@\\-]{1,104}$ ]]; }
 URLRE='^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~:/?#@!$&()*+,;=%-]*)?$'
 urlok(){ [[ $1 =~ $URLRE ]]; }
@@ -35,7 +73,7 @@ textok(){ ! [[ $1 =~ $BADTEXT ]] && [ ${#1} -le 200 ]; }
 SHARERE='^(\\\\|//)[A-Za-z0-9.-]+[\\/][A-Za-z0-9 ._$\\/-]+$'
 EXTRARE='^[A-Za-z0-9 /:+,._=#-]*$'
 TIMERE='^([01][0-9]|2[0-3]):[0-5][0-9]$'
-E=""; err(){ E+="- $*\n"; }
+E=""; err(){ E+="- $*"$'\n'; }
 declare -A V
 
 # --- remote desktop
@@ -47,7 +85,8 @@ case "$(low "$(get SETUP)")" in domain|dominio) V[SETUP]=domain ;; workgroup|gru
 # without a domain the field is the remote computer, and the message says so: there is no broker (#182)
 V[BROKER]=$(get BROKER)
 if [ -n "${V[BROKER]}" ] && ! hostportok "${V[BROKER]}"; then
-  if [ "${V[SETUP]:-$(setup_kind)}" = workgroup ]; then err "$V_PC"; else err "$V_BROKER"; fi
+  # the value refused is in the message: it is what the IT desk needs on the phone ("broker not valid" alone said nothing)
+  if [ "${V[SETUP]:-$(setup_kind)}" = workgroup ]; then err "$V_PC ${V[BROKER]}"; else err "$V_BROKER ${V[BROKER]}"; fi
 fi
 V[BROKER_FALLBACK]=$(get BROKER_FALLBACK | tr -s ' ,;' ' ' | sed 's/^ //; s/ $//')
 for t in ${V[BROKER_FALLBACK]}; do hostportok "$t" || err "$V_FALLBACK $t"; done
@@ -66,12 +105,9 @@ V[LOAD_BALANCE_INFO]=$(get LOAD_BALANCE_INFO); [[ ${V[LOAD_BALANCE_INFO]} =~ $RE
 case "$(low "$(get TRANSPORT)")" in udp) V[TRANSPORT]=udp ;; tcp) V[TRANSPORT]=tcp ;; *) V[TRANSPORT]=auto ;; esac
 case "$(low "$(get RDP_AUTH)")" in ntlm) V[RDP_AUTH]=ntlm ;; kerberos) V[RDP_AUTH]=kerberos ;; *) V[RDP_AUTH]=negotiate ;; esac
 case "$(low "$(get RDP_CERT)")" in ignore) V[RDP_CERT]=ignore ;; verify) V[RDP_CERT]=verify ;; *) V[RDP_CERT]=tofu ;; esac
-# RD Gateway: a name or an address, optionally :port (1-65535)
+# RD Gateway: a name or an address, optionally :port (1-65535; 443 when there is none)
 V[RDP_GATEWAY]=$(get RDP_GATEWAY | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
-if [ -n "${V[RDP_GATEWAY]}" ]; then
-  gh=${V[RDP_GATEWAY]%:*}; gp=${V[RDP_GATEWAY]##*:}; [ "$gh" = "${V[RDP_GATEWAY]}" ] && gp=443
-  { { ipok "$gh" || nameok "$gh"; } && [[ $gp =~ ^[0-9]{1,5}$ ]] && [ "$gp" -ge 1 ] && [ "$gp" -le 65535 ]; } || err "$V_RDP_GATEWAY"
-fi
+if [ -n "${V[RDP_GATEWAY]}" ] && ! hostportok "${V[RDP_GATEWAY]}"; then err "$V_RDP_GATEWAY ${V[RDP_GATEWAY]}"; fi
 case "$(low "$(get RDP_GATEWAY_USE)")" in detect|rileva|auto) V[RDP_GATEWAY_USE]=detect ;; *) V[RDP_GATEWAY_USE]=always ;; esac
 V[RDP_GFX]=$(get RDP_GFX); [[ ${V[RDP_GFX]} =~ ^[A-Za-z0-9:,]*$ ]] || err "$V_GFX"
 V[RDP_KEYBOARD]=$(get RDP_KEYBOARD); [[ ${V[RDP_KEYBOARD]} =~ ^(0x[0-9a-fA-F]{8})?$ ]] || err "$V_RDPKBD"
@@ -127,10 +163,7 @@ V[REPORT_INTERVAL]=$(get REPORT_INTERVAL | tr -d ' '); [ -z "${V[REPORT_INTERVAL
 cidrok(){ local a=${1%/*} p=${1#*/}; [ "$p" != "$1" ] && ipok "$a" && [[ $p =~ ^[0-9]{1,2}$ ]] && [ "$p" -le 32 ]; }
 case "$(low "$(get VPN)")" in wireguard|wg) V[VPN]=wireguard ;; openvpn|ovpn) V[VPN]=openvpn ;; tailscale|ts) V[VPN]=tailscale ;; *) V[VPN]=off ;; esac
 V[VPN_SERVER]=$(get VPN_SERVER | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
-if [ -n "${V[VPN_SERVER]}" ]; then
-  vh=${V[VPN_SERVER]%:*}; vp=${V[VPN_SERVER]##*:}; [ "$vh" = "${V[VPN_SERVER]}" ] && vp=51820
-  { { ipok "$vh" || nameok "$vh"; } && [[ $vp =~ ^[0-9]{1,5}$ ]] && [ "$vp" -ge 1 ] && [ "$vp" -le 65535 ]; } || err "$V_VPN_SERVER"
-fi
+if [ -n "${V[VPN_SERVER]}" ] && ! hostportok "${V[VPN_SERVER]}"; then err "$V_VPN_SERVER ${V[VPN_SERVER]}"; fi
 V[VPN_SERVER_KEY]=$(get VPN_SERVER_KEY | tr -d '[:space:]')
 [ -z "${V[VPN_SERVER_KEY]}" ] || [[ ${V[VPN_SERVER_KEY]} =~ ^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$ ]] || err "$V_VPN_KEY"
 V[VPN_ADDRESS]=$(get VPN_ADDRESS | tr -d '[:space:]')
@@ -160,7 +193,14 @@ case "$(low "$(get WIFI_SECURITY)")" in peap) V[WIFI_SECURITY]=peap ;; tls|eap-t
 if [ "${V[WIFI]}" = on ]; then
   [ -n "${V[WIFI_SSID]}" ] || err "$V_SSID"
   command -v wpa_supplicant >/dev/null || err "$V_NOWPA"
-  [ "${V[WIFI_SECURITY]}" != psk ] || [ -n "$WHEX" ] || [ -n "$OLDHEX" ] || err "$V_WIFIMISSING ${V[WIFI_SSID]}"
+  # A Wi-Fi whose key is gone (TPM cleared, manager never sent it) cannot be used anyway. It used to refuse every save
+  # for ever, and the settings dialog could not put it right: its password field is empty by design ("empty = keep the
+  # saved one"), so the device became unconfigurable. It is turned off instead, said in the events, and the Wi-Fi page
+  # (which takes the key) or the manager turns it back on.
+  if [ "${V[WIFI_SECURITY]}" = psk ] && [ -z "$WHEX" ] && [ -z "$OLDHEX" ]; then
+    V[WIFI]=off
+    ev "settings: Wi-Fi off: no key for ${V[WIFI_SSID]} any more (a TPM cleared? the manager never sent it): set it again from the Wi-Fi page"
+  fi
 fi
 
 # --- 802.1X: on the cable (DOT1X, dot1x.sh) and for Wi-Fi Enterprise, one block of settings (lib/eap.sh). The password
@@ -230,8 +270,8 @@ V[KIOSK_RELOAD_MIN]=$(get KIOSK_RELOAD_MIN)
 # --- power schedule
 V[POWER_ON_TIME]=$(get POWER_ON_TIME); [ -z "${V[POWER_ON_TIME]}" ] || [[ ${V[POWER_ON_TIME]} =~ $TIMERE ]] || err "$V_POWERON"
 V[POWER_OFF_TIME]=$(get POWER_OFF_TIME); [ -z "${V[POWER_OFF_TIME]}" ] || [[ ${V[POWER_OFF_TIME]} =~ $TIMERE ]] || err "$V_POWEROFF"
-d=$(get POWER_ON_DAYS); [ -z "$(echo "$d" | tr -d '1-7 ,;')" ] || err "$V_DAYS"
-V[POWER_ON_DAYS]=$(echo "$d" | tr -cd '1-7' | fold -w1 | sort -u | tr -d '\n'); [ -z "${V[POWER_ON_DAYS]}" ] && V[POWER_ON_DAYS]=1234567
+d=$(get POWER_ON_DAYS); [ -z "$(printf '%s' "$d" | tr -d '1-7 ,;')" ] || err "$V_DAYS"
+V[POWER_ON_DAYS]=$(printf '%s' "$d" | tr -cd '1-7' | fold -w1 | sort -u | tr -d '\n'); [ -z "${V[POWER_ON_DAYS]}" ] && V[POWER_ON_DAYS]=1234567
 
 # --- look and language
 V[LANGUAGE]=$(low "$(get LANGUAGE)"); { [[ ${V[LANGUAGE]} =~ ^[a-z]{2}$ ]] && [ -f "$OTR/lang/${V[LANGUAGE]}.sh" ]; } || err "$V_LANGUAGE"
@@ -242,7 +282,70 @@ V[LOGO]=$(get LOGO); [[ ${V[LOGO]} =~ ^(/[A-Za-z0-9._/-]+\.png)?$ ]] || err "$V_
 for k in BG_TOP BG_BOTTOM; do V[$k]=$(get $k); [[ ${V[$k]} =~ ^#[0-9a-fA-F]{6}$ ]] || err "$V_COLOR $k"; done
 V[SETTINGS_PIN_SHA256]=$(low "$(get SETTINGS_PIN_SHA256)"); [[ ${V[SETTINGS_PIN_SHA256]} =~ ^([0-9a-f]{64}|pbkdf2-sha256:[0-9]{4,7}:[0-9a-f]{32}:[0-9a-f]{64})?$ ]] || err "$V_PIN"
 
-if [ -n "$E" ]; then printf '%b' "$E"; exit 1; fi
+# A value stored before this save (a hand-edited openthinrdp.conf, a setting an older version or the manager wrote) that
+# the validator refuses used to block EVERY later save, for ever: the device could not be configured any more, a reboot
+# did not help and only reinstalling did. Every message below starts with the text of the V_* variable of the setting it
+# is about, so a refused value is attributed to its setting: the ones this save is NOT setting are dropped from the
+# device file (the site file and then the default take over) and the save goes on; the ones this save IS setting are
+# still refused, and the message says which file the value comes from.
+if [ -n "$E" ]; then
+  declare -A MKEY=(
+    ["$V_HOSTNAME"]=HOSTNAME ["$V_USER"]=DEFAULT_USER ["$V_PC"]=BROKER ["$V_BROKER"]=BROKER
+    ["$V_FALLBACK"]=BROKER_FALLBACK ["$V_DOMAIN"]=DOMAIN ["$V_WAKE_MAC"]=WAKE_MAC ["$V_WAKE_WAIT"]=WAKE_WAIT
+    ["$V_CONNECTIONS"]=CONNECTIONS ["$V_COLLECTION"]=LOAD_BALANCE_INFO ["$V_RDP_GATEWAY"]=RDP_GATEWAY
+    ["$V_GFX"]=RDP_GFX ["$V_RDPKBD"]=RDP_KEYBOARD ["$V_EXTRA"]=RDP_EXTRA ["$V_RESOLUTION"]=DISPLAY_RESOLUTION
+    ["$V_THRESHOLD"]=SESSION_THRESHOLD ["$V_SHUTDOWN"]=SHUTDOWN_SECS ["$V_USBLIST"]=USB_REDIRECT
+    ["$V_IP"]=IPADDR ["$V_NETMASK"]=NETMASK ["$V_GATEWAY"]=GATEWAY ["$V_SUBNET"]=IPADDR
+    ["$V_DNS_STATIC"]=DNS1 ["$V_DNS1"]=DNS1 ["$V_DNS2"]=DNS2 ["$V_NTP"]=NTP ["$V_TZ"]=TIMEZONE
+    ["$V_INTERVAL"]=REPORT_INTERVAL ["$V_VPN_SERVER"]=VPN_SERVER ["$V_VPN_KEY"]=VPN_SERVER_KEY
+    ["$V_VPN_ADDRESS"]=VPN_ADDRESS ["$V_VPN_ROUTE"]=VPN_ROUTES ["$V_VPN_DNS"]=VPN_DNS
+    ["$V_COUNTRY"]=WIFI_COUNTRY ["$V_WIFIPSK"]=WIFI_SSID ["$V_WIFINOSSID"]=WIFI_SSID ["$V_SSID"]=WIFI_SSID
+    ["$V_NOWPA"]=WIFI ["$V_NOWIFI"]=WIFI ["$V_WIFIMISSING"]=WIFI_SSID ["$V_NOWPA_8021X"]=DOT1X
+    ["$V_EAP_IDENTITY"]=EAP_IDENTITY ["$V_EAP_ANONYMOUS"]=EAP_ANONYMOUS ["$V_EAP_PASSWORD"]=EAP_PASSWORD
+    ["$V_EAP_CA"]=EAP_CA ["$V_EAP_SERVER"]=EAP_SERVER_NAME
+    ["$V_SHARE"]=MGMT_SHARE ["$V_UPDATE_SHARE"]=UPDATE_FROM ["$V_UPDATE_GITHUB"]=UPDATE_GITHUB
+    ["$V_UPDATE_TO"]=UPDATE_TO ["$V_UPDATE_HOURS"]=UPDATE_HOURS ["$V_MGMT_USER"]=MGMT_USER
+    ["$V_MGMT_PASSWORD"]=MGMT_PASSWORD ["$V_MGMT_NOUSER"]=MGMT_USER ["$V_MGMT_NOPASSWORD"]=MGMT_USER
+    ["$V_GROUP"]=DEVICE_GROUP ["$V_WEBLABEL"]=WEB_LABEL ["$V_WEBURL"]=WEB_URL ["$V_WEBURL_NEEDED"]=WEB_URL
+    ["$V_WEBALLOW"]=WEB_ALLOW ["$V_KIOSKURL"]=KIOSK_URL ["$V_KIOSKURL_NEEDED"]=KIOSK_URL
+    ["$V_BROWSER_ARCH"]=BROWSER ["$V_RELOAD"]=KIOSK_RELOAD_MIN ["$V_POWERON"]=POWER_ON_TIME
+    ["$V_POWEROFF"]=POWER_OFF_TIME ["$V_DAYS"]=POWER_ON_DAYS ["$V_LANGUAGE"]=LANGUAGE
+    ["$V_KEYBOARD"]=KEYBOARD ["$V_TITLE"]=TITLE ["$V_SUPPORT"]=SUPPORT_TEXT ["$V_LOGO"]=LOGO
+    ["$V_COLOR"]=BG_TOP ["$V_PIN"]=SETTINGS_PIN_SHA256
+  )
+  bad=""; asked=0
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    txt=${line#- }
+    best=""; bestlen=0
+    for m in "${!MKEY[@]}"; do
+      [ -n "$m" ] || continue
+      case "$txt" in "$m"*) [ ${#m} -gt $bestlen ] && { best=$m; bestlen=${#m}; } ;; esac
+    done
+    # a message that no setting can be attributed to: not a value of the device file, keep it as it is
+    [ -n "$best" ] || { asked=1; continue; }
+    k=${MKEY[$best]}
+    # BG_TOP and BG_BOTTOM share one message, which ends with the key itself
+    [ "$best" = "$V_COLOR" ] && k=${txt##* }
+    # refused only when this save really changes the value: the settings dialog sends every field back as it is, and a
+    # value echoed that way is the stored one that the validator refuses, not something the user typed now
+    v_in=$(sed -n "s/^$k=//p" "$F" 2>/dev/null | head -1 | tr -d '\r')
+    if [ -n "$v_in" ] && [ "$v_in" != "$(cfg "$k")" ]; then asked=1; else bad="$bad $k"; fi
+  done <<< "$E"
+  bad=$(printf '%s\n' $bad 2>/dev/null | sort -u | tr '\n' ' '); bad=${bad% }
+  if [ $asked = 0 ] && [ -n "$bad" ] && [ -f "$OTR_CONF" ] && [ -z "${OTR_HEALED:-}" ]; then
+    T=$(mktemp "$OTR_ETC/.conf.XXXXXX")
+    grep -Ev "^($(printf '%s\n' $bad | paste -sd '|' -))=" "$OTR_CONF" > "$T" 2>/dev/null
+    chmod 644 "$T"; mv -f "$T" "$OTR_CONF"
+    ev "settings: dropped $bad from the device file: a stored value the validator refuses, which blocked every save"
+    OTR_HEALED=1 OTR_HEALED_KEYS=" $bad " exec "$0" "$@"
+  fi
+  # printf %s, not %b: with %b a backslash in a refused value (\c) cut every message after it, and a \n split one
+  printf '%s' "$E"
+  # and where the refused values come from, for the IT desk: "I never typed that"
+  for k in $bad; do s=$(cfgsrc "$k"); [ -n "$s" ] && printf '  %s (%s)\n' "$k" "$s"; done
+  exit 1
+fi
 for k in SESSION_THRESHOLD SHUTDOWN_SECS KIOSK_RELOAD_MIN WAKE_WAIT; do V[$k]=$((10#${V[$k]})); done
 if [ "${2:-}" = --print ]; then
   for k in $(cfg_keys); do echo "$k=${V[$k]}"; done
@@ -255,16 +358,34 @@ if [ "${2:-}" = --print ]; then
   exit 0
 fi
 
-# --- save: the device file keeps the keys it already had plus the ones given now; the others keep
-# following site.conf and the project defaults
-mkdir -p "$OTR_ETC"
+# --- save: the device file holds the choices of THIS device, not a copy of the site file and the defaults. A key is
+# stored when its value differs from what the site file and the defaults already give (cfg_base), and dropped when it
+# no longer does. Before, the settings dialog sent every field back and the first Save froze all of them into the device
+# file: from then on a new site.conf (a newer image, the settings the manager writes) had no effect on that device, and a
+# value the site file had got wrong became the device's own. Here-string, not a process substitution: this runs as root
+# on a device where /dev/fd may not be there (a chroot, an early boot), and a missing /dev/fd lost every stored key.
+mkdir -p "$OTR_ETC" 2>/dev/null
 declare -A OUT
-[ -f "$OTR_CONF" ] && while IFS='=' read -r k v; do [ -n "$k" ] && OUT[$k]=$v; done < <(grep -E '^[A-Z][A-Z0-9_]*=' "$OTR_CONF")
-for k in $(cfg_keys); do [ "$k" = HOSTNAME ] && continue; { has "$k" || [ -n "${OUT[$k]+x}" ]; } && OUT[$k]=${V[$k]}; done
-T=$(mktemp "$OTR_ETC/.conf.XXXXXX")
-{ echo "# Settings of this device, written by save-config.sh. See /opt/openthinrdp/defaults.conf."
-  for k in $(cfg_keys); do [ -n "${OUT[$k]+x}" ] && echo "$k=${OUT[$k]}"; done; } > "$T"
-chmod 644 "$T"; mv -f "$T" "$OTR_CONF"
+[ -f "$OTR_CONF" ] && while IFS='=' read -r k v; do [ -n "$k" ] && OUT[$k]=$v; done <<< "$(grep -E '^[A-Z][A-Z0-9_]*=' "$OTR_CONF")"
+for k in $(cfg_keys); do
+  [ "$k" = HOSTNAME ] && continue
+  # not being set now and not in the device file: it keeps following the site file and the defaults
+  { has "$k" || [ -n "${OUT[$k]+x}" ]; } || continue
+  if [ "${V[$k]}" = "$(cfg_base "$k")" ]; then unset "OUT[$k]"; else OUT[$k]=${V[$k]}; fi
+done
+# A write that fails must be said, not swallowed: with a read-only or full filesystem (an ext4 that remounted itself
+# read-only after an I/O error, a full overlay) everything here failed and the script still ended with 0, so the dialog
+# said "settings saved" while nothing was on the disk and the settings came back as before at the next start.
+T=$(mktemp "$OTR_ETC/.conf.XXXXXX" 2>/dev/null)
+if [ -z "$T" ]; then printf "$V_WRITE\n" "$OTR_ETC"; exit 1; fi
+# "true" closes the block: without it the status of the group is the status of the last test in the loop, which is false
+# whenever the last setting is not set, and a save that wrote everything said it could not write
+if ! { echo "# Settings of this device, written by save-config.sh. See /opt/openthinrdp/defaults.conf."
+  for k in $(cfg_keys); do [ -n "${OUT[$k]+x}" ] && echo "$k=${OUT[$k]}"; done; true; } > "$T"; then
+  rm -f "$T"; printf "$V_WRITE\n" "$OTR_ETC"; exit 1
+fi
+chmod 644 "$T"
+mv -f "$T" "$OTR_CONF" 2>/dev/null || { rm -f "$T"; printf "$V_WRITE\n" "$OTR_CONF"; exit 1; }
 
 # the 802.1X password (before the Wi-Fi file, which holds it for an enterprise network)
 if [ -n "$EPW" ] && [ "$EPW" != "$OLDEPW" ]; then
