@@ -25,7 +25,12 @@ ALLIF=$(wired_nics); IF=$(main_nic); MODE=$(cfg NETMODE)
 DOM=$(cfg DOMAIN | tr 'A-Z' 'a-z'); [[ $DOM == *.* ]] || DOM=""
 # Wi-Fi only when enabled, with an adapter and a saved key (written by save-config.sh)
 WCF=/etc/wpa_supplicant/openthinrdp-wifi.conf; WL=""   # a link to the copy in memory when kept in the TPM (lib/secrets.sh)
-if [ "$(cfg WIFI)" = on ] && [ -s "$WCF" ] && command -v wpa_supplicant >/dev/null; then WL=$(wifi_nics | head -1); fi
+if [ "$(cfg WIFI)" = on ] && [ -s "$WCF" ] && command -v wpa_supplicant >/dev/null; then WL=$(wifi_nics | head -1)
+# the key no longer readable (#201: the copy kept in the TPM): the Wi-Fi block stays as it is, so a save does not cut
+# the connection still running; the settings dialog says to connect again from the Wi-Fi page
+elif [ "$(cfg WIFI)" = on ] && [ -n "$(wifi_nics | head -1)" ] && grep -qx "allow-hotplug $(wifi_nics | head -1)" /etc/network/interfaces 2>/dev/null; then
+  WL=$(wifi_nics | head -1)
+fi
 [ "$IF" = "$(wifi_nics | head -1)" ] && [ "$MODE" = static ] && IF=$(wired_nics | head -1)   # static only on a cable
 # 802.1X on the cable (dot1x.sh): before its address every wired adapter waits for its supplicant to authenticate
 D1X=""; [ "$(cfg DOT1X)" != off ] && command -v wpa_supplicant >/dev/null && D1X=1

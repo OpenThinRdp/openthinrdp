@@ -15,7 +15,9 @@
 WL=$(wifi_nics | head -1)
 # the Wi-Fi started in a scope of its own: wpa_supplicant and the DHCP client must outlive whatever started this script
 # (a transient service kills every process of its group when it ends: the Wi-Fi came up and went down again)
-up(){ systemd-run --scope --quiet --collect ifup "$WL" >/dev/null 2>&1 < /dev/null || ifup "$WL" >/dev/null 2>&1; }
+# 9>&-: the lock of this script does not pass to them. wpa_supplicant kept it open for good, and every later try from
+# the Wi-Fi page in the same power on said "busy" (0.3.6)
+up(){ systemd-run --scope --quiet --collect ifup "$WL" >/dev/null 2>&1 < /dev/null 9>&- || ifup "$WL" >/dev/null 2>&1 9>&-; }
 
 # iw scan output -> the lines above (stdin to stdout); a function on its own for the tests
 parse_scan(){
@@ -45,6 +47,13 @@ case "$1" in
     # the same rules as the settings (save-config.sh): a name of 1-32 characters, a password of 8-63
     if [ -z "$SSID" ] || [ ${#SSID} -gt 32 ] || [ ${#PSK} -lt 8 ] || [ ${#PSK} -gt 63 ]; then echo "result invalid"; exit 0; fi
     exec 9>/run/openthinrdp-wifi.lock; flock -n 9 || { echo "result busy"; exit 0; }
+    # the settings this will save, checked BEFORE the Wi-Fi of now is stopped: a save refused after the try left the
+    # device without Wi-Fi at every attempt (#201)
+    f=$(mktemp); chmod 600 "$f"
+    printf 'WIFI=on\nWIFI_SSID=%s\nWIFI_SECURITY=psk\nWIFI_PSK=%s\n' "$SSID" "$PSK" > "$f"
+    msg=$("$OTR/save-config.sh" "$f" --print --heal 2>&1); r=$?; rm -f "$f"
+    if [ $r -ne 0 ]; then ev "Wi-Fi from the page: $SSID not tried, the settings would be refused: $(echo "$msg" | tr '\n' ' ')"
+      echo "result saveerror $(echo "$msg" | head -1)"; exit 0; fi
     T=/run/otr-wifi-test; rm -rf "$T"; mkdir -m 700 "$T"
     stop_test(){ [ -s "$T/pid" ] && kill "$(cat "$T/pid")" 2>/dev/null; sleep 0.5; rm -rf "$T"; }
     was_on=$(cfg WIFI)
@@ -78,7 +87,7 @@ case "$1" in
     echo "step save"
     f=$(mktemp); chmod 600 "$f"
     printf 'WIFI=on\nWIFI_SSID=%s\nWIFI_SECURITY=psk\nWIFI_PSK=%s\n' "$SSID" "$PSK" > "$f"
-    msg=$("$OTR/save-config.sh" "$f" 2>&1); r=$?; rm -f "$f"
+    msg=$("$OTR/save-config.sh" "$f" --heal 2>&1 9>&-); r=$?; rm -f "$f"
     if [ $r -ne 0 ]; then [ "$was_on" = on ] && up; echo "result saveerror $(echo "$msg" | head -1)"; exit 0; fi
     # save-config.sh applied it, in the group of processes of its caller: started again here in a scope of its own
     echo "step dhcp"

@@ -8,8 +8,8 @@ this page lists all of it, item by item. Nothing on it can tell who you are, whe
 
 | Level | What is sent |
 |---|---|
-| **Full** (the default) | Once a week what the device is, how it is set up and used, how well it runs, and what went wrong |
-| **Errors only** | Only in a week when something went wrong: what went wrong, on which version and computer |
+| **Full** (the default) | Once a week what the device is, how it is set up and used and how well it runs; what went wrong as soon as it happens |
+| **Errors only** | Only what went wrong, as soon as it happens, on which version and computer |
 | **Off** | Nothing |
 
 A new device asks at its first start, with *Full* ready and the three levels explained on the screen; nothing leaves
@@ -21,7 +21,8 @@ it before the answer. Later: *Anonymous data for the project*, the last setting 
 
 ## What a device sends
 
-Once a week (`stats.sh`, started by `report.sh`); the first time once its level is chosen.
+The week once a week, and at once after an update; what went wrong as soon as it happens (at most one send every 10
+minutes). `stats.sh`, started by `report.sh`; the first time once its level is chosen.
 
 **The week** (`otr_week`, *Full* only):
 

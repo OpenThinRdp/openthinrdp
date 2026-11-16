@@ -579,7 +579,8 @@ settings_dialog(){
   [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" = yes ] && sync=$L_TIME_SYNC || sync=$L_TIME_NOSYNC
   wli=$(wifi_nics | head -1)
   if [ -z "$wli" ]; then wst=$L_WIFI_NONE
-  elif iw dev "$wli" link 2>/dev/null | grep -q Connected; then wst=$(printf "$L_WIFI_CONNECTED" "$(iw dev "$wli" link | sed -n 's/^[[:space:]]*SSID: //p') $(iw dev "$wli" link | sed -n 's/^[[:space:]]*signal: //p')")
+  # iw is in /usr/sbin, outside the path of the kiosk user: the line said "not connected" on a connected Wi-Fi
+  elif /usr/sbin/iw dev "$wli" link 2>/dev/null | grep -q Connected; then wst=$(printf "$L_WIFI_CONNECTED" "$(/usr/sbin/iw dev "$wli" link | sed -n 's/^[[:space:]]*SSID: //p') $(/usr/sbin/iw dev "$wli" link | sed -n 's/^[[:space:]]*signal: //p')")
   else wst=$L_WIFI_DISCONNECTED; fi
   rep=$(tail -1 "$OTR_LOG/report.log" 2>/dev/null | cut -c1-60)
   [ -z "$IPC" ] && [ "$(net_state)" != none ] && IPC=$L_NO_ADDR
@@ -646,7 +647,7 @@ settings_dialog(){
       case $r in
         0) wp=""; mp=""; epw=""; settings_read "$out" ;;
         11) break ;;
-        13) wifi_page; settings_dialog; return ;;
+        13) wifi_page; first_update; settings_dialog; return ;;
         14) bt_page; settings_dialog; return ;;
         12) xterm -fa Monospace -fs 11 2>/dev/null; break ;;
         *) ev "settings: the settings screen failed (exit $r), the earlier dialog instead" ;;
@@ -695,13 +696,19 @@ settings_dialog(){
     [ -n "$wp" ] && printf 'WIFI_PSK=%s\n' "$wp" >> "$tmp"
     [ -n "$mp" ] && printf 'MGMT_PASSWORD=%s\n' "$mp" >> "$tmp"
     [ -n "$epw" ] && printf 'EAP_PASSWORD=%s\n' "$epw" >> "$tmp"
-    msg=$(sudo -n "$OTR/save-config.sh" "$tmp" 2>&1); r=$?
+    msg=$(sudo -n "$OTR/save-config.sh" "$tmp" --heal 2>&1); r=$?
     rm -f "$tmp"
     if [ $r -eq 0 ]; then
       ev "settings saved from the dialog: hostname=$h user=$u network=$nm ip=$ip broker=$br"
       otr_lang     # the language may have changed
       if [ $GREETER = 1 ]; then ui message --icon=ok --heading="$(plain "$L_SAVED")" --timeout=2 >/dev/null
       else yad --center --undecorated --skip-taskbar --no-buttons --timeout=2 --width=$(pxs 300) --text="<b>$L_SAVED</b>" 2>/dev/null; fi
+      # saved, with something to know: saved values back to their default, the Wi-Fi key no longer readable (#201)
+      note=$(printf '%s\n' "$msg" | sed -n 's/^NOTE: //p')
+      if [ -n "$note" ]; then
+        if [ $GREETER = 1 ]; then ui message --icon=warn --heading="$(plain "$L_SAVED")" --text="$(plain "$note")" --button="$L_OK:0" --primary=0 --default=0 >/dev/null
+        else yad --center --width=$(pxs 480) --title="$L_SAVED" --text="$note" --button="$L_OK:0" 2>/dev/null; fi
+      fi
       # another kind of setup: the settings again at once, with the fields of that kind
       [ "$kind" != "$kind0" ] && [ $GREETER = 1 ] && { ev "kind of setup: $kind0 -> $kind"; settings_dialog; return; }
       # the password remembered no more: forgotten now
@@ -1220,8 +1227,18 @@ power_off(){
     ui message --update --icon=update --heading="$(plain "$L_UPDATE_RUNNING")" --text="$(plain "$L_WAIT_UPDATE") (%p%)"
     wait_update
   fi
+  # the live system from a USB stick: what was set and installed goes to the stick now and while it switches off (the
+  # first time the partition made at this start is filled then, persist.sh seed). Said on the screen: the stick stays in
+  if live_stick; then
+    ui message --icon=busy --heading="$(plain "$L_LIVE_SAVING_T")" --text="$(plain "$L_LIVE_SAVING")" --timeout=4 >/dev/null &
+    sync; sleep 4
+  fi
   sleep 1; systemctl $act; exit 0
 }
+# the live system started from a USB stick (not installed), and one that cannot keep its settings (Ventoy or another
+# boot manager, a CD, no room on the stick: persist.sh): everything set on it is lost at power off
+live_stick(){ [ -d /run/live/medium ] && ! otr_installed; }
+live_unsaved(){ live_stick && case "$(cat /run/openthinrdp-persist 2>/dev/null)" in "not a live stick"|"no room") true ;; *) false ;; esac; }
 # the sign-in screen (login.py, GTK); without the Python GTK bindings (a device updated without the Debian mirror)
 # the yad form of the earlier versions
 GREETER=0
@@ -1255,8 +1272,12 @@ update_question(){
   if [ $rc != 1 ] && [ $rc != 70 ]; then
     : > /tmp/openthinrdp-update-declined; ev "software update $v not now, on the device: staying on $cur until the next start"; return 0
   fi
-  # the event starts report.sh, which installs it; the install restarts this kiosk with the new version
-  echo "$v" > /tmp/openthinrdp-update-accepted; ev "software update $v chosen on the device$([ -n "$maj" ] && echo ' (major update)')"
+  update_install "$v" "on the device$([ -n "$maj" ] && echo ' (major update)')"
+}
+# update_install VERSION WHY: the event starts report.sh, which installs it; the install restarts this kiosk with it
+update_install(){
+  local v=$1 i
+  echo "$v" > /tmp/openthinrdp-update-accepted; ev "software update $v chosen $2"
   { echo "10"; echo "# $(printf "$L_UPD_GET" "$v")"
     for i in $(seq 1 120); do updating && break; sleep 0.5; done
     echo "100"; } | ui message --progress --icon=update --heading="$(plain "$L_UPDATE_RUNNING")" --text="$(plain "$(printf "$L_UPD_GET" "$v")")"
@@ -1269,7 +1290,32 @@ update_question(){
 # once nobody has typed for 10 s (not in a session), and the main loop asks (update_question) before drawing it again.
 start_update_check(){
   managed || [ "$(cfg UPDATE_FROM)" = off ] && return 0
+  first_update               # the first start: the newest version before anything else
   update_question            # an offer already there (the kiosk restarted): asked now
+}
+# The FIRST start of a device without a management folder (nothing set up yet: the ISO someone is trying, a new
+# install): the newest version is installed before the hardware test and the setup, without asking. Whoever tries
+# OpenThinRDP tries the current version, not the one of the ISO with what was fixed since (#201). Only with a
+# network: a cable within 10 s; on Wi-Fi this runs again as soon as the Wi-Fi page connects. Once per start (the
+# install restarts the kiosk with the new version); the other starts never wait for the check (#199).
+first_update(){
+  local i v cur maj
+  [ -z "$(cfg BROKER)" ] || return 0
+  managed || [ "$(cfg UPDATE_FROM)" = off ] && return 0
+  [ -f /tmp/openthinrdp-first-update ] && return 0
+  for i in $(seq 1 20); do net_ok && break; sleep 0.5; done
+  net_ok || return 0
+  : > /tmp/openthinrdp-first-update
+  if [ ! -f /run/openthinrdp-update-offer ]; then
+    # the event starts report.sh at once, which asks the update source (an answer in seconds; 45 s at most)
+    ev "first start: looking for a newer version"
+    { echo "15"; echo "# $L_UPD_CHECK"
+      for i in $(seq 1 90); do [ -f /run/openthinrdp-update-offer ] || [ -f /run/openthinrdp-update-checked ] && break; sleep 0.5; done
+      echo "100"; } | ui message --progress --icon=busy --heading="$(plain "$L_UPD_CHECK_T")" --text="$(plain "$L_UPD_CHECK")"
+  fi
+  [ -f /run/openthinrdp-update-offer ] || { ev "first start: no newer version found"; return 0; }
+  read -r v cur maj < /run/openthinrdp-update-offer; [ -n "$v" ] || return 0
+  update_install "$v" "at the first start (from $cur)"
 }
 start_update_check
 # the live system (from the USB stick) tests the hardware at its first start: what anyone trying it wants to know.
@@ -1291,7 +1337,7 @@ if [ -z "$(cfg BROKER)" ]; then
     ui message --icon=info --heading="$(plain "$L_SETUP_ASK_T")" --text="$(plain "$L_SETUP_ASK")" \
        --button="$L_SETUP_DOMAIN:22" --button="$L_SETUP_WORKGROUP:21" --primary=21 --default=21 >/dev/null
     case $? in 22) k=domain ;; *) k=workgroup ;; esac
-    tmp=$(mktemp); printf 'SETUP=%s\n' "$k" > "$tmp"; sudo -n "$OTR/save-config.sh" "$tmp" >/dev/null 2>&1; rm -f "$tmp"
+    tmp=$(mktemp); printf 'SETUP=%s\n' "$k" > "$tmp"; sudo -n "$OTR/save-config.sh" "$tmp" --heal >/dev/null 2>&1; rm -f "$tmp"
     ev "kind of setup chosen at the first start: $k"
   fi
   # the anonymous data for the project, asked once too, when neither the device nor its site chose: what each level
@@ -1300,7 +1346,7 @@ if [ -z "$(cfg BROKER)" ]; then
     ui message --icon=info --heading="$(plain "$L_STATS_ASK_T")" --text="$(plain "$L_STATS_ASK")" \
        --button="$L_STATS_OFF:33" --button="$L_STATS_ERRORS:32" --button="$L_STATS_FULL:31" --primary=31 --default=31 >/dev/null
     case $? in 33) k=off ;; 32) k=errors ;; *) k=full ;; esac
-    tmp=$(mktemp); printf 'ANON_STATS=%s\n' "$k" > "$tmp"; sudo -n "$OTR/save-config.sh" "$tmp" >/dev/null 2>&1; rm -f "$tmp"
+    tmp=$(mktemp); printf 'ANON_STATS=%s\n' "$k" > "$tmp"; sudo -n "$OTR/save-config.sh" "$tmp" --heal >/dev/null 2>&1; rm -f "$tmp"
     ev "anonymous data chosen at the first start: $k"
   fi
   ev "no broker configured: settings dialog opened"; settings_dialog
@@ -1317,6 +1363,7 @@ while true; do
   case "$WEB" in app|browser) WEBBTN=(--button="$(cfg WEB_LABEL):7") ;; kiosk) WEBBTN=(--button="$L_KIOSK:7") ;; esac
   KTXT=""; KPID=""; rm -f $KEXP
   [ -z "$(cfg BROKER)" ] && KTXT="\n<small>$L_NO_BROKER</small>"
+  live_unsaved && KTXT="$KTXT\n<small>$L_LIVE_UNSAVED</small>"
   if [ "$WEB" = kiosk ]; then
     if [ -z "$(cfg KIOSK_URL)" ]; then KTXT="\n<small>$L_K_NOPAGE</small>"
     elif [ $KSTOPPED -eq 0 ]; then KTXT="\n<small>$L_K_COUNTDOWN</small>"; kiosk_countdown & KPID=$!
@@ -1371,7 +1418,7 @@ while true; do
   fi
   [ $rc -eq 3 ] && { settings_dialog; continue; }
   # the network on the sign-in screen pressed: the Wi-Fi page, behind the PIN of the settings
-  [ $rc -eq 8 ] && { pin_ok && wifi_page; continue; }
+  [ $rc -eq 8 ] && { pin_ok && { wifi_page; first_update; }; continue; }
   [ $rc -eq 4 ] && { diag_dialog; continue; }
   if [ $rc -eq 7 ]; then
     [ "$WEB" = kiosk ] && { KSTOPPED=0; kiosk_page; continue; }
@@ -1426,11 +1473,14 @@ while true; do
       break
     fi
     if [ $res -eq 0 ]; then
-      OFF=$(cfg_num SHUTDOWN_SECS 10); TOPT=(); TXT=$L_END_ASK
+      OFF=$(cfg_num SHUTDOWN_SECS 10); TOPT=(); TXT=$L_END_ASK; BOPT=()
+      # the live system from a USB stick (someone trying OpenThinRDP, a laptop at home): no countdown, it is
+      # switched off only when asked, with the settings written to the stick first (power_off)
+      if live_stick; then OFF=0; BOPT=(--button="$L_BACK_LOGIN:1"); fi
       [ "$OFF" -gt 0 ] && { TOPT=(--timeout="$OFF"); TXT=$(printf "$L_END_COUNTDOWN" "$OFF"); }
       # Enter = Connect. 10/0 = Connect, 5 = Shut down, 70 = countdown expired, anything else = login
       ui message --icon=power --heading="$(plain "$L_END_TITLE")" --text="$(plain "$TXT")" "${TOPT[@]}" \
-         --button="$L_SHUTDOWN:5" --button="$L_CONNECT:10" --primary=10 --default=10
+         --button="$L_SHUTDOWN:5" "${BOPT[@]}" --button="$L_CONNECT:10" --primary=10 --default=10
       rc=$?
       { [ $rc -eq 10 ] || [ $rc -eq 0 ]; } && continue
       { [ $rc -eq 5 ] || [ $rc -eq 70 ]; } && power_off "after the session ended"

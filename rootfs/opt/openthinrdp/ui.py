@@ -130,7 +130,8 @@ COLORS = {'info': (0.15, 0.39, 0.92), 'ok': (0.09, 0.64, 0.29), 'warn': (0.85, 0
           'error': (0.86, 0.15, 0.15), 'power': (0.15, 0.39, 0.92), 'busy': (0.15, 0.39, 0.92),
           'update': (0.15, 0.39, 0.92)}
 
-def icon(kind, size=22, color=(1, 1, 1), alpha=0.92):
+def icon(kind, size=22, color=None, alpha=0.92):
+    if color is None: color = FG     # on the background: white, dark on light background colours
     size = dp(size)
     d = Gtk.DrawingArea(halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER); d.set_size_request(size, size)
     state = {'a': 0.0}
@@ -209,7 +210,8 @@ def bars(dbm):
 
 # the icon of a network, its kind and bars changed later (st['kind'], st['bars']): wifi (arcs, the empty ones faint),
 # wired (a plug), none (a Wi-Fi crossed out)
-def net_icon(kind='none', level=0, size=20, color=(1, 1, 1)):
+def net_icon(kind='none', level=0, size=20, color=None):
+    if color is None: color = FG
     size = dp(size)
     d = Gtk.DrawingArea(valign=Gtk.Align.CENTER); d.set_size_request(size, size)
     st = {'kind': kind, 'bars': level, 'color': color}
@@ -275,6 +277,24 @@ def leave(c, out=None):
         print(out, flush=True)
     Gtk.main_quit()
 
+# light background colours (0.3.6): dark text and icons on the background, as the project's logo goes on its dark card
+# there. The same rule as bg_light in lib/common.sh: the perceived brightness of the two colours, on average, over half
+def light_bg():
+    s = n = 0
+    for h in (A.top or '#1b2733', A.bottom or '#000000'):
+        if re.fullmatch(r'#[0-9a-fA-F]{6}', h):
+            s += 299 * int(h[1:3], 16) + 587 * int(h[3:5], 16) + 114 * int(h[5:7], 16); n += 1
+    return n > 0 and s // n > 127500
+LIGHT = light_bg()
+FG = (0.06, 0.09, 0.16) if LIGHT else (1, 1, 1)
+if LIGHT:
+    CSS += b"""
+.corner, .webbtn, .netpill { background: rgba(15,23,42,0.08); color: #0f172a; }
+.corner:hover, .webbtn:hover, .netpill:hover { background: rgba(15,23,42,0.16); }
+.netpill.down { background: rgba(220,38,38,0.85); color: #ffffff; }
+.clock { color: #0f172a; }
+.date, .device { color: rgba(15,23,42,0.70); }
+"""
 if K != 1.0:
     CSS = re.sub(rb'(\d+(?:\.\d+)?)px', lambda m: b'%dpx' % max(1, round(float(m.group(1)) * K)), CSS)
     # the arrows of the drop-down lists and menus come from the theme, at its own size
@@ -865,7 +885,10 @@ if A.t_net:
         txt = tn[0] if k == 'wired' else ('%s · %s' % (tn[1], ssid) if ssid else tn[1]) if k == 'wifi' else tn[2]
         if k != 'none' and not ip: txt += ' · ' + tn[3]
         nlb.set_text(txt); nb.set_tooltip_text(ip or txt)
-        ctx = nb.get_style_context(); (ctx.add_class if k == 'none' or not ip else ctx.remove_class)('down')
+        down = k == 'none' or not ip
+        ctx = nb.get_style_context(); (ctx.add_class if down else ctx.remove_class)('down')
+        # on the red pill the icon is always white (also on light background colours, where it is dark otherwise)
+        nic.st['color'] = (1, 1, 1) if down else FG
         return True
     net_tick(); GLib.timeout_add_seconds(5, net_tick)
     tr.pack_start(nb, False, False, 0)

@@ -43,7 +43,15 @@ cfg_keys(){ echo HOSTNAME; grep -oE '^[A-Z][A-Z0-9_]*=' "$OTR_DEFAULTS" | tr -d 
 # logo and background picture in use: the ones of the management folder (branding.sh) when there, otherwise LOGO and
 # the image's own
 otr_logo(){ if [ -f "$OTR_LIB/branding/logo.png" ]; then echo "$OTR_LIB/branding/logo.png"; else cfg LOGO; fi; }
-otr_splash(){ if [ -f "$OTR_LIB/branding/splash.png" ]; then echo "$OTR_LIB/branding/splash.png"; else echo "$OTR/branding/splash.png"; fi; }
+otr_splash(){ if [ -f "$OTR_LIB/branding/splash.png" ]; then echo "$OTR_LIB/branding/splash.png"; else otr_image_splash "$(cfg BG_TOP)" "$(cfg BG_BOTTOM)"; fi; }
+# bg_light TOP BOTTOM: the two background colours (#rrggbb) are light on average (perceived brightness over half)
+bg_light(){ local c s=0 n=0; for c in "$1" "$2"; do [[ $c =~ ^#[0-9a-fA-F]{6}$ ]] || continue
+  s=$(( s + 299 * 16#${c:1:2} + 587 * 16#${c:3:2} + 114 * 16#${c:5:2} )); n=$((n + 1)); done
+  [ $n -gt 0 ] && [ $(( s / n )) -gt 127500 ]; }
+# the image's own boot picture for these colours: the project's logo is white and blue with a glow, transparent for
+# the dark backgrounds; on light ones it is washed out, so there the same logo on its dark card (0.3.6). A picture of
+# the site has no card next to it and is always used as it is.
+otr_image_splash(){ if [ -f "$OTR/branding/splash-card.png" ] && bg_light "$1" "$2"; then echo "$OTR/branding/splash-card.png"; else echo "$OTR/branding/splash.png"; fi; }
 
 # event log: one line per event, English, sent to the management folder by report.sh
 ev(){ echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$OTR_EVENTS" 2>/dev/null; }

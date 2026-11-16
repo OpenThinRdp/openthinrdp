@@ -21,7 +21,8 @@ echo "$V" > "$T/opt/openthinrdp/VERSION"
 mkdir -p "$T/etc/openthinrdp/ca" "$T/opt/openthinrdp/branding" "$T/usr/share/plymouth/themes/openthinrdp"
 [ -f $S/site.conf ] && cp $S/site.conf "$T/etc/openthinrdp/site.conf"
 for f in logo splash; do if [ -f $S/$f.png ]; then cp $S/$f.png "$T/opt/openthinrdp/branding/"; else cp $B/image/branding/$f.png "$T/opt/openthinrdp/branding/"; fi; done
-cp "$T/opt/openthinrdp/branding/splash.png" "$T/usr/share/plymouth/themes/openthinrdp/logo.png"
+[ -f $S/splash.png ] || cp $B/image/branding/splash-card.png "$T/opt/openthinrdp/branding/"
+cp "$( . "$T/opt/openthinrdp/lib/common.sh"; OTR=$T/opt/openthinrdp; otr_image_splash "$(get BG_TOP)" "$(get BG_BOTTOM)" )" "$T/usr/share/plymouth/themes/openthinrdp/logo.png"
 cp $B/image/lb/plymouth/openthinrdp.plymouth "$T/usr/share/plymouth/themes/openthinrdp/"
 sed -e "s/@TOP@/$(rgb "$(get BG_TOP)")/" -e "s/@BOTTOM@/$(rgb "$(get BG_BOTTOM)")/" $B/image/lb/plymouth/openthinrdp.script > "$T/usr/share/plymouth/themes/openthinrdp/openthinrdp.script"
 cp $S/ca/*.crt "$T/etc/openthinrdp/ca/" 2>/dev/null || true

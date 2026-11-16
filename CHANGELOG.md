@@ -5,6 +5,42 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.3.6 (not released yet)
+
+- **The new logo** ([#206](https://github.com/OpenThinRdp/openthinrdp/issues/206)), everywhere: boot, sign-in screen,
+  dialogs, the boot menu of the ISO, the manager, the site. On the devices it is transparent on the dark background
+  colours (the default) and on its own dark card when a site chooses light ones (`BG_TOP`, `BG_BOTTOM`); with light
+  colours the clock, the date, the buttons and the icons on the background turn dark as well, by the same rule. A
+  device still showing the previous project picture gets the new one with the update; the pictures of a site stay.
+- **One saved value no longer valid blocked every save** ([#201](https://github.com/OpenThinRdp/openthinrdp/issues/201)).
+  A save checks again the values it does not change. One of them no longer valid made every save fail, and nothing in
+  the settings could clear it. The typical case is Wi-Fi on with its password no longer readable on the device (the
+  copy kept in the TPM): *Wi-Fi password missing for the network* at every save, a restart did not help. Now, from
+  the settings and the Wi-Fi page, such a value goes back to its default and the rest is saved, and a message says
+  which one. With the Wi-Fi password lost, the other settings are saved, the Wi-Fi is left as it is (the connection
+  still running is not cut) and the message says to connect again from the Wi-Fi page. A value typed now and not valid
+  is still refused, and the central settings stay strict: one not valid is refused and reported to the manager.
+- The Wi-Fi page checks the settings it will save **before** it stops the Wi-Fi of now: a save refused after the try
+  left the device without Wi-Fi at every attempt (#201).
+- **The Wi-Fi page said *busy* at every try after the first one**, until a restart: the `wpa_supplicant` it started
+  kept its lock. The status line of the settings said *Wi-Fi: not connected* on a connected Wi-Fi (`iw` is outside the
+  path of the kiosk user) ([#202](https://github.com/OpenThinRdp/openthinrdp/issues/202)).
+- **The first start installs the newest version first** ([#203](https://github.com/OpenThinRdp/openthinrdp/issues/203)).
+  At the first start of a device without a management folder (nothing set up yet: the ISO someone is trying, a new
+  install), with a network, OpenThinRDP looks for a newer version and installs it before the hardware test and the
+  setup, without a question (on the test bench 7 s, from the check to the setup on the new version). On Wi-Fi, as soon
+  as the Wi-Fi page connects. Every other start stays as fast as in 0.3.5.
+- **Anonymous data: what went wrong, as soon as it happens** ([#204](https://github.com/OpenThinRdp/openthinrdp/issues/204)).
+  Errors are sent at the next report (at most one send every 10 minutes), the week every 7 days and at once after an
+  update. Before, everything once a week: an error reached the project up to 7 days late, and a device updated from
+  0.3.2 or earlier sent nothing for a week. What is sent does not change ([privacy](docs/privacy.md)).
+- **The live system on a USB stick** ([#205](https://github.com/OpenThinRdp/openthinrdp/issues/205)). No countdown at
+  the end of a session: *Shut down*, *Back to sign-in* or *Connect*, as the person chooses. Power off shows *Saving the
+  settings on the USB stick* and writes them before the screen goes dark (the first time, the settings partition made
+  at this start is filled then). A stick that cannot keep the settings (Ventoy or another boot manager, a CD, no room)
+  is said on the sign-in screen, with how to write the ISO so that it does. Installed devices and devices with a
+  management folder do as before.
+
 ## 0.3.5 (2026-11-13)
 
 - **Waiting for the network, not "check the cable"** ([#197](https://github.com/OpenThinRdp/openthinrdp/issues/197)).

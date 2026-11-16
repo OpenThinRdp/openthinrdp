@@ -65,7 +65,10 @@ echo "$V" > $C/opt/openthinrdp/VERSION
 # site: settings, branding, certificates, credentials, keys, packages
 [ -f $S/site.conf ] && cp $S/site.conf $C/etc/openthinrdp/site.conf
 for f in logo splash; do if [ -f $S/$f.png ]; then cp $S/$f.png $C/opt/openthinrdp/branding/; else cp $B/image/branding/$f.png $C/opt/openthinrdp/branding/; fi; done
-cp $C/opt/openthinrdp/branding/splash.png $C/usr/share/plymouth/themes/openthinrdp/logo.png
+# the project's logo on its dark card for light site colours (lib/common.sh otr_image_splash); not with a site picture
+[ -f $S/splash.png ] || cp $B/image/branding/splash-card.png $C/opt/openthinrdp/branding/
+SPL=$( . $C/opt/openthinrdp/lib/common.sh; OTR=$C/opt/openthinrdp; otr_image_splash "$(get BG_TOP)" "$(get BG_BOTTOM)" )
+cp "$SPL" $C/usr/share/plymouth/themes/openthinrdp/logo.png
 cp $B/image/lb/plymouth/openthinrdp.plymouth $C/usr/share/plymouth/themes/openthinrdp/
 sed -e "s/@TOP@/$(rgb "$(get BG_TOP)")/" -e "s/@BOTTOM@/$(rgb "$(get BG_BOTTOM)")/" $B/image/lb/plymouth/openthinrdp.script > $C/usr/share/plymouth/themes/openthinrdp/openthinrdp.script
 # boot menu of the ISO: our menu files over live-build's templates (live system first, starting by itself), and a
@@ -73,7 +76,6 @@ sed -e "s/@TOP@/$(rgb "$(get BG_TOP)")/" -e "s/@BOTTOM@/$(rgb "$(get BG_BOTTOM)"
 # splash.svg for GRUB and isolinux)
 mkdir -p config/bootloaders
 cp -a $B/image/lb/bootloaders/grub-pc config/bootloaders/
-SPL=$C/opt/openthinrdp/branding/splash.png
 SW=$(od -An -tu1 -j16 -N4 "$SPL" | awk '{print $1*16777216 + $2*65536 + $3*256 + $4}')
 SH=$(od -An -tu1 -j20 -N4 "$SPL" | awk '{print $1*16777216 + $2*65536 + $3*256 + $4}')
 IW=440; IH=$(( SH * IW / SW ))

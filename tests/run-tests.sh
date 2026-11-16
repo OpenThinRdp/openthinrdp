@@ -435,7 +435,7 @@ rm -rf $U/pkg-* $U/attempts-*; echo 0.4.0 > $OTR_LIB/update-version; mv $OTR_LIB
 ok "major update, no management folder: offered on the device as a major one" 'grep -q "asked on the device at the sign-in, major update$" $U/status && [ "$(cat /run/openthinrdp-update-offer)" = "0.4.2 0.4.0 0.4.1" ]'
 mv /tmp/cc2 $OTR_LIB/central-common.conf; rm -rf $U/pkg-* $U/attempts-* /run/openthinrdp-update-offer /run/openthinrdp-update-notes /tmp/share/updates
 if [ -f /tmp/cc.keep ]; then mv /tmp/cc.keep $OTR_LIB/central-common.conf; else rm -f $OTR_LIB/central-common.conf; fi
-ok "kiosk: the update question only without central settings, at every sign-in round; the form redrawn for an offer" 'grep -q "^managed(){ \[ -s \"\$OTR_LIB/central-common.conf\" \]; }" $OTR/kiosk.sh && grep -q "^  managed || \[" $OTR/kiosk.sh && grep -A2 "^while true; do" $OTR/kiosk.sh | grep -q "^  update_question" && grep -q "OTR_CONF\" /run/openthinrdp-update-offer" $OTR/kiosk.sh && ! grep -q first_update $OTR/kiosk.sh'
+ok "kiosk: the update question only without central settings, at every sign-in round; the form redrawn for an offer" 'grep -q "^managed(){ \[ -s \"\$OTR_LIB/central-common.conf\" \]; }" $OTR/kiosk.sh && grep -q "^  managed || \[" $OTR/kiosk.sh && grep -A2 "^while true; do" $OTR/kiosk.sh | grep -q "^  update_question" && grep -q "OTR_CONF\" /run/openthinrdp-update-offer" $OTR/kiosk.sh'
 
 # --- packages by architecture (lib/common.sh): the package list and the .deb files of an update package
 PL=/src/image/lb/packages.list
@@ -890,7 +890,7 @@ BSS aa:bb:cc:dd:ee:04(on wlp2s0)
 	RSN:	 * Version: 1'
 WS=$(eval "$(sed -n '/^parse_scan(){/,/^}/p' $OTR/wifi.sh)"; printf '%s\n' "$SCAN" | parse_scan)
 ok "wifi.sh: scan read right: strongest first, one line per name, psk/eap/open/wep, hidden names out" '[ "$(printf "%s\n" "$WS" | head -1)" = "$(printf "%s\t%s\t%s" -52 psk "Office Work")" ] && [ $(printf "%s\n" "$WS" | grep -c "Office Work") -eq 1 ] && printf "%s\n" "$WS" | grep -q "eap	Office Corp" && printf "%s\n" "$WS" | grep -q "open	Guest" && printf "%s\n" "$WS" | grep -q "wep	Old Router" && [ $(printf "%s\n" "$WS" | grep -c .) -eq 4 ]'
-ok "wifi.sh: the kiosk may run it through sudo; a wrong password changes nothing (tried before save-config)" 'grep -q "/opt/openthinrdp/wifi.sh" /etc/sudoers.d/openthinrdp && [ $(grep -n "step test" $OTR/wifi.sh | cut -d: -f1) -lt $(grep -n "save-config.sh\" \"\$f\"" $OTR/wifi.sh | cut -d: -f1) ]'
+ok "wifi.sh: the kiosk may run it through sudo; a wrong password changes nothing (tried before save-config)" 'grep -q "/opt/openthinrdp/wifi.sh" /etc/sudoers.d/openthinrdp && [ $(grep -n "step test" $OTR/wifi.sh | cut -d: -f1) -lt $(grep -n "save-config.sh\" \"\$f\" --heal 2>&1" $OTR/wifi.sh | cut -d: -f1) ]'
 ok "ui.py: compiles, with the Wi-Fi page and the network on the sign-in screen" 'python3 -m py_compile $OTR/ui.py && grep -q "^if MODE == .wifi.:" $OTR/ui.py && grep -q "leave(8)" $OTR/ui.py'
 # the time zones of the settings dialog: tz_list() of ui.py run alone (UTC and every zone of tzdata, sorted)
 TZN=$(python3 - "$OTR/ui.py" <<'PY'
@@ -1106,7 +1106,92 @@ ok "kiosk: with the cable in it waits for the address up to 2 minutes on one scr
 ok "kiosk: still no address after the wait, the message says the cable is fine (noaddr), the cable only without cable" 'grep -q "noaddr) t=\"\$L_T_NOADDR" $OTR/kiosk.sh && grep -q "\[ \"\$LAST_ERR\" = net \] && echo \"\$L_P_NONET\" || echo \"\$L_P_NOADDR\"" $OTR/kiosk.sh && grep -q "IPC=\$L_NO_ADDR" $OTR/kiosk.sh'
 ok "kiosk: a default route on an adapter with its link down (dhcpcd persistent, linkdown) is no network" 'grep -q "net_ok(){ ip -4 route show default 2>/dev/null | grep -v linkdown | grep -q ." $OTR/kiosk.sh'
 # --- 0.3.5: the sign-in screen first on a device without a management folder (#199)
-ok "start: no wait for the network or the update source in front of the sign-in screen; a later offer closes the screen only after 10 s without input (any redraw)" '! grep -q "for i in \$(seq 1 90); do \[ -f /run/openthinrdp-update-offer \]" $OTR/kiosk.sh && grep -q "elif \[ \"\$(xprintidle 2>/dev/null || echo 60000)\" -ge 10000 \]; then bsig=\$nsig; pkill -f -- \"--class=OtrLogin\" 2>/dev/null; fi" $OTR/kiosk.sh && ! grep -q offer_watch $OTR/kiosk.sh'
+ok "start: no wait for the network or the update source in front of the sign-in screen (only at the first start, 0.3.6); a later offer closes the screen only after 10 s without input (any redraw)" '[ "$(grep -c "for i in \$(seq 1 90); do \[ -f /run/openthinrdp-update-offer \]" $OTR/kiosk.sh)" = 1 ] && sed -n "/^first_update(){/,/^}/p" $OTR/kiosk.sh | grep -q "for i in \$(seq 1 90); do \[ -f /run/openthinrdp-update-offer \]" && grep -q "elif \[ \"\$(xprintidle 2>/dev/null || echo 60000)\" -ge 10000 \]; then bsig=\$nsig; pkill -f -- \"--class=OtrLogin\" 2>/dev/null; fi" $OTR/kiosk.sh && ! grep -q offer_watch $OTR/kiosk.sh'
 ok "start: the sign-in screen ready event only within 10 minutes of power on" 'grep -q "\[ \"\$up\" -lt 600 \] && ev \"sign-in screen ready \$up s after power on\"" $OTR/kiosk.sh'
+# --- 0.3.6: a saved value no longer valid blocked every save, and the Wi-Fi page dropped the Wi-Fi (#201)
+printf 'SHUTDOWN_SECS=abc\nDEFAULT_USER=anna\n' > $OTR_CONF; printf 'SHUTDOWN_SECS=abc\nDEFAULT_USER=bruno\n' > "$T"
+ok "settings: a saved value not valid any more and not changed now is back to the default, the rest saved, said with NOTE" 'out=$($OTR/save-config.sh "$T" --heal 2>&1) && grep -qx "DEFAULT_USER=bruno" $OTR_CONF && grep -qx "SHUTDOWN_SECS=10" $OTR_CONF && echo "$out" | grep -q "^NOTE: .*SHUTDOWN_SECS" && grep -q "back to the project default: SHUTDOWN_SECS" $OTR_EVENTS'
+printf 'SHUTDOWN_SECS=abc\n' > $OTR_CONF; printf 'DEFAULT_USER=bruno\n' > "$T"
+ok "settings: without --heal (central settings, first boot) a saved value not valid still refuses the save" '! $OTR/save-config.sh "$T" >/dev/null 2>&1 && grep -qx "SHUTDOWN_SECS=abc" $OTR_CONF'
+ok "settings: also when the saved value is not in the input at all (the Wi-Fi page)" '$OTR/save-config.sh "$T" --heal >/dev/null 2>&1 && grep -qx "SHUTDOWN_SECS=10" $OTR_CONF'
+printf 'SHUTDOWN_SECS=abc\n' > $OTR_CONF; printf 'SHUTDOWN_SECS=xyz\nDEFAULT_USER=bruno\n' > "$T"
+ok "settings: a value not valid typed now is still refused, nothing saved" '! $OTR/save-config.sh "$T" --heal >/dev/null 2>&1 && grep -qx "SHUTDOWN_SECS=abc" $OTR_CONF && ! grep -q bruno $OTR_CONF'
+printf 'SHUTDOWN_SECS=abc\n' > $OTR_CONF; printf 'DEFAULT_USER=bruno\n' > "$T"
+ok "settings: --print heals the same way and changes nothing" 'P=$($OTR/save-config.sh "$T" --print --heal 2>&1) && echo "$P" | grep -qx "SHUTDOWN_SECS=10" && ! echo "$P" | grep -q "^NOTE" && grep -qx "SHUTDOWN_SECS=abc" $OTR_CONF'
+rm -f /etc/wpa_supplicant/openthinrdp-wifi.conf; printf 'WIFI=on\nWIFI_SSID=Office\nWIFI_SECURITY=psk\n' > $OTR_CONF
+printf 'WIFI=on\nWIFI_SSID=Office\nDEFAULT_USER=carla\n' > "$T"
+ok "settings: Wi-Fi on and its key no longer readable: the other settings saved, the Wi-Fi left as it is, said with NOTE" 'out=$($OTR/save-config.sh "$T" --heal 2>&1) && grep -qx "DEFAULT_USER=carla" $OTR_CONF && grep -qx "WIFI=on" $OTR_CONF && grep -qx "WIFI_SSID=Office" $OTR_CONF && echo "$out" | grep -q "^NOTE: .*Office" && grep -q "Wi-Fi key of Office is not readable" $OTR_EVENTS'
+printf 'WIFI=on\nWIFI_SSID=Other\n' > "$T"
+ok "settings: another Wi-Fi network without its password is still refused" '! $OTR/save-config.sh "$T" --heal >/dev/null 2>&1 && grep -qx "WIFI_SSID=Office" $OTR_CONF'
+: > $OTR_CONF
+ok "kiosk: the dialog and the Wi-Fi page save with --heal (only they), after Save the NOTE lines are shown; the Wi-Fi line of the settings uses /usr/sbin/iw (not in the kiosk path)" 'grep -q "save-config.sh\" \"\$tmp\" --heal 2>&1" $OTR/kiosk.sh && ! grep -q -- "--heal" $OTR/central-apply.sh $OTR/boot.sh && grep -q "s/^NOTE: //p" $OTR/kiosk.sh && grep -q "elif /usr/sbin/iw dev" $OTR/kiosk.sh && ! grep -qE "[ (]iw dev" $OTR/kiosk.sh'
+ok "Wi-Fi page: wpa_supplicant and the DHCP client started without its lock (it said busy at every later try until a restart)" 'grep -q "^up(){ systemd-run --scope --quiet --collect ifup \"\$WL\" >/dev/null 2>&1 < /dev/null 9>&- || ifup \"\$WL\" >/dev/null 2>&1 9>&-; }" $OTR/wifi.sh'
+ok "apply.sh: Wi-Fi on with its key not readable keeps the Wi-Fi block (a save does not cut the connection still running)" 'grep -q "elif \[ \"\$(cfg WIFI)\" = on \] && \[ -n \"\$(wifi_nics | head -1)\" \] && grep -qx \"allow-hotplug \$(wifi_nics | head -1)\" /etc/network/interfaces" /src/rootfs/opt/openthinrdp/apply.sh'
+ok "Wi-Fi page: the settings checked (save-config --print) before the Wi-Fi of now is stopped" 'a=$(grep -n "save-config.sh\" \"\$f\" --print --heal" $OTR/wifi.sh | cut -d: -f1); b=$(grep -n "echo \"step stop\"" $OTR/wifi.sh | cut -d: -f1); [ -n "$a" ] && [ -n "$b" ] && [ "$a" -lt "$b" ]'
+# --- 0.3.6: the first start of a device without a management folder installs the newest version first
+ok "kiosk: first start = no remote computer yet, not managed, updates on, a network: looks, then installs without asking; once per start" 'f=$(sed -n "/^first_update(){/,/^}/p" $OTR/kiosk.sh); echo "$f" | grep -q "\[ -z \"\$(cfg BROKER)\" \] || return 0" && echo "$f" | grep -q "managed || \[ \"\$(cfg UPDATE_FROM)\" = off \] && return 0" && echo "$f" | grep -q "net_ok || return 0" && echo "$f" | grep -q "update_install \"\$v\" \"at the first start" && echo "$f" | grep -q "/tmp/openthinrdp-first-update"'
+ok "kiosk: the first start looks again after the Wi-Fi page (settings and sign-in screen)" 'grep -q "13) wifi_page; first_update; settings_dialog; return ;;" $OTR/kiosk.sh && grep -q "pin_ok && { wifi_page; first_update; }; continue;" $OTR/kiosk.sh'
+ok "auto-update: a check skipped because GitHub answered within 3 hours still says it is checked (no 45 s wait)" 'grep -q "lt 10800 \] && { touch /run/openthinrdp-update-checked; exit 0; }" $OTR/auto-update.sh'
+# --- 0.3.6: the live system from a USB stick
+ok "kiosk: on a live stick no countdown at the end of a session (Back to sign-in), and power off writes to the stick with a message first" 'grep -q "if live_stick; then OFF=0; BOPT=(--button=\"\$L_BACK_LOGIN:1\"); fi" $OTR/kiosk.sh && sed -n "/^power_off(){/,/^}/p" $OTR/kiosk.sh | grep -q "L_LIVE_SAVING" && grep -q "live_unsaved && KTXT=" $OTR/kiosk.sh'
+ok "kiosk: a stick that cannot keep the settings (Ventoy, CD, no room) is told on the sign-in screen; installed never" '( eval "$(sed -n "/^live_stick(){/p;/^live_unsaved(){/p" $OTR/kiosk.sh)"; otr_installed(){ false; }; mkdir -p /run/live/medium; echo "not a live stick" > /run/openthinrdp-persist; live_unsaved && echo on > /run/openthinrdp-persist && ! live_unsaved && echo "no room" > /run/openthinrdp-persist && live_unsaved && otr_installed(){ true; } && ! live_unsaved ); r=$?; rm -rf /run/live /run/openthinrdp-persist; [ $r = 0 ]'
+for l in en it nl; do ok "language $l: the texts of 0.3.6" '( . $OTR/lang/'$l'.sh; [ -n "$V_HEALED" ] && [ -n "$V_WIFIKEYLOST" ] && [ -n "$L_LIVE_UNSAVED" ] && [ -n "$L_LIVE_SAVING" ] && [ -n "$L_LIVE_SAVING_T" ] )'; done
+# --- 0.3.6: the new logo; the project's boot picture on its dark card on light background colours
+ok "logo: the project ships the transparent boot picture, the same on its card, and a dialog logo within 240 x 90" 'python3 -c "
+import struct, sys
+def size(f):
+    b = open(f, \"rb\").read(32); assert b[:8] == b\"\\x89PNG\\r\\n\\x1a\\n\"; return struct.unpack(\">II\", b[16:24]), b[25]
+for f in (\"splash\", \"splash-card\"):
+    (w, h), t = size(\"/src/image/branding/%s.png\" % f); assert t == 6 and w <= 640 and h <= 400, (f, w, h, t)
+(w, h), t = size(\"/src/image/branding/logo.png\"); assert w <= 240 and h <= 90, (w, h)
+"'
+ok "logo: dark colours (the default, #1b2533 to black) = transparent picture, light ones = the card, a site picture always as it is" '( . $OTR/lib/common.sh; D=$(mktemp -d); OTR=$D; mkdir -p $D/branding; touch $D/branding/splash.png $D/branding/splash-card.png
+  [ "$(otr_image_splash "#1b2533" "#000000")" = $D/branding/splash.png ] && [ "$(otr_image_splash "#eef2f6" "#c8d2dc")" = $D/branding/splash-card.png ] &&
+  [ "$(otr_image_splash "" "")" = $D/branding/splash.png ] && bg_light "#ffffff" "#808080" && ! bg_light "#336699" "#000000" &&
+  rm $D/branding/splash-card.png && [ "$(otr_image_splash "#ffffff" "#ffffff")" = $D/branding/splash.png ]; r=$?; rm -rf $D; exit $r )'
+ok "logo: the boot splash, the ISO menu and the update follow the same choice; the card never next to a site picture" 'grep -q "IMG_SPLASH=\$(otr_image_splash \"\$(img_cfg BG_TOP)\" \"\$(img_cfg BG_BOTTOM)\")" $OTR/branding.sh && grep -q "\[ -f \$S/splash.png \] || cp \$B/image/branding/splash-card.png" /src/image/lb/inside.sh && grep -q "otr_image_splash \"\$(get BG_TOP)\" \"\$(get BG_BOTTOM)\"" /src/image/lb/inside.sh /src/image/rpi/customize.sh && grep -q "if cmp -s project-branding/splash.png \$OTR/branding/splash.png; then install -m644 project-branding/splash-card.png" /src/management/publish/install.sh && grep -q "image/branding/splash-card.png \"\$STAGE/project-branding/\"" /src/management/publish/make-update.sh'
+ok "screens: on light background colours dark text and icons, by the same rule as the logo; white icon on the red network pill" 'python3 - <<"PY"
+import re
+s = open("/opt/openthinrdp/ui.py").read()
+assert "s // n > 127500" in s and "LIGHT = light_bg()" in s and "FG = (0.06, 0.09, 0.16) if LIGHT else (1, 1, 1)" in s
+assert ".clock { color: #0f172a; }" in s and "nic.st[\"color\"] = (1, 1, 1) if down else FG".replace("\"", chr(39)) in s
+assert "def icon(kind, size=22, color=None" in s and "def net_icon(kind=" in s and "if color is None: color = FG" in s
+c = open("/opt/openthinrdp/lib/common.sh").read(); assert "-gt 127500 ]" in c
+PY'
+ok "logo: the pictures replaced by 0.3.6 are known to install.sh (a device still showing them gets the new ones)" 'grep -q db53949e775da810e22110aaea8c70f927da77d8bd43b5fcbe09a49bc8590366 /src/management/publish/install.sh && grep -q 502303aede93b009d1dd7dfb294478de11da555a7bf8817d0c2d53ea43f05270 /src/management/publish/install.sh'
+# --- 0.3.6: what went wrong sent at once, the week after an update
+cp $OTR_EVENTS /tmp/events.keep; : > $OTR_EVENTS; L=/var/lib/openthinrdp
+SB=$(mktemp -d); GU=http://127.0.0.1:18098/batch/
+python3 -c '
+import http.server, sys
+class H(http.server.BaseHTTPRequestHandler):
+    def do_POST(s):
+        b = s.rfile.read(int(s.headers.get("Content-Length", 0)))
+        open(sys.argv[1], "ab").write(b + b"\n")
+        s.send_response(200); s.end_headers(); s.wfile.write(b"{\"status\":\"Ok\"}")
+    def log_message(s, *a): pass
+http.server.HTTPServer(("127.0.0.1", 18098), H).serve_forever()' "$SB/sent" & GS=$!
+for i in $(seq 20); do python3 -c 'import socket; socket.create_connection(("127.0.0.1", 18098), 1)' 2>/dev/null && break; sleep 0.5; done
+evs(){ python3 -c "import json,sys; print(' '.join(e['event'] for e in json.loads(open(sys.argv[1]).read().splitlines()[-1])['batch']))" "$SB/sent"; }
+sent(){ local n; n=$(grep -c . "$SB/sent" 2>/dev/null); echo "${n:-0}"; }
+drop(){ echo "$(date '+%F %T') session of u DROPPED after 5 s (error 147, code 147): x" >> $OTR_EVENTS; }
+rm -f $L/stats-sent $L/stats-version $L/stats-errors-sent $L/stats-errors-checked; printf 'ANON_STATS=full\n' > $OTR_CONF
+OTR_STATS_URL=$GU $OTR/stats.sh
+ok "anonymous data: the first week sent, its version kept" '[ "$(sent)" = 1 ] && [ "$(cat $L/stats-version)" = "$(cat $OTR/VERSION)" ]'
+touch -d "-5 sec" $L/stats-sent; sleep 1; drop; OTR_STATS_URL=$GU $OTR/stats.sh
+ok "anonymous data: an error sent at once, alone (no week)" '[ "$(sent)" = 2 ] && [ "$(evs)" = otr_errors ]'
+sleep 1; drop; OTR_STATS_URL=$GU $OTR/stats.sh
+ok "anonymous data: another error within 10 minutes waits" '[ "$(sent)" = 2 ]'
+touch -d "-11 min" $L/stats-errors-sent; OTR_STATS_URL=$GU $OTR/stats.sh
+ok "anonymous data: after 10 minutes the waiting error is sent" '[ "$(sent)" = 3 ] && [ "$(evs)" = otr_errors ]'
+OTR_STATS_URL=$GU $OTR/stats.sh
+ok "anonymous data: nothing new, nothing sent" '[ "$(sent)" = 3 ]'
+echo 0.0.1 > $L/stats-version; OTR_STATS_URL=$GU $OTR/stats.sh
+ok "anonymous data: after an update the week is sent at once" '[ "$(sent)" = 4 ] && [ "$(evs)" = otr_week ] && [ "$(cat $L/stats-version)" = "$(cat $OTR/VERSION)" ]'
+rm -f $L/stats-version; OTR_STATS_URL=$GU $OTR/stats.sh
+ok "anonymous data: a device updated from 0.3.2 or earlier (stamp of GoatCounter, no version) sends its week at once" '[ "$(sent)" = 5 ]'
+printf 'ANON_STATS=errors\n' > $OTR_CONF; sleep 1; touch -d "-11 min" $L/stats-errors-sent; drop; OTR_STATS_URL=$GU $OTR/stats.sh
+ok "anonymous data, errors only: the error at once too" '[ "$(sent)" = 6 ] && [ "$(evs)" = otr_errors ]'
+kill $GS 2>/dev/null; wait $GS 2>/dev/null; rm -rf "$SB" $L/stats-sent $L/stats-version $L/stats-errors-sent $L/stats-errors-checked; : > $OTR_CONF; mv /tmp/events.keep $OTR_EVENTS
 echo "passed $PASS, failed $FAIL"
 [ $FAIL = 0 ]

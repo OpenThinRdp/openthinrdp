@@ -1,9 +1,9 @@
 #!/bin/bash
 # Anonymous data for the project (ANON_STATS, docs/privacy.md says the same, item by item):
-#   full    (the default) once a week what the device is, how it is used and how well it runs, and what went wrong
-#   errors  only in a week when something went wrong: what went wrong and on what (version, model)
+#   full    (the default) once a week what the device is, how it is used and how well it runs; what went wrong at once
+#   errors  only what went wrong, at once: what went wrong and on what (version, model)
 #   off     nothing
-# From report.sh: a new device once it has chosen (the first start asks), then once a week.
+# From report.sh: a new device once it has chosen (the first start asks), then as said below (When).
 # Full, the week ("otr_week"): versions of OpenThinRDP and FreeRDP, maker and model, processor, memory in GB,
 #   architecture, live or installed, language; the environment (domain or workgroup, broker or one PC, RD Gateway
 #   yes/no, VPN kind, where updates come from, transport); what is used (password remembered, Wake-on-LAN, Bluetooth
@@ -163,30 +163,55 @@ errors(){
   done | sort
 }
 
-# everything due now at level $1: the week (full), and what went wrong (full and errors, only when something did)
+# When (0.3.6): what went wrong at once (the first error sent at the next report, which starts at every new event; more
+# errors grouped, at most one send every 10 minutes); the week every 7 days, and at once after an update (a version not
+# sent yet). Before, all of it once a week: an error waited up to 7 days, and a device updated from 0.3.2 or earlier
+# found the stamp of GoatCounter and sent nothing for a week.
+ESTAMP=$OTR_LIB/stats-errors-sent    # what went wrong is sent up to here
+VSTAMP=$OTR_LIB/stats-version        # the version of the last week sent
+CHECKED=$OTR_LIB/stats-errors-checked
+NOW=$(date +%s); VER=$(cat "$OTR/VERSION" 2>/dev/null)
+mt(){ stat -c %Y "$1" 2>/dev/null || echo 0; }
+# since the week sent last; the first time, the week before
+week_since(){ if [ -f "$STAMP" ]; then mt "$STAMP"; else echo $(( NOW - 604800 )); fi; }
+week_due(){ [ ! -f "$STAMP" ] || [ $(( NOW - $(mt "$STAMP") )) -ge 604800 ] || [ "$(cat "$VSTAMP" 2>/dev/null)" != "$VER" ]; }
+
+# everything due at level $1: the week (full, when $2 is 1), and what went wrong since $3 (full and errors, only when
+# something did). The count of problems of the week covers the whole week, the errors only what was not sent yet.
 all(){
-  local since e
-  # since the last send; the first time, the week before
-  if [ -f "$STAMP" ]; then since=$(stat -c %Y "$STAMP"); else since=$(( $(date +%s) - 604800 )); fi
-  e=$(errors "$since")
-  if [ "$1" = full ]; then base otr_week; environment; usage "$since"; p otr_week problems "$(printf '%s\n' "$e" | grep -c "$(printf '\te_')")"; fi
+  local e w ws
+  e=$(errors "$3")
+  if [ "$1" = full ] && [ "$2" = 1 ]; then
+    ws=$(week_since); if [ "$ws" = "$3" ]; then w=$e; else w=$(errors "$ws"); fi
+    base otr_week; environment; usage "$(week_since)"; p otr_week problems "$(printf '%s\n' "$w" | grep -c "$(printf '\te_')")"
+  fi
   if [ -n "$e" ] && [ "$1" != off ]; then base otr_errors; printf '%s\n' "$e"; fi
 }
 
 LEVEL=$(anon_level "${OTR_STATS_ANON:-}")
-if [ "${1:-}" = --print ]; then all "$LEVEL" | awk -F'\t' '{print $1 " " $2 "=" $3}'; exit 0; fi
+if [ "${1:-}" = --print ]; then all "$LEVEL" 1 "$(week_since)" | awk -F'\t' '{print $1 " " $2 "=" $3}'; exit 0; fi
 [ "$LEVEL" = off ] && exit 0
 # a new device that has not chosen yet: the first start asks (kiosk.sh), nothing leaves before the answer
 [ -z "$(cfg BROKER)" ] && ! anon_decided && exit 0
-# one send at a time (report.sh may start a second before the first is done), once a week
+# one send at a time (report.sh starts this every 5 minutes and at every new event)
 exec 9> "$OTR_LIB/stats.lock"; flock -n 9 || exit 0
-[ -f "$STAMP" ] && [ $(( $(date +%s) - $(stat -c %Y "$STAMP") )) -lt 604800 ] && exit 0
-D=$(all "$LEVEL")
-# errors only and nothing went wrong: nothing to send, the week is checked
-[ -z "$D" ] && { touch "$STAMP"; exit 0; }
+WEEK=""; week_due && WEEK=1
+# what went wrong since the last send of it (never before the week sent last: that one had it)
+ES=$(week_since); [ "$(mt "$ESTAMP")" -gt "$ES" ] && ES=$(mt "$ESTAMP")
+# looking costs a read of the journal: only when something new was written, or every hour (the kernel's own errors)
+if [ -z "$WEEK" ]; then
+  [ "$(mt "$OTR_EVENTS")" -gt "$(mt "$CHECKED")" ] || [ $(( NOW - $(mt "$CHECKED") )) -ge 3600 ] || exit 0
+  touch "$CHECKED"
+  # errors already sent less than 10 minutes ago: the next ones together, at a later report
+  [ $(( NOW - $(mt "$ESTAMP") )) -ge 600 ] || { touch -d "@$(( $(mt "$ESTAMP") ))" "$CHECKED"; exit 0; }
+fi
+D=$(all "$LEVEL" "$WEEK" "$ES")
+# nothing to send (errors only, or nothing went wrong): the week is checked
+if [ -z "$D" ]; then [ -n "$WEEK" ] && { touch -d "@$NOW" "$STAMP"; echo "$VER" > "$VSTAMP"; }; exit 0; fi
+SENT_E=""; printf '%s\n' "$D" | grep -q "^otr_errors" && SENT_E=1
 # python3 is in the image, curl is not. One request with every event: sent when PostHog answers 200, else tried again
 # at the next report
-printf '%s\n' "$D" | python3 -c '
+if printf '%s\n' "$D" | python3 -c '
 import json, sys, uuid, datetime, urllib.request
 url, key = sys.argv[1], sys.argv[2]
 sid = str(uuid.uuid4())   # this send only: never kept, taken from nothing of the device
@@ -210,5 +235,10 @@ try:
     with urllib.request.urlopen(req, timeout=15) as r:
         sys.exit(0 if r.status == 200 else 1)
 except Exception:
-    sys.exit(1)' "$URL" "$KEY" 2>/dev/null && touch "$STAMP"
+    sys.exit(1)' "$URL" "$KEY" 2>/dev/null; then
+  [ -n "$WEEK" ] && { touch -d "@$NOW" "$STAMP"; echo "$VER" > "$VSTAMP"; }
+  [ -n "$SENT_E" ] && touch -d "@$NOW" "$ESTAMP"
+else
+  rm -f "$CHECKED"     # not sent (no internet): tried again at the next report
+fi
 exit 0

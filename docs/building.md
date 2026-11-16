@@ -29,7 +29,9 @@ See [image/site.example/README.md](../image/site.example/README.md). In short:
   of `otradmin` for `su` in the Terminal of the settings dialog, from `mkpasswd -m yescrypt`; empty = SSH key only), `FREERDP_FROM` (`openthinrdp`, the
   default: FreeRDP with UDP, see [udp.md](udp.md); `backports`, `debian` or `site`), `AUTO_INSTALL`.
 - `site.conf`: default settings of every device.
-- `logo.png` (~200 px, dialogs), `splash.png` (~640 px, transparent, boot screen).
+- `logo.png` (~200 px, dialogs), `splash.png` (~640 px, transparent, boot screen). Without them the image has
+  OpenThinRDP's own: its boot picture is transparent on dark background colours and on its dark card on light ones
+  (`BG_TOP`, `BG_BOTTOM`), chosen by itself; a `splash.png` of yours is always used as it is.
 - `ca/*.crt`: certificate authorities for the web button.
 - `smb.cred`, `update-key.asc`, `authorized_keys`: management (see [management.md](management.md)).
 - `debs/*.deb`: your own packages, e.g. a FreeRDP build.
