@@ -5,6 +5,68 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## Unreleased (Chinese image)
+
+The image is built from `image/site` with Simplified Chinese screens, China Standard Time and a Chinese keyboard.
+
+- **Simplified Chinese screens** (396 strings, `lang/zh.sh`). The language list of the settings dialog did not know
+  `zh`, so a device set to Chinese was silently turned back to English at the first Save; `it` and `nl` were missing
+  from that list too. Dates on the sign-in screen now have Chinese day and month names instead of falling back to English.
+- **Chinese text no longer shows empty boxes**: `fonts-noto-cjk` is in the image (about 45-50 MB compressed). DejaVu and
+  Liberation have no ideographs, so every Chinese label was a row of boxes.
+- **The gettext folders of the language are kept**: `LANGS` used the two-letter prefix only, so `LANG=zh_CN.UTF-8` was
+  in effect but `/usr/share/locale/zh_CN` (the only Chinese folder there is) had been removed and the programs still
+  printed English. `image/rpi/inside.sh` had the same line.
+- **`build.conf` grew `MIRROR` and `MIRROR_SECURITY`** for a build from a place where deb.debian.org is slow. Both the
+  mirror of the image and the parent mirror of the bootstrap stage are set: with only the first, live-build 2025 went on
+  fetching from deb.debian.org at 20 KB/s.
+- The text installer is Chinese (`language=zh country=CN`), and asks for the `us` console keymap: `cn` is a valid X11
+  layout but not a console keymap. GRUB's menu stays English (no CJK glyphs).
+
+Fixes, found on a real device and by reviewing the settings path:
+
+- **A device could not be configured any more, for ever.** One value in `/etc/openthinrdp/openthinrdp.conf` that the
+  validator refuses (a hand-edited file, a value an older version or the manager wrote) made `save-config.sh` refuse
+  **every** later save, whatever was being changed; a reboot did not help, the settings dialog kept answering "settings
+  not valid", and only reinstalling fixed it. A refused value is now attributed to its setting: the ones the save is not
+  changing are dropped from the device file (the site file and then the default take over) and the save goes on; the
+  ones being changed are still refused, and the message names the file the value comes from
+  (`TITLE (/etc/openthinrdp/site.conf)`). The settings dialog sends every field back, so an echoed value counts as "not
+  changed", not as a new one.
+- **Wi-Fi on with a key that is not there any more** (a cleared TPM, a manager that never sent it) refused every save
+  too, and the settings dialog could not put it right: its password field is empty by design ("empty = keep the saved
+  one"). Wi-Fi is turned off instead, the event log says why, and the Wi-Fi page (which takes the key) or the manager
+  turns it back on.
+- **A save that carries few keys could wipe the others.** The settings already stored were read back with a process
+  substitution; where `/dev/fd` is missing (a chroot, an early boot) the read silently returned nothing and the device
+  file was rewritten with only the keys of that save — the Wi-Fi page saves four keys, so the broker, the language and
+  everything else went. A here-string now.
+- The image has an `otradmin` password: with `ADMIN_PASSWORD_HASH` empty, root, `kiosk` and `otradmin` are all locked
+  and the Terminal of the settings dialog cannot be used to repair a device (`su otradmin`, then `passwd` to change it).
+- **Wi-Fi went down after saving the settings, and the device looked as if it had lost them.** The Wi-Fi page saved
+  through `save-config.sh`, which restarts the adapter in the background, and then took the same adapter down a second
+  time to bring it up itself: two restarts at once, and the interface could stay down. It now waits for the address the
+  first restart gives it, and restarts the adapter only if there is none after 20 s.
+- **A 32-byte Wi-Fi name whose two halves are equal could not be joined from the Wi-Fi page.** `od` without `-v` folds
+  repeated lines into `*`, so the name reached wpa_supplicant as 33 hex digits and the configuration was refused.
+  The page also accepts a 64-digit key pasted as it is, like the settings do.
+- **`apply.sh` could leave an adapter down**: it brought an adapter down and back up only when the interface file
+  already named it, so an adapter that was not in the file (a failed write, a read-only filesystem) was flushed and
+  never brought up. It now always runs `ifup` (a no-op for an interface the file does not know) and says in the event log
+  when `/etc/network/interfaces` could not be written.
+- **A computer or broker address may now be IPv6** (`fd00::1`, or `[fd00::1]:3390`) and may end with the trailing dot of
+  a fully qualified name. A value with a stray colon is still refused, and the message now names the value it refused:
+  "Broker not valid" alone said nothing on the phone.
+- **`save-config.sh` printed its messages with `printf %b`**: a backslash in a refused value (`\c`) cut every message
+  after it. It is `%s` now.
+- **A value of `-n` or `-e` vanished**: `low()` and the power-on days used `echo`, so `POWER_ON_DAYS=-n` was accepted as
+  "every day" instead of being refused.
+- **`cfg()` now drops the spaces around a value**, as `save-config.sh` already did: a `site.conf` edited on Windows
+  (`WIFI=on `) made `[ "$(cfg WIFI)" = on ]` false, so Wi-Fi was never enabled and the setting looked saved.
+- The settings status line printed the Wi-Fi state twice (`printf` with one `%s` and two arguments).
+
+`tests/run-tests.sh` has assertions for each of these, including the format, the keys and the `%s` of `lang/zh.sh`.
+
 ## 0.3.5 (2026-11-13)
 
 - **Waiting for the network, not "check the cable"** ([#197](https://github.com/OpenThinRdp/openthinrdp/issues/197)).

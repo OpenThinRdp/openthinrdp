@@ -54,7 +54,9 @@ ok "SSID with a quote refused" '! check x "$(printf "WIFI_SSID=a\"b")"'
 ok "SSID with a pipe refused" '! check x "$(printf "WIFI_SSID=a|b")"'
 ok "Wi-Fi password without SSID refused" '! check x "WIFI_PSK=password123"'
 ok "Wi-Fi on with SSID and password accepted (no adapter needed)" 'check x "$(printf "WIFI=on\nWIFI_SSID=Office\nWIFI_PSK=password123")"'
-ok "Wi-Fi on without a key refused" '! check x "$(printf "WIFI=on\nWIFI_SSID=Office")"'
+# without a key the network could never be joined: Wi-Fi is turned off and the rest of the settings are saved (refusing
+# the whole save left the device unconfigurable, and the settings dialog cannot put the key back: its field is empty)
+ok "Wi-Fi on without a key: Wi-Fi off, the settings still saved" 'printf "WIFI=on\nWIFI_SSID=Office\n" > "$T"; P=$($OTR/save-config.sh "$T" --print 2>&1); echo "$P" | grep -qx "WIFI=off" && echo "$P" | grep -qx "WIFI_SSID=Office"'
 ok "threshold out of range refused" '! check x "SESSION_THRESHOLD=200"'
 ok "bad days refused" '! check x "POWER_ON_DAYS=1289"'
 ok "bad time refused" '! check x "POWER_ON_TIME=25:00"'
@@ -171,6 +173,22 @@ printf 'BROKER=rdbroker.example.com\nDEFAULT_USER=alice\n' > "$T"
 ok "save works" '$OTR/save-config.sh "$T" >/dev/null 2>&1'
 ok "device file has the given keys" 'grep -qx "BROKER=rdbroker.example.com" $OTR_CONF && grep -qx "DEFAULT_USER=alice" $OTR_CONF'
 ok "device file has no other keys" '[ "$(grep -c "^[A-Z]" $OTR_CONF)" = 2 ]'
+
+# The device file holds the choices of this device, not a copy of the site file and the defaults: a key whose value is
+# the one they already give is not stored, so a new site.conf (a newer image, the manager) still reaches the device for
+# everything it did not change. The settings dialog sends every field back, which used to freeze all the defaults on the
+# first Save and made a wrong value of the site file the device's own.
+: > /etc/openthinrdp/openthinrdp.conf
+printf 'LANGUAGE=zh\nKEYBOARD=cn\nTIMEZONE=Asia/Shanghai\nTITLE=远程桌面\n' > /etc/openthinrdp/site.conf
+$OTR/save-config.sh "$T" --print > /tmp/all-fields.conf 2>/dev/null
+ok "a whole screen sent back unchanged stores nothing" '$OTR/save-config.sh /tmp/all-fields.conf >/dev/null 2>&1; [ "$(grep -c "^[A-Z]" $OTR_CONF)" = 0 ]'
+printf 'BROKER=rdbroker.example.com:3390\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
+ok "a key that differs from the site file is stored" 'grep -qx "BROKER=rdbroker.example.com:3390" $OTR_CONF && [ "$(grep -c "^[A-Z]" $OTR_CONF)" = 1 ]'
+printf 'LANGUAGE=zh\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
+ok "a value equal to the site file is not stored (and an old copy is dropped)" '! grep -q "^LANGUAGE=" $OTR_CONF && [ "$(cfg LANGUAGE)" = zh ]'
+printf 'BROKER=\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
+ok "clearing a key removes it from the device file" '! grep -q "^BROKER=" $OTR_CONF'
+: > /etc/openthinrdp/site.conf
 
 # --- account of the management folder: the password only in smb.cred (600), never in the settings
 CRED=/etc/openthinrdp/smb.cred
@@ -482,6 +500,20 @@ ok "make-update refuses to build without the manager as released (-m)" '! /src/m
 # --- RD Gateway: validation, and the options connect() of the kiosk gives FreeRDP (FreeRDP replaced by a stub)
 ok "RD Gateway: a name, a name:port and an address are accepted" 'check x "RDP_GATEWAY=rdg.example.com" && check x "RDP_GATEWAY=rdg.example.com:8443" && check x "RDP_GATEWAY=192.0.2.10"'
 ok "RD Gateway: a bad name or port is refused" '! check x "RDP_GATEWAY=rdg example" && ! check x "RDP_GATEWAY=rdg.example.com:0" && ! check x "RDP_GATEWAY=rdg.example.com:70000"'
+# a computer or broker: the ports of the real networks (3389, 3390, ...), IPv6 (plain, and in brackets with a port) and a
+# fully qualified name copied with its trailing dot. A value with a stray colon is refused, never read as an address.
+ok "computer or broker: an IPv6 address, plain or in brackets with a port, and a name with a trailing dot" 'check x "BROKER=fd00::1" && check x "BROKER=[fd00::1]:3390" && check x "BROKER=pc.example.test." && check x "BROKER=192.168.1.50:3390"'
+ok "computer or broker: an address that is no IPv6 address is refused (a:b:c, two groups and a port)" '! check x "BROKER=a:b:c" && ! check x "BROKER=a:b:3390"'
+# the message says which value it refused: "Broker not valid" alone said nothing on the phone
+ok "broker refused: the message names the value" 'printf "BROKER=not a host\n" > "$T"; $OTR/save-config.sh "$T" 2>&1 | grep -q "Broker not valid.*not a host"'
+# the messages are printed with %s, not %b: a backslash in a refused value no longer cuts what follows it
+ok "save-config: a backslash in a refused value does not cut the messages after it" 'printf "BROKER_FALLBACK=x\\\\c\nLANGUAGE=xx\n" > "$T"; $OTR/save-config.sh "$T" 2>&1 | grep -q "Language not available"'
+# echo treated "-n" as an option and printed nothing: POWER_ON_DAYS=-n was accepted as all days
+ok "days: a value that looks like an echo option is refused, not read as all days" '! check x "POWER_ON_DAYS=-n"'
+# cfg() drops the spaces around a value, as save-config.sh does: a site.conf edited on Windows must still apply
+ok "cfg drops the spaces a hand-edited site.conf leaves around a value" 'printf "WIFI=on \n" > /etc/openthinrdp/site.conf; q="$(cfg WIFI)"; : > /etc/openthinrdp/site.conf; [ "$q" = on ]'
+# od without -v folds repeated lines into "*": a 32-byte name whose halves are equal lost half of its hex digits
+ok "wifi.sh: the name goes to wpa_supplicant in hex, od must not fold it" 'SSID=ABCDEFGHIJKLMNOPABCDEFGHIJKLMNOP; hex=$(printf "%s" "$SSID" | od -An -v -tx1 | tr -d " \n"); [ ${#hex} = 64 ] && grep -q "od -An -v -tx1" $OTR/wifi.sh'
 ok "RD Gateway: use always, detect (rileva), anything else always" 'printf "RDP_GATEWAY_USE=Rileva\n" > "$T"; $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "RDP_GATEWAY_USE=detect" && printf "RDP_GATEWAY_USE=x\n" > "$T" && $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "RDP_GATEWAY_USE=always"'
 (
   eval "$(sed -n '/^connect(){/,/^}/p; /^vm_alive(){/,/^  sleep 5/p' $OTR/kiosk.sh)"
@@ -616,7 +648,10 @@ ok "802.1X: peap, tls (eap-tls) and off, anything else off; Wi-Fi psk, peap, tls
 ok "802.1X: identities DOMAIN\\user, user@domain, host/name, a computer account; quotes and ; refused" 'check x "EAP_IDENTITY=EXAMPLE\\thin-1" && check x "EAP_IDENTITY=host/pc1.example.com" && check x "EAP_IDENTITY=PC1\$" && check x "EAP_ANONYMOUS=anonymous@example.com" && ! check x "EAP_IDENTITY=a\"b" && ! check x "EAP_ANONYMOUS=a;b"'
 ok "802.1X: the CA is system (also when empty) or a .crt name of the site folder, never a path" 'printf "EAP_CA=\n" > "$T"; $OTR/save-config.sh "$T" --print 2>&1 | grep -qx EAP_CA=system && check x "EAP_CA=System" && check x "EAP_CA=corp-root.crt" && ! check x "EAP_CA=../corp.crt" && ! check x "EAP_CA=/etc/ssl/corp.crt" && ! check x "EAP_CA=corp.pem"'
 ok "802.1X: server names normalized, a bad one refused" 'printf "EAP_SERVER_NAME=nps1.example.com, nps2.example.com;\n" > "$T"; $OTR/save-config.sh "$T" --print 2>&1 | grep -qx "EAP_SERVER_NAME=nps1.example.com nps2.example.com" && ! check x "EAP_SERVER_NAME=nps_1.example.com"'
-ok "802.1X: a missing password or certificate is no error (the device reports it)" 'check x "DOT1X=peap" && check x "DOT1X=tls" && check x "$(printf "WIFI=on\nWIFI_SSID=Corp\nWIFI_SECURITY=peap")" && ! check x "$(printf "WIFI=on\nWIFI_SSID=Corp\nWIFI_SECURITY=psk")"'
+ok "802.1X: a missing password or certificate is no error (the device reports it)" 'check x "DOT1X=peap" && check x "DOT1X=tls" && check x "$(printf "WIFI=on\nWIFI_SSID=Corp\nWIFI_SECURITY=peap")"'
+# A Wi-Fi whose key is lost (TPM cleared, manager never sent it) used to refuse every save for ever, and the settings
+# dialog could not put it right (its password field is empty by design): the device could not be configured any more.
+ok "Wi-Fi on with no key: the settings are saved anyway and Wi-Fi is turned off, not the whole device refused" 'printf "WIFI=on\nWIFI_SSID=Corp\nWIFI_SECURITY=psk\n" > "$T"; P=$($OTR/save-config.sh "$T" --print 2>&1); echo "$P" | grep -qx "WIFI=off" && echo "$P" | grep -qx "WIFI_SSID=Corp"'
 ok "802.1X password: 256 characters at most, printed only as a hash" '! check x "EAP_PASSWORD=$(printf "%0257d" 0)" && printf "EAP_PASSWORD=Pw|with=all \$tuff\n" > "$T" && P=$($OTR/save-config.sh "$T" --print 2>&1) && ! echo "$P" | grep -q "tuff" && echo "$P" | grep -qx "EAP_PASSWORD=$(printf "Pw|with=all \$tuff" | sha256sum | cut -c1-64)"'
 # a test CA, a client of it, and the CA in the site folder
 X=/tmp/x509; mkdir -p $X /etc/openthinrdp/ca
@@ -709,7 +744,9 @@ ok "Wi-Fi Enterprise EAP-TLS: WPA2/WPA3 (WPA-EAP and SHA256, PMF when offered), 
 printf 'WIFI_SECURITY=peap\nEAP_IDENTITY=EXAMPLE\\thin\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
 ok "Wi-Fi Enterprise PEAP: the 802.1X password, read by the real wpa_supplicant" 'grep -qx "	eap=PEAP" $W && grep -q "^	password=$(printf New-Pw2 | od -An -v -tx1 | tr -d " \n")$" $W && ! timeout 3 /usr/sbin/wpa_supplicant -D nl80211 -i lo -c $W 2>&1 | grep -qE "Failed to read or parse|^Line [0-9]+:"'
 printf 'WIFI_SECURITY=psk\n' > "$T"
-ok "Wi-Fi back to a password: it must be given again" '! $OTR/save-config.sh "$T" >/dev/null 2>&1'
+# the key is not there any more: Wi-Fi is turned off (a device that cannot save anything was the old behaviour), and the
+# Wi-Fi page or the manager puts the key and WIFI=on back
+ok "Wi-Fi back to a password: the key must be given again (Wi-Fi off, the save still works)" 'printf "WIFI=on\nWIFI_SSID=Corp\nWIFI_SECURITY=psk\n" > "$T"; P=$($OTR/save-config.sh "$T" --print 2>&1); echo "$P" | grep -qx "WIFI=off"'
 printf 'WIFI_SECURITY=psk\nWIFI_PSK=password123\n' > "$T"; $OTR/save-config.sh "$T" >/dev/null 2>&1
 ok "Wi-Fi personal: the file exactly as before" '[ "$(cat $W)" = "$(printf "ctrl_interface=/run/wpa_supplicant\ncountry=IT\nnetwork={\n\tssid=\"Corp\"\n\tpsk=%s\n\tkey_mgmt=WPA-PSK\n\tieee80211w=1\n}" "$(wpa_passphrase Corp password123 | sed -n "s/^[[:space:]]*psk=//p")")" ]'
 # central settings: the password applied once, compared by hash; a Wi-Fi key left there does not loop on enterprise
