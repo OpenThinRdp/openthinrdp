@@ -42,8 +42,10 @@ case "$1" in
   connect)
     [ -n "$WL" ] || { echo "result nowifi"; exit 0; }
     IFS= read -r SSID; IFS= read -r PSK
-    # the same rules as the settings (save-config.sh): a name of 1-32 characters, a password of 8-63
-    if [ -z "$SSID" ] || [ ${#SSID} -gt 32 ] || [ ${#PSK} -lt 8 ] || [ ${#PSK} -gt 63 ]; then echo "result invalid"; exit 0; fi
+    # the same rules as the settings (save-config.sh): a name of 1-32 characters, a password of 8-63, or the 64 hex
+    # digits of a key already computed (some administrators paste those)
+    if [ -z "$SSID" ] || [ ${#SSID} -gt 32 ]; then echo "result invalid"; exit 0; fi
+    if ! [[ $PSK =~ ^[0-9a-fA-F]{64}$ ]] && { [ ${#PSK} -lt 8 ] || [ ${#PSK} -gt 63 ]; }; then echo "result invalid"; exit 0; fi
     exec 9>/run/openthinrdp-wifi.lock; flock -n 9 || { echo "result busy"; exit 0; }
     T=/run/otr-wifi-test; rm -rf "$T"; mkdir -m 700 "$T"
     stop_test(){ [ -s "$T/pid" ] && kill "$(cat "$T/pid")" 2>/dev/null; sleep 0.5; rm -rf "$T"; }
@@ -51,9 +53,12 @@ case "$1" in
     echo "step stop"
     ifdown --force "$WL" >/dev/null 2>&1; pkill -f "wpa_supplicant.*-i *$WL( |$)" 2>/dev/null; sleep 1
     ip link set "$WL" up 2>/dev/null
-    # the network for the try: its name in hex (any character is safe), the key as wpa_passphrase computes it
-    hex=$(printf '%s' "$SSID" | od -An -tx1 | tr -d ' \n')
-    key=$(wpa_passphrase "$SSID" "$PSK" 2>/dev/null | sed -n 's/^[[:space:]]*psk=\([0-9a-f]\{64\}\)$/\1/p')
+    # the network for the try: its name in hex (any character is safe), the key as wpa_passphrase computes it.
+    # od -v: without it od folds the repeated lines into "*", and a 32-byte name whose two halves are equal
+    # became 33 characters with a "*" in them (the supplicant refused the file, the page timed out).
+    hex=$(printf '%s' "$SSID" | od -An -v -tx1 | tr -d ' \n')
+    if [[ $PSK =~ ^[0-9a-fA-F]{64}$ ]]; then key=$(printf '%s' "$PSK" | tr 'A-F' 'a-f')
+    else key=$(wpa_passphrase "$SSID" "$PSK" 2>/dev/null | sed -n 's/^[[:space:]]*psk=\([0-9a-f]\{64\}\)$/\1/p'); fi
     [ -n "$key" ] || { echo "result invalid"; rm -rf "$T"; [ "$was_on" = on ] && up; exit 0; }
     ( umask 077; printf 'ctrl_interface=%s/ctrl\ncountry=%s\nnetwork={\n  ssid=%s\n  scan_ssid=1\n  psk=%s\n}\n' "$T" "$(cfg WIFI_COUNTRY)" "$hex" "$key" > "$T/conf" )
     [ -n "$(cfg WIFI_COUNTRY)" ] || sed -i '/^country=$/d' "$T/conf"
@@ -80,11 +85,19 @@ case "$1" in
     printf 'WIFI=on\nWIFI_SSID=%s\nWIFI_SECURITY=psk\nWIFI_PSK=%s\n' "$SSID" "$PSK" > "$f"
     msg=$("$OTR/save-config.sh" "$f" 2>&1); r=$?; rm -f "$f"
     if [ $r -ne 0 ]; then [ "$was_on" = on ] && up; echo "result saveerror $(echo "$msg" | head -1)"; exit 0; fi
-    # save-config.sh applied it, in the group of processes of its caller: started again here in a scope of its own
+    # save-config.sh applied it already: apply.sh then restarts this adapter in the background, in a scope of its own
+    # (wpa_supplicant and the DHCP client must outlive this script). Waiting here for the address instead of bringing
+    # the interface down a second time underneath that restart: two restarts at once left the Wi-Fi down after "Save",
+    # and the device looked as if it had lost its settings.
     echo "step dhcp"
-    timeout -s KILL 20 ifdown --force "$WL" >/dev/null 2>&1; up
+    wl_ip(){ ip -4 -o addr show dev "$WL" scope global 2>/dev/null | awk '{print $4}' | head -1; }
     ipa=""
-    for i in $(seq 1 40); do ipa=$(ip -4 -o addr show dev "$WL" scope global 2>/dev/null | awk '{print $4}' | head -1); [ -n "$ipa" ] && break; sleep 0.5; done
+    for i in $(seq 1 40); do ipa=$(wl_ip); [ -n "$ipa" ] && break; sleep 0.5; done
+    if [ -z "$ipa" ]; then
+      # nothing after 20 s: one restart of our own, in a scope of its own
+      timeout -s KILL 20 ifdown --force "$WL" >/dev/null 2>&1; up
+      for i in $(seq 1 40); do ipa=$(wl_ip); [ -n "$ipa" ] && break; sleep 0.5; done
+    fi
     central=""; grep -qs '^WIFI_SSID=' "$OTR_LIB"/central-*.conf && ! grep -qsxF "WIFI_SSID=$SSID" "$OTR_LIB"/central-*.conf && central=" central"
     if [ -n "$ipa" ]; then ev "Wi-Fi from the page: connected to $SSID, $ipa"; echo "result ok ${ipa%/*}$central"
     else ev "Wi-Fi from the page: joined $SSID, no address from the network"; echo "result noip$central"; fi
