@@ -40,18 +40,20 @@ and what is still missing. It is updated when something changes. What runs where
 
 **Covered**: one production fleet since October 2026, 15 Dell OptiPlex 3000 Thin Clients (desks, tills, a
 laboratory, weighing stations, a wall screen on Wi-Fi). From the event logs the devices keep, since the first release
-(11-26 October 2026):
+(11 October - 16 November 2026):
 
 | | |
 |---|---|
-| software updates installed | 299 |
+| software updates installed | 389 |
 | software updates failed | 0 |
-| sessions opened | 235 |
-| hours in session | 970 |
-| sessions dropped by a lost network, reopened by themselves within 10 minutes | 46 of 51 |
-| starts of the kiosk | 388 |
+| sessions opened | 460 |
+| hours in session | 2,760 |
+| sessions dropped by a lost network, reopened by themselves within 10 minutes | 63 of 66 |
+| starts of the kiosk | 673 |
 
-**Not yet**: months of data, and fleets other than ours; the hardware test of the live system (0.2.8) lets anyone
+**Outside our fleet**, from the anonymous data devices send by choice and from GitHub: 850 ISO downloads, 39 different models (HP t520, t530, t620, t655, Dell Wyse 5070, Centerm and Wyse thin clients, mini PCs, laptops, virtual machines), 7 devices outside our fleet sending their weekly report.
+
+**Not yet**: months of data, and other production fleets reporting their numbers; the hardware test of the live system (0.2.8) lets anyone
 send a hardware report from their own devices. The numbers will be updated here as they grow; a fleet
 report in the manager (uptime, failed updates, recovery times) is planned.
 
