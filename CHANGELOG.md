@@ -5,7 +5,7 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
-## 0.3.6 (not released yet)
+## 0.3.6 (2026-11-16)
 
 - **The new logo** ([#206](https://github.com/OpenThinRdp/openthinrdp/issues/206)), everywhere: boot, sign-in screen,
   dialogs, the boot menu of the ISO, the manager, the site. On the devices it is transparent on the dark background
