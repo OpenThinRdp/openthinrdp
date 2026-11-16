@@ -726,7 +726,7 @@ ok "802.1X off: the supplicants stopped, the status says off" '! pgrep -f "dot1x
   eval "$(sed -n '/^settings_spec(){/,/^}/p; /^settings_read(){/,/^}/p' $OTR/kiosk.sh)"; otr_lang
   NETV=(dhcp static) NETL=(a b) USBV=(all) USBL=(a) ONV=(on off) ONL=(a b) STV=(full errors off) STL=(a b c) TRV=(auto) TRL=(a) WEBV=(none) WEBL=(a) LNV=(en) LNL=(a)
   WSECV=(psk peap tls) WSECL=(a b c) D1XV=(off peap tls) D1XL=("$L_OFF" "$L_D1X_PEAP" "$L_D1X_TLS")
-  h= u= br= brf= dom= lbi= tr=auto thr= off= nm=dhcp ip= mask= gw= d1= d2= ntp= wf=on ws= wp= um=all ur= ul= wb=none wu= ku= kr=
+  h= u= br= brf= dom= lbi= tr=auto thr= off= sbar=off ckey= nm=dhcp ip= mask= gw= d1= d2= ntp= wf=on ws= wp= um=all ur= ul= wb=none wu= ku= kr=
   pon= poff= pdays= share= mu= mp= su=on an=on tz= ln=en ean= epw= SETV=(domain workgroup) SETL=(a b) kind=domain rem=off wmac= found="pc1|192.168.1.20" conns= vpn=off tss= VPNV=(off tailscale) VPNL=(a b) bro=chromium BROV=(chromium firefox) BROL=(a b)
   wsec=peap d1x=tls d1xs="eth0: authenticated (EAP-TLS)" eid='EXAMPLE\thin' eca=system esn=nps.example.test
   dres=native dsc=auto mm=auto RESV=(native 1920x1080) RESL=("Native (3840x2160)" 1920x1080) SCV=(auto 100 200) SCL=(a b c) MMV=(auto off) MML=(a b)
@@ -805,7 +805,7 @@ printf 'TPM_SECRETS=on\n' > $OTR_LIB/central-host.conf
 ok "secrets: on for this device in the central settings wins over the common off" '[ "$(secret_setting)" = on ] && $OTR/secrets.sh && [ -L $C ] && [ -s $OTR_SEALED/smb.cred.cred ]'
 rm -f $OTR_LIB/central-common.conf $OTR_LIB/central-host.conf
 rm -f /tmp/faketpm; rm -rf /run/openthinrdp; : > $OTR_EVENTS
-ok "secrets: a TPM that does not give them back (cleared, replaced) is reported once" '$OTR/secrets.sh && [ -f $OTR_SEALED/smb.cred.cred.unreadable ] && [ ! -f $OTR_SEALED/smb.cred.cred ] && [ ! -e $C ] && grep -q "NOT readable from the TPM: smb.cred" $OTR_EVENTS && $OTR/secrets.sh && [ "$(grep -c "NOT readable" $OTR_EVENTS)" = 1 ]'
+ok "secrets: a TPM that does not give them back is tried three times at a start, kept for the next starts, given up and reported once at the third (#201)" '$OTR/secrets.sh && [ -f $OTR_SEALED/smb.cred.cred ] && [ "$(cat $OTR_SEALED/smb.cred.fails)" = 1 ] && grep -q "not readable from the TPM at this start: smb.cred" $OTR_EVENTS && ! grep -q "NOT readable" $OTR_EVENTS && $OTR/secrets.sh && [ -f $OTR_SEALED/smb.cred.cred ] && $OTR/secrets.sh && [ -f $OTR_SEALED/smb.cred.cred.unreadable ] && [ ! -f $OTR_SEALED/smb.cred.cred ] && [ ! -e $OTR_SEALED/smb.cred.fails ] && [ ! -e $C ] && grep -q "NOT readable from the TPM: smb.cred" $OTR_EVENTS && $OTR/secrets.sh && [ "$(grep -c "NOT readable" $OTR_EVENTS)" = 1 ]'
 rm -rf $OTR_SEALED /run/openthinrdp /usr/local/bin/systemd-analyze /usr/local/bin/systemd-creds /etc/ssh/sshd_config.d/00-openthinrdp-hostkeys.conf
 
 # --- USB devices held until the desktop is up (usb-hold.sh runs as root through sudo from the kiosk)
@@ -912,7 +912,7 @@ has_all(){ local s=$1 e=$2 x m=""; shift 2; for x in "$@"; do printf "%s
 ok "anonymous data: full by default; on is full, no is off, errori is errors (save-config)" '[ "$(cfg ANON_STATS)" = full ] && printf "ANON_STATS=No\n" > "$T" && $OTR/save-config.sh "$T" --print 2>/dev/null | grep -qx "ANON_STATS=off" && printf "ANON_STATS=on\n" > "$T" && $OTR/save-config.sh "$T" --print 2>/dev/null | grep -qx "ANON_STATS=full" && printf "ANON_STATS=Errori\n" > "$T" && $OTR/save-config.sh "$T" --print 2>/dev/null | grep -qx "ANON_STATS=errors"'
 cp $OTR_EVENTS /tmp/events.keep; : > $OTR_EVENTS
 SP=$($OTR/stats.sh --print)
-AK='version|freerdp|model|cpu|ram_gb|arch|mode|language|first|wifi_adapter|tpm|managed|setup|target|gateway|vpn|update_from|transport|remember_password|wake_on_lan|bluetooth_paired|network|web|browser|monitors|resolution_class|resolution_setting|scale_setting|usb|live_saved_settings|alongside_windows|sessions|days_used|session_hours|sessions_udp|sessions_tcp|latency_ms|signin_s|signin_broker_s|signin_vm_s|signin_windows_s|start_to_signin_s|problems'
+AK='version|freerdp|model|cpu|ram_gb|arch|mode|language|first|wifi_adapter|wifi_networks|tpm|managed|setup|target|gateway|vpn|update_from|transport|remember_password|wake_on_lan|bluetooth_paired|network|web|browser|monitors|resolution_class|resolution_setting|scale_setting|usb|live_saved_settings|alongside_windows|sessions|days_used|session_hours|sessions_udp|sessions_tcp|latency_ms|signin_s|signin_broker_s|signin_vm_s|signin_windows_s|start_to_signin_s|problems'
 ok "anonymous data, full: one week event with only the listed items, no address, no name of the device; a week with no problem has no error event" '[ -n "$SP" ] && ! printf "%s\n" "$SP" | grep -vE "^otr_week ($AK)=" | grep -q . && printf "%s\n" "$SP" | grep -qx "otr_week problems=0" && printf "%s\n" "$SP" | grep -qx "otr_week sessions=0" && ! printf "%s\n" "$SP" | grep -q "^otr_errors" && ! printf "%s\n" "$SP" | grep -qE "([0-9]{1,3}\.){3}[0-9]{1,3}|([0-9a-f]{2}:){5}[0-9a-f]{2}|$(hostname)"'
 ok "anonymous data, errors only: nothing at all in a week with no problem" '[ -z "$(OTR_STATS_ANON=errors $OTR/stats.sh --print)" ] && [ -z "$(OTR_STATS_ANON=off $OTR/stats.sh --print)" ]'
 # how the device was used and how fast it was: numbers from its event log, medians
@@ -1159,6 +1159,64 @@ assert "def icon(kind, size=22, color=None" in s and "def net_icon(kind=" in s a
 c = open("/opt/openthinrdp/lib/common.sh").read(); assert "-gt 127500 ]" in c
 PY'
 ok "logo: the pictures replaced by 0.3.6 are known to install.sh (a device still showing them gets the new ones)" 'grep -q db53949e775da810e22110aaea8c70f927da77d8bd43b5fcbe09a49bc8590366 /src/management/publish/install.sh && grep -q 502303aede93b009d1dd7dfb294478de11da555a7bf8817d0c2d53ea43f05270 /src/management/publish/install.sh'
+# --- 0.3.6: found by soso192 (#201): the device file froze site.conf and the defaults; unknown choices; interfaces
+: > $OTR_CONF; printf 'SHUTDOWN_SECS=10\nDEFAULT_USER=dora\nANON_STATS=full\nTRANSPORT=auto\n' > "$T"
+ok "settings: a value equal to what the device inherits is not written into the device file (site.conf and the defaults keep counting); ANON_STATS always" '$OTR/save-config.sh "$T" >/dev/null 2>&1 && grep -qx "DEFAULT_USER=dora" $OTR_CONF && ! grep -q "^SHUTDOWN_SECS=" $OTR_CONF && ! grep -q "^TRANSPORT=" $OTR_CONF && grep -qx "ANON_STATS=full" $OTR_CONF'
+printf 'SHUTDOWN_SECS=30\n' > $OTR_CONF; printf 'SHUTDOWN_SECS=10\n' > "$T"
+ok "settings: a key already in the device file is still written, also back to the inherited value" '$OTR/save-config.sh "$T" >/dev/null 2>&1 && grep -qx "SHUTDOWN_SECS=10" $OTR_CONF'
+: > $OTR_CONF
+ok "screens: a value a choice list does not know stays selected as it is (ui.py and the yad dialog), never the first item" 'grep -q "if val: w.append(val, val); w.set_active_id(val)" $OTR/ui.py && ( eval "$(sed -n "/^combo(){/,/; }$/p;/^unlabel(){/,/; fi; }$/p" $OTR/kiosk.sh)"; LV=(en it nl); LL=(English Italiano Nederlands); [ "$(combo zh LV LL)" = "English!Italiano!Nederlands!^zh" ] && [ "$(combo it LV LL)" = "English!^Italiano!Nederlands" ] && [ "$(unlabel zh LV LL)" = zh ] && [ "$(unlabel Italiano LV LL)" = it ] && [ "$(unlabel "" LV LL)" = en ] )'
+ok "apply.sh: /etc/network/interfaces written whole or not at all (a copy next to it, then renamed)" 'grep -q "cp \"\$NEW\" \$OLD.new && chmod 644 \$OLD.new && sync \$OLD.new 2>/dev/null; mv -f \$OLD.new \$OLD" /src/rootfs/opt/openthinrdp/apply.sh && ! grep -q "|| cp \"\$NEW\" \$OLD$" /src/rootfs/opt/openthinrdp/apply.sh'
+# --- 0.3.6: closing the session from the device, both off by default
+ck(){ printf 'SESSION_CLOSE_KEY=%s\n' "$1" > "$T"; $OTR/save-config.sh "$T" --print 2>/dev/null | sed -n 's/^SESSION_CLOSE_KEY=//p'; }
+ok "session bar and close key: off and empty by default" '[ "$(cfg SESSION_BAR)" = off ] && [ -z "$(cfg SESSION_CLOSE_KEY)" ]'
+ok "close key: written in FreeRDP's form (lower case, shift ctrl alt super, then the key); Control and Win understood" '[ "$(ck "Ctrl+Alt+Q")" = ctrl+alt+q ] && [ "$(ck "alt + control + F12")" = ctrl+alt+f12 ] && [ "$(ck "Win+E")" = super+e ] && [ "$(ck "Ctrl+Shift+End")" = shift+ctrl+end ] && [ -z "$(ck "")" ]'
+ok "close key: Shift alone, no key, two keys or garbage refused" '! check x "SESSION_CLOSE_KEY=shift+q" && ! check x "SESSION_CLOSE_KEY=ctrl+alt+" && ! check x "SESSION_CLOSE_KEY=ctrl+x+q" && ! check x "SESSION_CLOSE_KEY=q" && ! check x "SESSION_CLOSE_KEY=ctrl+alt+é"'
+printf 'SESSION_CLOSE_KEY=ctrl+alt+q\n' > $OTR_CONF; rm -f /tmp/kiosk.userclose
+ok "rdp-action.sh: lists the combination, a press of it leaves the flag and keeps the keys from Windows, another combination nothing" '[ "$(bash $OTR/rdp-action.sh key)" = ctrl+alt+q ] && [ -z "$(bash $OTR/rdp-action.sh key ctrl+alt+x)" ] && [ ! -e /tmp/kiosk.userclose ] && [ "$(bash $OTR/rdp-action.sh key ctrl+alt+q)" = key-local ] && [ -e /tmp/kiosk.userclose ] && [ -z "$(bash $OTR/rdp-action.sh xevent)" ]'
+rm -f /tmp/kiosk.userclose; : > $OTR_CONF
+ok "rdp-action.sh: without a combination it watches nothing" '[ -z "$(bash $OTR/rdp-action.sh key)" ]'
+ok "kiosk: the bar and the action script only when set; closed with them = a disconnect (end page, no reconnection); a minimized session brought back" 'grep -q "\[ \"\$(cfg SESSION_BAR)\" = on \] && o+=(/floatbar:sticky:off,default:visible,show:fullscreen)" $OTR/kiosk.sh && grep -q "\[ -n \"\$(cfg SESSION_CLOSE_KEY)\" \] && o+=(/action-script:\"\$OTR/rdp-action.sh\")" $OTR/kiosk.sh && grep -q "if \[ -f /tmp/kiosk.userclose \] || { \[ \"\$(cfg SESSION_BAR)\" = on \] && \[ \"\$ec\" = 145 \] && grep -q CONNECT_CANCELLED /tmp/kiosk.log; }; then" $OTR/kiosk.sh && grep -q "grep -q Iconic && xdotool windowactivate" $OTR/kiosk.sh && grep -q "/tmp/kiosk.disconnect /tmp/kiosk.userclose" $OTR/kiosk.sh'
+for l in en it nl; do ok "language $l: the texts of the session bar and of the close key" '( . $OTR/lang/'$l'.sh; [ -n "$L_F_SESSIONBAR" ] && [ -n "$L_H_SESSIONBAR" ] && [ -n "$L_F_CLOSEKEY" ] && [ -n "$L_H_CLOSEKEY" ] && [ -n "$V_CLOSEKEY" ] )'; done
+ok "kiosk: Ctrl+Alt+Enter does not take the session out of full screen (-toggle-fullscreen; RDP_EXTRA=+toggle-fullscreen gives it back)" 'grep -q " /f -toggle-fullscreen /smartcard " $OTR/kiosk.sh && grep -q "\"\${extra\[@\]}\"" $OTR/kiosk.sh'
+ok "kiosk: a minimized session is brought back also without the session bar" 'grep -B1 "for w in \$(xdotool search --pid \"\$fp\" 2>/dev/null); do xprop" $OTR/kiosk.sh | grep -q "if \[ \$s3 -eq 1 \]; then$"'
+ok "kiosk: the error names the computer of this connection (the one chosen in the list), with words for a broker and a PC" 'grep -q "printf \"\$L_T_DNS\" \"\${CONN:-\$(cfg BROKER)}\"" $OTR/kiosk.sh && ( . $OTR/lang/it.sh; [[ $L_T_DNS != *broker* ]] && [[ $L_E_DNS != *Broker* ]] )'
+# --- 0.3.6: more Wi-Fi networks (the main one, three more of the settings, up to 10 of the device itself)
+WC=/etc/wpa_supplicant/openthinrdp-wifi.conf; rm -f $WC /etc/openthinrdp/wifi-known; : > $OTR_CONF
+wf(){ ( . $OTR/lib/secrets.sh; . $OTR/lib/eap.sh; "$@" ); }
+ok "Wi-Fi: a network name to hex and back, spaces and accents included" '[ "$(wf wifi_unhex "$(wf wifi_hex "Caffè Wi-Fi 5G")")" = "Caffè Wi-Fi 5G" ] && [ "$(wf wifi_hex AB)" = 4142 ]'
+K1=$(printf 'a%.0s' $(seq 64)); K2=$(printf 'b%.0s' $(seq 64)); K3=$(printf 'c%.0s' $(seq 64))
+wf wifi_known_add "Home" "$K1"; wf wifi_known_add "Phone hotspot" "$K2"; wf wifi_known_add "Home" "$K3"
+ok "Wi-Fi: the device's own networks, the last joined first, a name once (its new key)" '[ "$(wf wifi_known_names | paste -sd "|")" = "Home|Phone hotspot" ] && wf wifi_known | head -1 | grep -q "	$K3$" && [ "$(stat -c %a /etc/openthinrdp/wifi-known)" = 600 ]'
+for i in $(seq 1 12); do wf wifi_known_add "Net $i" "$K1"; done
+ok "Wi-Fi: at most 10 networks of the device, the oldest dropped" '[ "$(wf wifi_known | grep -c .)" = 10 ] && wf wifi_known_names | head -1 | grep -qx "Net 12" && ! wf wifi_known_names | grep -qx Home'
+for i in $(seq 1 12); do wf wifi_known_forget "Net $i"; done
+ok "Wi-Fi: forgetting the last one removes the secret" '[ -z "$(wf wifi_known)" ] && [ ! -e /etc/openthinrdp/wifi-known ]'
+printf 'WIFI=on\nWIFI_SSID=Office\nWIFI_SECURITY=psk\nWIFI_SSID_2=Office B\n' > $OTR_CONF
+declare -A WIFI_NEWKEY 2>/dev/null
+( . $OTR/lib/secrets.sh; . $OTR/lib/eap.sh; declare -A WIFI_NEWKEY=([2]=$K2); wifi_known_add "Home" "$K3"; wifi_known_add "Office" "$K1"; wifi_conf_update "$K1" )
+ok "Wi-Fi: the file has the main network, the other one of the settings, the device's own; a name only once" '[ "$(grep -c "^network={" $WC)" = 3 ] && grep -q "ssid=\"Office\"" $WC && grep -q "ssid=$(wf wifi_hex "Office B")" $WC && grep -q "ssid=$(wf wifi_hex Home)" $WC && grep -q "psk=$K3" $WC'
+ok "Wi-Fi: the key of each network found by its name, in clear or in hex" '[ "$(wf wifi_saved_psk Office)" = "$K1" ] && [ "$(wf wifi_saved_psk "Office B")" = "$K2" ] && [ "$(wf wifi_saved_psk Home)" = "$K3" ] && [ -z "$(wf wifi_saved_psk Nowhere)" ]'
+printf 'WIFI_SSID_3=Branch\nWIFI_PSK_3=branchpass1\n' > "$T"
+ok "settings: another network with its password: kept as a hash for the comparison, never in clear" 'P=$($OTR/save-config.sh "$T" --print 2>&1) && echo "$P" | grep -qx "WIFI_SSID_3=Branch" && echo "$P" | grep -Eq "^WIFI_PSK_3=[0-9a-f]{64}$" && ! echo "$P" | grep -q branchpass1 && echo "$P" | grep -Eq "^WIFI_PSK_2=[0-9a-f]{64}$"'
+ok "settings: another network new without its password, or a password too short, refused" '! check x "WIFI_SSID_4=Nokey" && ! check x "$(printf "WIFI_SSID_4=X\nWIFI_PSK_4=short")" && ! check x "WIFI_SSID_4=a\"b"'
+ok "central settings: the keys of the other networks are secrets like WIFI_PSK (compared by hash, never shown)" 'grep -q "^SECRETS=\"WIFI_PSK WIFI_PSK_2 WIFI_PSK_3 WIFI_PSK_4 MGMT_PASSWORD EAP_PASSWORD\"" $OTR/central-apply.sh && grep -q "WIFI_PSK WIFI_PSK_2 WIFI_PSK_3 WIFI_PSK_4 MGMT_PASSWORD EAP_PASSWORD\"$" $OTR/central-apply.sh'
+ok "wifi.sh known: the main network, the other ones of the settings, the device's own" '[ "$(bash $OTR/wifi.sh known | paste -sd "|")" = "$(printf "main\tOffice|extra\tOffice B|personal\tOffice|personal\tHome")" ]'
+ok "wifi.sh forget: only a network of the device; the others say so" '[ "$(printf "Office B\n" | bash $OTR/wifi.sh forget)" = "result notpersonal" ] && [ "$(printf "Home\n" | bash $OTR/wifi.sh forget)" = "result forgotten" ] && ! wf wifi_known_names | grep -qx Home && ! grep -q "ssid=$(wf wifi_hex Home)" $WC'
+rm -f /etc/openthinrdp/wifi-known; ( . $OTR/lib/secrets.sh; . $OTR/lib/eap.sh; wifi_known_add "Home" "$K3" )
+rm -f $WC; printf 'WIFI=on\nWIFI_SSID=Office\nWIFI_SECURITY=psk\n' > $OTR_CONF; wf wifi_conf_update ""
+ok "Wi-Fi: the main network set but its key not readable: the file left as it is; written when the device's networks change" '[ ! -e $WC ] && ( . $OTR/lib/secrets.sh; . $OTR/lib/eap.sh; WIFI_FORCE=1 wifi_conf_update "" ) && grep -q "ssid=$(wf wifi_hex Home)" $WC && ! grep -q "ssid=\"Office\"" $WC'
+ok "wifi.sh connect: with a main network another one is added to the device (result added), one of the settings gets its key again" 'grep -q "mode=personal slot=\"\"" $OTR/wifi.sh && grep -q "wifi_known_add \"\$SSID\" \"\$key\"; WIFI_FORCE=1 wifi_conf_update \"\"" $OTR/wifi.sh && grep -q "printf .WIFI_PSK_%s=%s\\\\n. \"\$slot\" \"\$PSK\"" $OTR/wifi.sh && grep -q "ok=ok; \[ \$mode = personal \] && ok=added" $OTR/wifi.sh'
+ok "Wi-Fi page: saved networks marked (also when not around), Forget only for the device's own, the added one said" 'python3 - <<"PY"
+s = open("/opt/openthinrdp/ui.py").read()
+for x in ("WIFI + [\"known\"]", "WIFI + [\"forget\"]", "\"away\": True", "t(\"known_\" + k)", "== \"personal\")", "t(\"added\", s,"):
+    assert x.replace("\"", chr(39)) in s, x
+PY'
+for l in en it nl; do ok "language $l: the texts of the saved Wi-Fi networks" '( . $OTR/lang/'$l'.sh; for v in L_WP_ADDED L_WP_FORGET L_WP_FORGOTTEN L_WP_AWAY L_WP_KNOWN_MAIN L_WP_KNOWN_EXTRA L_WP_KNOWN_PERSONAL; do [ -n "${!v}" ] || exit 1; done )'; done
+ok "report and anonymous data: the networks by name in the status, by number only in the anonymous data" 'grep -q "echo \"WIFI_NETWORKS=" $OTR/report.sh && grep -q "p \$e wifi_networks" $OTR/stats.sh'
+rm -f $WC /etc/openthinrdp/wifi-known; : > $OTR_CONF
+# --- 0.3.6: a secret the TPM does not give back at one start is kept and tried again (#201)
+ok "secrets: three tries at a start, given up only after 3 starts in a row, the event says so" 'grep -q "if ! { secret_unseal \"\$n\" || { sleep 2; secret_unseal \"\$n\"; } || { sleep 5; secret_unseal \"\$n\"; }; }; then" $OTR/secrets.sh && grep -q "if \[ \$f -ge 3 \]; then" $OTR/secrets.sh && grep -q "secrets not readable from the TPM at this start" $OTR/secrets.sh && grep -q "^  \[wifi-known\]=" $OTR/lib/secrets.sh'
 # --- 0.3.6: what went wrong sent at once, the week after an update
 cp $OTR_EVENTS /tmp/events.keep; : > $OTR_EVENTS; L=/var/lib/openthinrdp
 SB=$(mktemp -d); GU=http://127.0.0.1:18098/batch/

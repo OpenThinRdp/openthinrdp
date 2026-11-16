@@ -39,6 +39,8 @@ The reference with comments is [`rootfs/opt/openthinrdp/defaults.conf`](../rootf
 | `RDP_EXTRA` | | extra xfreerdp3 options (letters, digits, `/:+,._=#-` and spaces only) |
 | `SESSION_THRESHOLD` | `10` | a session that ends within these seconds counts as a failed attempt |
 | `SHUTDOWN_SECS` | `10` | after the user disconnects, switch off after these seconds (0 = never) |
+| `SESSION_BAR` | `off` | `on` = FreeRDP's bar at the top of the session, with a button that closes it (as a disconnect from Windows: the session stays open on the computer). Off: the session is left from Windows (Start > user > Disconnect or Sign out) |
+| `SESSION_CLOSE_KEY` | | a key combination that closes the session the same way, e.g. `Ctrl+Alt+Q`: Ctrl, Alt or Win (and Shift) with one key, not sent to Windows. Empty = none |
 
 The device switches off only after a deliberate end (disconnect, sign out, VM shut down by an administrator).
 Every other ending (network drop, crash, server restart) reconnects without asking. A session taken over by
@@ -108,6 +110,7 @@ own input is used. A device listed in `USB_REDIRECT` is still passed whole.
 | `WIFI` | `off` | `on` = use Wi-Fi when no cable is connected |
 | `WIFI_SSID`, `WIFI_COUNTRY` | | network name, regulatory country (two letters) |
 | `WIFI_PSK` | | password or 64-hex key. Only in central settings or the dialog; stored only in `/etc/wpa_supplicant` |
+| `WIFI_SSID_2` .. `WIFI_SSID_4`, `WIFI_PSK_2` .. `WIFI_PSK_4` | | up to three more networks (WPA2-Personal) for every device, e.g. two buildings: their keys kept as `WIFI_PSK`. The device joins whichever is around, the strongest when more are, as well as the networks a user adds from its Wi-Fi page (up to 10, *Forget* there) |
 | `WIFI_SECURITY` | `psk` | `psk` = a password (WPA2-Personal, `WIFI_PSK`); `peap` or `tls` = WPA2/WPA3-Enterprise with the 802.1X settings below. See [802.1X and Wi-Fi Enterprise](#8021x-and-wi-fi-enterprise) |
 | `DOT1X` | `off` | 802.1X on the cable: `peap` (an account and its password) or `tls` (a certificate of the device). See [802.1X and Wi-Fi Enterprise](#8021x-and-wi-fi-enterprise) |
 | `EAP_IDENTITY` | | the identity: `DOMAIN\user`, `user@domain`, `host/name.domain`. With `tls`, empty = the common name of the certificate |

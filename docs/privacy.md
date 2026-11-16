@@ -33,6 +33,7 @@ minutes). `stats.sh`, started by `report.sh`; the first time once its level is c
 | Live system or installed, language | `live`, `it` |
 | First send of this device | `yes` / `no` |
 | Wi-Fi adapter, TPM, managed from a management folder | `yes` / `no` |
+| How many Wi-Fi networks it knows (a number, never their names) | `2` |
 | Domain or workgroup; a broker or one computer | `workgroup`, `pc` |
 | RD Gateway; kind of VPN; where updates come from; transport | `no`, `tailscale`, `github`, `auto` |
 | Password remembered, Wake-on-LAN, a Bluetooth device paired | `on`, `yes`, `no` |

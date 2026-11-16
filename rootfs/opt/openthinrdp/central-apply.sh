@@ -19,9 +19,9 @@ GROUPF=$OTR_LIB/central-group.conf
 MANAGED=$OTR_LIB/central-managed
 # keys that only the file of a single device may set (they identify the device)
 HOST_ONLY="HOSTNAME DEFAULT_USER NETMODE IPADDR VPN_ADDRESS DEVICE_GROUP"
-KEYS="$(cfg_keys | tr '\n' ' ')WIFI_PSK MGMT_PASSWORD EAP_PASSWORD"
+KEYS="$(cfg_keys | tr '\n' ' ')WIFI_PSK WIFI_PSK_2 WIFI_PSK_3 WIFI_PSK_4 MGMT_PASSWORD EAP_PASSWORD"
 # secrets: compared through their hash (save-config.sh --print), applied with the value of the central file
-SECRETS="WIFI_PSK MGMT_PASSWORD EAP_PASSWORD"
+SECRETS="WIFI_PSK WIFI_PSK_2 WIFI_PSK_3 WIFI_PSK_4 MGMT_PASSWORD EAP_PASSWORD"
 
 [ -f "$COMMON" ] || [ -f "$GROUPF" ] || [ -f "$HOSTF" ] || [ -s "$MANAGED" ] || { echo "no central configuration" > "$ST"; exit 0; }
 

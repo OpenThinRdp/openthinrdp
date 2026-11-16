@@ -67,7 +67,11 @@ for i in $ALLIF $WL $(awk '/^allow-hotplug /{print $2}' $OLD 2>/dev/null); do
   if [ -z "$a" ] && [ "$MODE" != static ] && ip -4 -o addr show dev "$i" 2>/dev/null | grep -q inet; then continue; fi
   CHANGED="$CHANGED $i"; [ -z "$a" ] && [ -n "$b" ] && ADDED="$ADDED $i"
 done
-cmp -s "$NEW" $OLD || cp "$NEW" $OLD
+# written whole or not at all: a copy over the file left it cut short when the power went in the middle, as when a
+# device switches off right after a session (0.3.6, found by soso192). A copy next to it, on disk, then renamed
+if ! cmp -s "$NEW" $OLD; then
+  cp "$NEW" $OLD.new && chmod 644 $OLD.new && sync $OLD.new 2>/dev/null; mv -f $OLD.new $OLD && sync -f $OLD 2>/dev/null
+fi
 rm -f "$NEW"
 
 # --- DNS: the configured servers, or the ones from DHCP when DNS1 is empty

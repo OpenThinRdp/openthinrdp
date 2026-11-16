@@ -1,4 +1,4 @@
-# The secrets of the device: the password of the management folder account, the Wi-Fi key, the SSH host keys, the VPN
+# The secrets of the device: the password of the management folder account, the Wi-Fi keys, the SSH host keys, the VPN
 # key and profile, the 802.1X password and the private key of the 802.1X certificate.
 # Source it after common.sh: . /opt/openthinrdp/lib/secrets.sh   (root only)
 # With a TPM 2.0 (and TPM_SECRETS=on, the default) they are kept encrypted with a key that never leaves the TPM
@@ -14,6 +14,7 @@ OTR_SECRETS=/run/openthinrdp/secrets
 declare -A OTR_SECRET_FILES=(
   [smb.cred]=$OTR_ETC/smb.cred
   [wifi.conf]=/etc/wpa_supplicant/openthinrdp-wifi.conf
+  [wifi-known]=$OTR_ETC/wifi-known
   [ssh_host_ed25519_key]=/etc/ssh/ssh_host_ed25519_key
   [ssh_host_ecdsa_key]=/etc/ssh/ssh_host_ecdsa_key
   [ssh_host_rsa_key]=/etc/ssh/ssh_host_rsa_key

@@ -71,34 +71,77 @@ eap_block(){
   fi
 }
 
-# wifi_saved_psk SSID: the WPA key in the Wi-Fi configuration, when it is for that network
+# a network name in hex (any character is safe in the file of wpa_supplicant) and back
+wifi_hex(){ printf '%s' "$1" | od -An -tx1 | tr -d ' \n'; }
+wifi_unhex(){ printf "$(printf '%s' "$1" | sed 's/../\\x&/g')"; }
+
+# wifi_saved_psk SSID: the WPA key of that network in the Wi-Fi configuration (named in clear or in hex)
 wifi_saved_psk(){
   local w; w=$(secret_path wifi.conf)
-  grep -qF "ssid=\"$1\"" "$w" 2>/dev/null && sed -n 's/^[[:space:]]*psk=//p' "$w" | head -1
+  awk -v q="ssid=\"$1\"" -v x="ssid=$(wifi_hex "$1")" '
+    { l = $0; gsub(/^[ \t]+/, "", l) }
+    l ~ /^network=\{/ { s = 0; p = "" }
+    l == q || l == x { s = 1 }
+    l ~ /^psk=/ { p = substr(l, 5) }
+    l == "}" { if (s && p != "") { print p; exit } }' "$w" 2>/dev/null
 }
 
-# wifi_conf_update [KEY]: the Wi-Fi configuration of wpa_supplicant from the settings, kept as a secret (lib/secrets.sh):
-#   WIFI_SECURITY=psk     WPA2-Personal with KEY (64 hex), or the key saved for the same network
-#   WIFI_SECURITY=peap|tls WPA2- and WPA3-Enterprise (WPA-EAP, WPA-EAP-SHA256 with management frame protection when
-#                         the access point offers it) with the EAP settings; nothing written while they are incomplete
-# Written only when it changes; wpa_supplicant reads it again at once.
+# The networks this device keeps by itself (0.3.6): the ones joined from the Wi-Fi page while another one is the main
+# network of the settings. A secret like the Wi-Fi file (wifi-known): "<name in hex>\t<key in hex>" per line, the last
+# joined first, WIFI_KNOWN_MAX at most. They are the user's: the central settings never touch them.
+WIFI_KNOWN_MAX=10
+wifi_known(){ local f; f=$(secret_path wifi-known); [ -s "$f" ] && grep -E $'^[0-9a-f]+\t[0-9a-f]{64}$' "$f"; }
+wifi_known_names(){ local h k; wifi_known | while IFS=$'\t' read -r h k; do wifi_unhex "$h"; echo; done; }
+# the list from stdin becomes the secret (an empty one removes it)
+wifi_known_store(){
+  local t; t=$(mktemp); chmod 600 "$t"; cat > "$t"
+  if [ -s "$t" ]; then secret_store wifi-known "$t"
+  else rm -f "$t" "$OTR_SEALED/wifi-known.cred" "$OTR_SECRETS/wifi-known" "${OTR_SECRET_FILES[wifi-known]}"; fi
+}
+wifi_known_add(){ local h; h=$(wifi_hex "$1"); { printf '%s\t%s\n' "$h" "$2"; wifi_known | awk -F'\t' -v h="$h" '$1 != h'; } | head -n $WIFI_KNOWN_MAX | wifi_known_store; }
+wifi_known_forget(){ local h; h=$(wifi_hex "$1"); wifi_known | awk -F'\t' -v h="$h" '$1 != h' | wifi_known_store; }
+
+# wifi_conf_update [KEY]: the Wi-Fi configuration of wpa_supplicant, kept as a secret (lib/secrets.sh), with
+#   the main network (WIFI_SSID):
+#     WIFI_SECURITY=psk      WPA2-Personal with KEY (64 hex), or the key saved for the same network
+#     WIFI_SECURITY=peap|tls WPA2- and WPA3-Enterprise (WPA-EAP, WPA-EAP-SHA256 with management frame protection when
+#                            the access point offers it) with the EAP settings
+#   the other networks of the settings (WIFI_SSID_2..4, WPA2-Personal): their new key in WIFI_NEWKEY[n] (save-config.sh)
+#     or the one saved; a network without a key is left out
+#   the networks of the device (wifi_known), but the ones above
+# wpa_supplicant joins by itself whichever of them is around, the strongest when more are. The main network set but not
+# usable (enterprise settings incomplete, its key not readable: #201) leaves the file as it is, unless the device's own
+# networks just changed (WIFI_FORCE=1, wifi.sh). Written only when it changes; wpa_supplicant reads it again at once.
 wifi_conf_update(){
-  local ssid sec key t c wl
-  ssid=$(cfg WIFI_SSID); sec=$(cfg WIFI_SECURITY); key=$1
-  [ -n "$ssid" ] || return 0
-  t=$(mktemp); chmod 600 "$t"
-  { echo "ctrl_interface=/run/wpa_supplicant"; c=$(cfg WIFI_COUNTRY); [ -n "$c" ] && echo "country=$c"
+  local ssid sec key t c wl n s k h body="" missing="" names
+  ssid=$(cfg WIFI_SSID); sec=$(cfg WIFI_SECURITY); key=$1; names=" $(wifi_hex "$ssid") "
+  if [ -n "$ssid" ]; then
     case "$sec" in
       peap|tls)
-        [ -z "$(eap_missing "$sec")" ] || { rm -f "$t"; return 0; }
-        printf 'network={\n\tssid="%s"\n\tkey_mgmt=WPA-EAP WPA-EAP-SHA256\n\tieee80211w=1\n' "$ssid"
-        eap_block "$sec"; printf '}\n' ;;
+        if [ -z "$(eap_missing "$sec")" ]; then
+          body+="$(printf 'network={\n\tssid="%s"\n\tkey_mgmt=WPA-EAP WPA-EAP-SHA256\n\tieee80211w=1\n' "$ssid"; eap_block "$sec"; printf '}')"$'\n'
+        else missing=1; fi ;;
       *)
         [ -n "$key" ] || key=$(wifi_saved_psk "$ssid")
-        [ -n "$key" ] || { rm -f "$t"; return 0; }
-        printf 'network={\n\tssid="%s"\n\tpsk=%s\n\tkey_mgmt=WPA-PSK\n\tieee80211w=1\n}\n' "$ssid" "$key" ;;
-    esac; } > "$t"
-  [ -s "$t" ] || { rm -f "$t"; return 0; }
+        if [ -n "$key" ]; then body+="$(printf 'network={\n\tssid="%s"\n\tpsk=%s\n\tkey_mgmt=WPA-PSK\n\tieee80211w=1\n}' "$ssid" "$key")"$'\n'
+        else missing=1; fi ;;
+    esac
+  fi
+  for n in 2 3 4; do
+    s=$(cfg WIFI_SSID_$n); h=$(wifi_hex "$s")
+    [ -n "$s" ] && [[ $names != *" $h "* ]] || continue
+    k=${WIFI_NEWKEY[$n]:-}; [ -n "$k" ] || k=$(wifi_saved_psk "$s"); [ -n "$k" ] || continue
+    names+="$h "; body+="$(printf 'network={\n\tssid=%s\n\tpsk=%s\n\tkey_mgmt=WPA-PSK\n\tieee80211w=1\n}' "$h" "$k")"$'\n'
+  done
+  while IFS=$'\t' read -r h k; do
+    [ -n "$h" ] && [[ $names != *" $h "* ]] || continue
+    names+="$h "; body+="$(printf 'network={\n\tssid=%s\n\tpsk=%s\n\tkey_mgmt=WPA-PSK\n\tieee80211w=1\n}' "$h" "$k")"$'\n'
+  done < <(wifi_known)
+  [ -n "$missing" ] && [ -z "${WIFI_FORCE:-}" ] && return 0
+  # nothing to write, unless the last network of the device was just forgotten (an empty list of networks then)
+  [ -n "$body" ] || [ -n "${WIFI_FORCE:-}" ] || return 0
+  t=$(mktemp); chmod 600 "$t"
+  { echo "ctrl_interface=/run/wpa_supplicant"; c=$(cfg WIFI_COUNTRY); [ -n "$c" ] && echo "country=$c"; printf '%s' "$body"; } > "$t"
   if cmp -s "$t" "$(secret_path wifi.conf)"; then rm -f "$t"; return 0; fi
   mkdir -p /etc/wpa_supplicant
   secret_store wifi.conf "$t"

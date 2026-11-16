@@ -22,6 +22,29 @@ Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/
   is still refused, and the central settings stay strict: one not valid is refused and reported to the manager.
 - The Wi-Fi page checks the settings it will save **before** it stops the Wi-Fi of now: a save refused after the try
   left the device without Wi-Fi at every attempt (#201).
+- **A secret the TPM does not give back at one start is no longer thrown away** (#201). It was set aside for good at
+  the first start where the TPM did not answer in time (a firmware TPM still busy at power on): the Wi-Fi key was lost,
+  and from then on every save was refused. Now three tries at each start, and a secret is given up only after three
+  starts in a row.
+- Found by @soso192 (#201), fixed: the settings wrote every field into the device file at the first *Save*, freezing
+  the values of `site.conf` and of the defaults on that device for good (now only what differs from them); a value a
+  choice list does not know (a language added, a value set centrally) was replaced on save by the first item of the
+  list (now kept, as it is); `/etc/network/interfaces` was not written atomically, and a power cut in the middle left
+  it cut short (now written next to it, then renamed).
+- **More Wi-Fi networks** ([#208](https://github.com/OpenThinRdp/openthinrdp/issues/208)). The Wi-Fi page adds a
+  network to the networks of the device (up to 10) instead of replacing the main one, marks the saved ones in the list
+  (also when they are not around) and forgets the device's own ones (*Forget*). Up to three more networks for every
+  device from the settings and the manager (`WIFI_SSID_2..4`, `WIFI_PSK_2..4`), e.g. two buildings. The device joins
+  whichever is around, the strongest when more are, and the one chosen on the page at once. The keys stay in the TPM;
+  the status file names the networks, never a key; the anonymous data only counts them.
+- **Closing the session from the device** ([#209](https://github.com/OpenThinRdp/openthinrdp/issues/209)), both off
+  by default: FreeRDP's bar at the top of the session (`SESSION_BAR`) and a key combination of your choice
+  (`SESSION_CLOSE_KEY`, e.g. Ctrl+Alt+Q). Either ends like *Disconnect* in Windows: the session stays open on the
+  computer. Ctrl+Alt+Enter no longer takes the session out of full screen (out of it, the X of the window closed the
+  session and an installed device switched off; `RDP_EXTRA=+toggle-fullscreen` gives it back), and a minimized session
+  comes back by itself.
+- The error after the last attempt names the computer of this connection (the one chosen in the list, not always the
+  first), with words that fit a broker and a single PC.
 - **The Wi-Fi page said *busy* at every try after the first one**, until a restart: the `wpa_supplicant` it started
   kept its lock. The status line of the settings said *Wi-Fi: not connected* on a connected Wi-Fi (`iw` is outside the
   path of the kiosk user) ([#202](https://github.com/OpenThinRdp/openthinrdp/issues/202)).

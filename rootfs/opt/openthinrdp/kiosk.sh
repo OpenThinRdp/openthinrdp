@@ -353,6 +353,11 @@ connect(){
   elif [ $HASUDP = 1 ]; then o+=(/network:lan -multitransport)
   else o+=(/network:lan); fi
   v=$(cfg RDP_KEYBOARD); [ -n "$v" ] && o+=(/kbd:layout:"$v")
+  # ways to close the session from the device (0.3.6, both off by default: in an office people leave from Windows):
+  # FreeRDP's bar at the top of the screen (SESSION_BAR) with its close button, and a key combination of the site's
+  # choice (SESSION_CLOSE_KEY, rdp-action.sh). Either ends like a disconnect from Windows (see the end of session())
+  [ "$(cfg SESSION_BAR)" = on ] && o+=(/floatbar:sticky:off,default:visible,show:fullscreen)
+  [ -n "$(cfg SESSION_CLOSE_KEY)" ] && o+=(/action-script:"$OTR/rdp-action.sh")
   # every monitor when more than one is connected (with /f the session is full screen on all of them)
   [ "$(cfg MULTIMON)" != off ] && [ "$(xrandr --current 2>/dev/null | grep -c ' connected')" -gt 1 ] && o+=(/multimon)
   # the scale of the screens as the display scale of Windows (#183): the desktop as chosen, the device scale (store
@@ -379,7 +384,10 @@ connect(){
   # setsid, input from /dev/null: no console for FreeRDP. Missing a user or a password it would ask for them on tty1,
   # where nobody can answer: stopped by the kernel (SIGTTOU), the screen stuck on "connecting" until switched off.
   # Without a console the question fails at once and the attempt ends with its error.
-  setsid -w xfreerdp3 "${o[@]}" /gdi:hw /bpp:32 /dynamic-resolution /f /smartcard /drive:hotplug,'*' \
+  # -toggle-fullscreen: Ctrl+Alt+Enter no longer takes the session out of full screen (0.3.6, #201). Out of it the
+  # window had a title bar: its X closed the session and the device switched off, its minimize hid the session.
+  # RDP_EXTRA=+toggle-fullscreen gives it back
+  setsid -w xfreerdp3 "${o[@]}" /gdi:hw /bpp:32 /dynamic-resolution /f -toggle-fullscreen /smartcard /drive:hotplug,'*' \
     "$snd" /clipboard "${extra[@]}" < /dev/null > /tmp/kiosk.log 2>&1
 }
 
@@ -387,11 +395,15 @@ connect(){
 # prefix /23 -> 255.255.254.0
 pfx2mask(){ local p=$1 m="" i o; for i in 1 2 3 4; do if [ $p -ge 8 ]; then o=255; p=$((p-8)); else o=$(( 256 - (1 << (8-p)) )); [ $p -eq 0 ] && o=0; p=0; fi; m="$m${m:+.}$o"; done; echo $m; }
 # combo VALUE VALUES_ARRAY LABELS_ARRAY: yad list "a!^b!c" with the label of VALUE selected
-combo(){ local cur=$1 i out=""; local -n vs=$2 ls=$3
-  for i in "${!vs[@]}"; do out+="${out:+!}$([ "${vs[$i]}" = "$cur" ] && echo '^')${ls[$i]}"; done; echo "$out"; }
+combo(){ local cur=$1 i out="" known=""; local -n vs=$2 ls=$3
+  for i in "${!vs[@]}"; do [ "${vs[$i]}" = "$cur" ] && known=1; out+="${out:+!}$([ "${vs[$i]}" = "$cur" ] && echo '^')${ls[$i]}"; done
+  # a value the list does not know stays, as it is (as in ui.py)
+  [ -z "$known" ] && [ -n "$cur" ] && out+="!^$cur"; echo "$out"; }
 # unlabel LABEL VALUES_ARRAY LABELS_ARRAY: the value behind a label chosen in a combo
 unlabel(){ local lab=$1 i; local -n vs=$2 ls=$3
-  for i in "${!ls[@]}"; do [ "${ls[$i]}" = "$lab" ] && { echo "${vs[$i]}"; return; }; done; echo "${vs[0]}"; }
+  for i in "${!ls[@]}"; do [ "${ls[$i]}" = "$lab" ] && { echo "${vs[$i]}"; return; }; done
+  # not a label of the list: the value kept by combo() as it is
+  if [ -n "$lab" ]; then echo "$lab"; else echo "${vs[0]}"; fi; }
 # the settings can be protected by a PIN (SETTINGS_PIN_SHA256): anyone at the device could change the broker.
 # The value is pbkdf2-sha256:<iterations>:<salt>:<key> (salted and slow: a short PIN is not reversed in seconds
 # by whoever gets the settings file) or, as set by 0.1.4 and earlier, the plain SHA-256 of the PIN.
@@ -451,6 +463,8 @@ settings_spec(){
     fld SESSION_THRESHOLD text "$L_F_THRESHOLD" "$thr" "" "$L_H_THRESHOLD"
   fi
   fld SHUTDOWN_SECS text "$L_F_SHUTDOWN" "$off" "" "$L_H_SHUTDOWN"
+  fld SESSION_BAR choice "$L_F_SESSIONBAR" "$sbar" "$(chs ONV ONL)" "$L_H_SESSIONBAR"
+  fld SESSION_CLOSE_KEY text "$L_F_CLOSEKEY" "$ckey" "" "$L_H_CLOSEKEY"
   # the screen (#183): the resolutions the main monitor offers, the scale, every monitor or the main one only
   sec "$L_SEC_SCREEN"
   fld DISPLAY_RESOLUTION choice "$L_F_RESOLUTION" "$dres" "$(chs RESV RESL)" "$L_H_RESOLUTION"
@@ -524,7 +538,7 @@ settings_read(){
     case ${l%%=*} in
       HOSTNAME) h=$v ;; DEFAULT_USER) u=$v ;; BROKER) br=$v ;; BROKER_FALLBACK) brf=$v ;; DOMAIN) dom=$v ;;
       LOAD_BALANCE_INFO) lbi=$v ;; NETMODE) nm=$v ;; IPADDR) ip=$v ;; NETMASK) mask=$v ;; GATEWAY) gw=$v ;;
-      DNS1) d1=$v ;; DNS2) d2=$v ;; NTP) ntp=$v ;; SHUTDOWN_SECS) off=$v ;; SESSION_THRESHOLD) thr=$v ;;
+      DNS1) d1=$v ;; DNS2) d2=$v ;; NTP) ntp=$v ;; SHUTDOWN_SECS) off=$v ;; SESSION_THRESHOLD) thr=$v ;; SESSION_BAR) sbar=$v ;; SESSION_CLOSE_KEY) ckey=$v ;;
       TRANSPORT) tr=$v ;; LANGUAGE) ln=$v ;; MGMT_SHARE) share=$v ;; MGMT_USER) mu=$v ;; MGMT_PASSWORD) mp=$v ;;
       USB_MODE) um=$v ;; USB_REDIRECT) ur=$v ;; USB_LOCAL) ul=$v ;; SECURITY_UPDATES) su=$v ;; ANON_STATS) an=$v ;; TIMEZONE) tz=$v ;; WEB_BUTTON) wb=$v ;; WEB_URL) wu=$v ;;
       KIOSK_URL) ku=$v ;; KIOSK_RELOAD_MIN) kr=$v ;; POWER_ON_TIME) pon=$v ;; POWER_OFF_TIME) poff=$v ;;
@@ -548,6 +562,8 @@ wifi_page(){
     step_stop "$L_WP_STEP_STOP" step_test "$L_WP_STEP_TEST" step_save "$L_WP_STEP_SAVE" step_dhcp "$L_WP_STEP_DHCP" \
     ok "$L_WP_OK" noip "$L_WP_NOIP" wrongkey "$L_WP_WRONGKEY" notfound "$L_WP_NOTFOUND" timeout "$L_WP_TIMEOUT" \
     invalid "$L_WP_INVALID" nowifi "$L_WP_NOWIFI" busy "$L_WP_BUSY" saveerror "$L_WP_SAVEERROR" central "$L_WP_CENTRAL" \
+    added "$L_WP_ADDED" forget "$L_WP_FORGET" forgotten "$L_WP_FORGOTTEN" away "$L_WP_AWAY" \
+    known_main "$L_WP_KNOWN_MAIN" known_extra "$L_WP_KNOWN_EXTRA" known_personal "$L_WP_KNOWN_PERSONAL" \
     | ui wifi --heading="$(plain "$L_WP_HEADING")"
 }
 
@@ -611,6 +627,7 @@ settings_dialog(){
   if [ "$nm" = static ]; then ip=$(cfg IPADDR); mask=$(cfg NETMASK); gw=$(cfg GATEWAY)
   else ip=$IPC; mask=$([ -n "$IPC" ] && pfx2mask "$PFX" || cfg NETMASK); gw=${GWC:-$(cfg GATEWAY)}; fi
   d1=$(cfg DNS1); d2=$(cfg DNS2); ntp=$(cfg NTP); off=$(cfg_num SHUTDOWN_SECS 10); thr=$(cfg_num SESSION_THRESHOLD 10)
+  sbar=$(cfg SESSION_BAR); ckey=$(cfg SESSION_CLOSE_KEY)
   share=$(cfg MGMT_SHARE); um=$(cfg USB_MODE); ur=$(cfg USB_REDIRECT); ul=$(cfg USB_LOCAL); su=$(cfg SECURITY_UPDATES); an=$(anon_level); tz=$(cfg TIMEZONE); tr=$(cfg TRANSPORT)
   wb=$(cfg WEB_BUTTON); wu=$(cfg WEB_URL); ku=$(cfg KIOSK_URL); kr=$(cfg_num KIOSK_RELOAD_MIN 10)
   pon=$(cfg POWER_ON_TIME); poff=$(cfg POWER_OFF_TIME); pdays=$(cfg POWER_ON_DAYS); wf=$(cfg WIFI); ws=$(cfg WIFI_SSID); ln=$(cfg LANGUAGE)
@@ -687,7 +704,7 @@ settings_dialog(){
     tmp=$(mktemp)
     printf '%s\n' "HOSTNAME=$h" "DEFAULT_USER=$u" "BROKER=$br" "BROKER_FALLBACK=$brf" "DOMAIN=$dom" \
       "LOAD_BALANCE_INFO=$lbi" "NETMODE=$nm" "IPADDR=$ip" "NETMASK=$mask" "GATEWAY=$gw" "DNS1=$d1" "DNS2=$d2" \
-      "NTP=$ntp" "SHUTDOWN_SECS=$off" "SESSION_THRESHOLD=$thr" "MGMT_SHARE=$share" "MGMT_USER=$mu" "USB_MODE=$um" \
+      "NTP=$ntp" "SHUTDOWN_SECS=$off" "SESSION_THRESHOLD=$thr" "SESSION_BAR=$sbar" "SESSION_CLOSE_KEY=$ckey" "MGMT_SHARE=$share" "MGMT_USER=$mu" "USB_MODE=$um" \
       "USB_REDIRECT=$ur" "USB_LOCAL=$ul" "SECURITY_UPDATES=$su" "ANON_STATS=$an" "TIMEZONE=$tz" "TRANSPORT=$tr" "WEB_BUTTON=$wb" "WEB_URL=$wu" "KIOSK_URL=$ku" \
       "KIOSK_RELOAD_MIN=$kr" "POWER_ON_TIME=$pon" "POWER_OFF_TIME=$poff" "POWER_ON_DAYS=$pdays" "LANGUAGE=$ln" \
       "WIFI=$wf" "WIFI_SSID=$ws" "WIFI_SECURITY=$wsec" "DOT1X=$d1x" "EAP_IDENTITY=$eid" "EAP_ANONYMOUS=$ean" \
@@ -861,8 +878,10 @@ show_err(){ local cl=$1 u=$2 before=$3 t sup
   case "$cl" in
     net)    t="$L_T_NET" ;;
     noaddr) t="$L_T_NOADDR\n$sup" ;;
-    dns)    t=$(printf "$L_T_DNS" "$(cfg BROKER)")"\n$sup" ;;
-    broker) t=$(printf "$L_T_BROKER" "$(cfg BROKER) $(cfg BROKER_FALLBACK)")"\n$sup" ;;
+    # the computer of this connection: the one chosen on the sign-in screen (CONN), else the broker or remote computer
+    # (the message named BROKER also when another computer of the list was the one not found, 0.3.6)
+    dns)    t=$(printf "$L_T_DNS" "${CONN:-$(cfg BROKER)}")"\n$sup" ;;
+    broker) t=$(printf "$L_T_BROKER" "${CONN:-$(cfg BROKER) $(cfg BROKER_FALLBACK)}")"\n$sup" ;;
     vm)     t=$(printf "$L_T_VM" "$u")"\n$sup" ;;
     udp)    t="$L_T_UDP\n$sup" ;;
     *)      t=$(printf "$L_T_OTHER" "$LAST_EC")"\n$sup" ;;
@@ -942,7 +961,7 @@ WOL
 session(){
   local U="$1" P="$2" att=0 max=8 txt="$L_P_CONNECTING" B BRHA st d ec thr xp wp udponly=0 noudp=0 vmfails=0 vmwait=0 vmlog=0 ctmo=150 ns nw netw0=0 netok=0 msg
   BRHA=${CONN:-$(cfg BROKER)}
-  rm -f /tmp/kiosk.cancel /tmp/kiosk.stopped /tmp/kiosk.timeout /tmp/kiosk.disconnect
+  rm -f /tmp/kiosk.cancel /tmp/kiosk.stopped /tmp/kiosk.timeout /tmp/kiosk.disconnect /tmp/kiosk.userclose
   [ "$3" = reconnect ] && { max=40; txt="$L_P_RECONNECTING"; }
   LAST_ERR=""; LAST_EC=""
   thr=$(cfg_num SESSION_THRESHOLD 10)
@@ -1028,6 +1047,11 @@ session(){
         # and the session is reopened like after any drop.
         [ $((n % 12)) -eq 0 ] || continue
         fp=$(pgrep -P $xp -x xfreerdp3 | head -1); [ -n "$fp" ] || continue
+        # a session minimized (the button of FreeRDP's bar, or of the title bar once out of full screen with
+        # Ctrl+Alt+Enter): with no taskbar it would never come back
+        if [ $s3 -eq 1 ]; then
+          for w in $(xdotool search --pid "$fp" 2>/dev/null); do xprop -id "$w" WM_STATE 2>/dev/null | grep -q Iconic && xdotool windowactivate "$w" 2>/dev/null; done
+        fi
         # Watchdog 4: the clock changed (daylight saving time): the session is opened again at once, like after a
         # drop (code 137, a few seconds, the programs stay open on the server), so Windows shows the new time
         if [ $s3 -eq 1 ] && [ "$(date +%z)" != "$tzo" ]; then ev "session of $U: the time changed ($tzo to $(date +%z), daylight saving time), opened again so Windows shows the new time"; tzo=$(date +%z); kill -9 "$fp"; continue; fi
@@ -1109,6 +1133,13 @@ session(){
     # disconnected by an administrator from the manager (the flag, then FreeRDP ended): the session stays open on its
     # desktop, this device goes back to the sign-in and does not reconnect
     if [ -f /tmp/kiosk.disconnect ]; then rm -f /tmp/kiosk.disconnect; ev "session of $U disconnected from the manager after $(duration $d)"; return 5; fi
+    # closed on purpose on this device (0.3.6): the key combination of SESSION_CLOSE_KEY (rdp-action.sh leaves the
+    # flag) or the close button of FreeRDP's bar (SESSION_BAR; it aborts the connection: 145, CONNECT_CANCELLED). As a
+    # disconnect from Windows: the session stays open on its desktop, the end page here, no reconnection
+    if [ -f /tmp/kiosk.userclose ] || { [ "$(cfg SESSION_BAR)" = on ] && [ "$ec" = 145 ] && grep -q CONNECT_CANCELLED /tmp/kiosk.log; }; then
+      ev "session of $U ended after $(duration $d) (closed on the device with $([ -f /tmp/kiosk.userclose ] && echo 'the key' || echo 'the bar'))"
+      rm -f /tmp/kiosk.userclose; return 0
+    fi
     if [ -f /tmp/kiosk.stopped ] || [ -f /tmp/kiosk.timeout ]; then
       if [ -f /tmp/kiosk.stopped ]; then STOP_MSG=$L_E_STOPPED; else STOP_MSG=$(printf "$L_E_TIMEOUT" "$ctmo"); fi
       rm -f /tmp/kiosk.stopped /tmp/kiosk.timeout; return 6

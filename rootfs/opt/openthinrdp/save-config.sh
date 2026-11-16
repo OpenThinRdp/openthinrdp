@@ -100,6 +100,23 @@ case "${V[DISPLAY_RESOLUTION]}" in ""|native|nativa|auto) V[DISPLAY_RESOLUTION]=
 case "$(get DISPLAY_SCALE | tr -d ' %')" in 100|125|150|175|200) V[DISPLAY_SCALE]=$(get DISPLAY_SCALE | tr -d ' %') ;; *) V[DISPLAY_SCALE]=auto ;; esac
 V[SESSION_THRESHOLD]=$(get SESSION_THRESHOLD)
 { [[ ${V[SESSION_THRESHOLD]} =~ ^[0-9]{1,3}$ ]] && [ $((10#${V[SESSION_THRESHOLD]})) -ge 5 ] && [ $((10#${V[SESSION_THRESHOLD]})) -le 120 ]; } || err "SESSION_THRESHOLD" "$V_THRESHOLD"
+# closing the session from the device (0.3.6): FreeRDP's bar, a key combination in FreeRDP's form (lower case, the
+# modifiers in the order shift, ctrl, alt, super, then one key: "ctrl+alt+q"); Control, Win, Meta understood
+V[SESSION_BAR]=$(onoff "$(get SESSION_BAR)")
+ck=$(get SESSION_CLOSE_KEY | tr 'A-Z' 'a-z' | tr -d ' ')
+V[SESSION_CLOSE_KEY]=""
+if [ -n "$ck" ]; then
+  IFS=+ read -ra P <<< "$ck"; key=${P[${#P[@]}-1]}; mods=" "; ok=1
+  for x in "${P[@]:0:${#P[@]}-1}"; do
+    case "$x" in shift|ctrl|alt|super) mods+="$x " ;; control) mods+="ctrl " ;; win|windows|meta) mods+="super " ;; *) ok="" ;; esac
+  done
+  # one key that is not itself a modifier, with Ctrl, Alt or Super (Shift alone would catch typing)
+  case "$key" in shift|ctrl|control|alt|super|win|windows|meta) ok="" ;; esac
+  { [[ $ck != *+ ]] && [[ $key =~ ^[a-z0-9_]+$ ]] && [[ $mods =~ \ (ctrl|alt|super)\  ]]; } || ok=""
+  if [ -n "$ok" ]; then
+    for x in shift ctrl alt super; do [[ $mods == *" $x "* ]] && V[SESSION_CLOSE_KEY]+="$x+"; done; V[SESSION_CLOSE_KEY]+=$key
+  else err "SESSION_CLOSE_KEY" "$V_CLOSEKEY"; fi
+fi
 V[SHUTDOWN_SECS]=$(get SHUTDOWN_SECS)
 { [[ ${V[SHUTDOWN_SECS]} =~ ^[0-9]{1,4}$ ]] && [ $((10#${V[SHUTDOWN_SECS]})) -le 3600 ]; } || err "SHUTDOWN_SECS" "$V_SHUTDOWN"
 
@@ -183,6 +200,24 @@ if [ "${V[WIFI]}" = on ]; then
     else WKEYLOST=1; fi
   fi
 fi
+# the other networks of the settings (0.3.6): WIFI_SSID_2..4 with WIFI_PSK_2..4, WPA2-Personal (two buildings, a branch
+# office); the keys as the main one's, only in the Wi-Fi file. A network without its key is an error when it is set
+# now; one already there whose key is not readable is left out of the file (lib/eap.sh)
+declare -A WIFI_NEWKEY
+for n in 2 3 4; do
+  s=$(get WIFI_SSID_$n); V[WIFI_SSID_$n]=$s
+  [ -z "$s" ] || { [ ${#s} -le 32 ] && ! [[ $s =~ $BADSSID ]]; } || err "WIFI_SSID_$n" "$V_SSID $s"
+  p=$(sed -n "s/^WIFI_PSK_$n=//p" "$F" | head -1 | tr -d '\r')
+  if [ -n "$p" ]; then
+    if [[ $p =~ ^[0-9a-fA-F]{64}$ ]]; then WIFI_NEWKEY[$n]=$(low "$p")
+    elif [ ${#p} -ge 8 ] && [ ${#p} -le 63 ]; then WIFI_NEWKEY[$n]=$(wpa_passphrase "$s" "$p" 2>/dev/null | sed -n 's/^[[:space:]]*psk=//p')
+    else err "WIFI_PSK_$n" "$V_WIFIPSK"; fi
+    [ -n "$s" ] || err "WIFI_PSK_$n WIFI_SSID_$n" "$V_WIFINOSSID"
+  fi
+  if [ -n "$s" ] && [ -z "${WIFI_NEWKEY[$n]:-}" ] && changed "WIFI_SSID_$n" && [ -z "$(wifi_saved_psk "$s")" ]; then
+    err "WIFI_SSID_$n" "$V_WIFIMISSING $s"
+  fi
+done
 
 # --- 802.1X: on the cable (DOT1X, dot1x.sh) and for Wi-Fi Enterprise, one block of settings (lib/eap.sh). The password
 # lives ONLY in the TPM or a root-only file, like the Wi-Fi key; an empty one keeps the saved one. A missing password,
@@ -278,17 +313,25 @@ if [ -n "$PRINT" ]; then
   hs(){ [ -n "$1" ] && printf '%s' "$1" | sha256sum | cut -c1-64; }
   # (an enterprise network has no key: a WIFI_PSK left in the central files must not look like a change at every run)
   if [ "${V[WIFI_SECURITY]}" = psk ]; then echo "WIFI_PSK=$(hs "${WHEX:-$OLDHEX}")"; else echo "WIFI_PSK="; fi
+  for n in 2 3 4; do s=${V[WIFI_SSID_$n]}; echo "WIFI_PSK_$n=$( [ -n "$s" ] && hs "${WIFI_NEWKEY[$n]:-$(wifi_saved_psk "$s")}")"; done
   echo "MGMT_PASSWORD=$(hs "${MPW:-$OLDPW}")"
   echo "EAP_PASSWORD=$(hs "${EPW:-$OLDEPW}")"
   exit 0
 fi
 
-# --- save: the device file keeps the keys it already had plus the ones given now; the others keep
-# following site.conf and the project defaults
+# --- save: the device file keeps the keys it already had, plus the ones given now that differ from what the device
+# inherits; the others keep following site.conf and the project defaults. The settings screen sends every field: all
+# of them written froze site.conf and the defaults on the device at its first Save, for good (0.3.6, found by soso192
+# in #201). ANON_STATS always: its presence says the question of the first start was answered.
 mkdir -p "$OTR_ETC"
 declare -A OUT
 [ -f "$OTR_CONF" ] && while IFS='=' read -r k v; do [ -n "$k" ] && OUT[$k]=$v; done < <(grep -E '^[A-Z][A-Z0-9_]*=' "$OTR_CONF")
-for k in $(cfg_keys); do [ "$k" = HOSTNAME ] && continue; { has "$k" || [ -n "${OUT[$k]+x}" ]; } && OUT[$k]=${V[$k]}; done
+inherited(){ local f; for f in "$OTR_SITE" "$OTR_DEFAULTS"; do [ -f "$f" ] && grep -q "^$1=" "$f" && { sed -n "s/^$1=//p" "$f" | head -1 | tr -d '\r'; return; }; done; }
+for k in $(cfg_keys); do
+  [ "$k" = HOSTNAME ] && continue
+  if [ -n "${OUT[$k]+x}" ]; then OUT[$k]=${V[$k]}
+  elif has "$k" && { [ "$k" = ANON_STATS ] || [ "${V[$k]}" != "$(inherited "$k")" ]; }; then OUT[$k]=${V[$k]}; fi
+done
 T=$(mktemp "$OTR_ETC/.conf.XXXXXX")
 { echo "# Settings of this device, written by save-config.sh. See /opt/openthinrdp/defaults.conf."
   for k in $(cfg_keys); do [ -n "${OUT[$k]+x}" ] && echo "$k=${OUT[$k]}"; done; } > "$T"

@@ -53,6 +53,8 @@ environment(){
   local e=otr_week w mons=0 maxw=0 c x res dev
   p $e first "$([ -f "$STAMP" ] && echo no || echo yes)"
   p $e wifi_adapter "$(yn test -n "$(wifi_nics | head -1)")"
+  # how many Wi-Fi networks it knows (0.3.6): a number, never a name
+  p $e wifi_networks "$( ( . "$OTR/lib/secrets.sh"; . "$OTR/lib/eap.sh"; { cfg WIFI_SSID; for n in 2 3 4; do cfg WIFI_SSID_$n; done; wifi_known_names; } 2>/dev/null | grep -c . ) )"
   p $e tpm "$(yn test -e /dev/tpmrm0 -o -e /dev/tpm0)"
   p $e managed "$(yn test -n "$(cfg MGMT_SHARE)" -o -s "$OTR_LIB/share-from-domain")"
   x=$(setup_kind); p $e setup "${x:-unset}"

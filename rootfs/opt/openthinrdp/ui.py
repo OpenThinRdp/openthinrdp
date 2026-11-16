@@ -120,6 +120,7 @@ stacksidebar row:hover:not(:selected) { background: #f1f5f9; }
 .wifirow { padding: 10px 12px; border-radius: 8px; }
 .wifiname { color: #111827; font-size: 15px; }
 .wifimeta { color: #64748b; font-size: 12px; }
+row:selected .wifimeta, row:selected .wifiname { color: #ffffff; }
 .result-ok { color: #15803d; font-size: 14px; font-weight: bold; }
 .result-err { color: #b91c1c; font-size: 14px; font-weight: bold; }
 .result-busy { color: #1d4ed8; font-size: 14px; }
@@ -516,7 +517,11 @@ if MODE == 'form':
                 w = Gtk.ComboBoxText()
                 for c in ch.split('|'):
                     v, _, t = c.partition('='); w.append(v, t or v)
-                if not w.set_active_id(val): w.set_active(0)
+                # a value the list does not know (set centrally, by another version, or by hand) stays as it is, shown
+                # as it is: choosing the first item instead saved a value nobody chose (0.3.6, found by soso192)
+                if not w.set_active_id(val):
+                    if val: w.append(val, val); w.set_active_id(val)
+                    else: w.set_active(0)
             elif typ in ('tz', 'combo'):
                 # the time zones of tzdata in a list, with a search while typing ("rome" finds Europe/Rome); combo:
                 # free text with suggestions (the PCs found on the network)
@@ -626,37 +631,49 @@ if MODE == 'wifi':
     res = left_label('', 'text', 90); card.pack_start(res, False, False, 0)
     bar = Gtk.Box(spacing=dp(10))
     bcn = button(t('connect'), 'primary', lambda *_: connect()); bcl = button(t('close'), 'secondary', lambda *_: leave(code))
+    # Forget: only a network the device keeps by itself (added here); the ones of the settings change there (0.3.6)
+    bfg = button(t('forget'), 'secondary', lambda *_: forget()); bfg.set_no_show_all(True)
+    bar.pack_start(bfg, False, False, 0)
     bar.pack_end(bcn, False, False, 0); bar.pack_end(bcl, False, False, 0); card.pack_start(bar, False, False, 0)
-    state = {'busy': False, 'net': None}
+    state = {'busy': False, 'net': None, 'known': {}}
     def say(text, cls):
         res.set_text(text)
         for c in ('result-ok', 'result-err', 'result-busy', 'text'): res.get_style_context().remove_class(c)
         res.get_style_context().add_class(cls)
     def busy(on):
         state['busy'] = on
-        for w in (brf, bcn, bcl, lb, ep, cshow): w.set_sensitive(not on)
+        for w in (brf, bcn, bcl, bfg, lb, ep, cshow): w.set_sensitive(not on)
     def pick(_lb, row):
         if row is None: return
         n = row.net; state['net'] = n
-        if n['sec'] == 'psk':
+        bfg.set_visible(state['known'].get(n['ssid']) == 'personal')
+        if n.get('away'):
+            # a saved network not around now: nothing to join, it can only be forgotten
+            sel.set_text(t('chosen', n['ssid']) + '  —  ' + t('away')); prow.set_sensitive(False); bcn.set_sensitive(False)
+        elif n['sec'] == 'psk':
             sel.set_text(t('chosen', n['ssid'])); prow.set_sensitive(True); bcn.set_sensitive(not state['busy']); ep.grab_focus()
         else:
             sel.set_text(t('chosen', n['ssid']) + '  —  ' + t('sec_' + n['sec'])); prow.set_sensitive(False); bcn.set_sensitive(False)
     lb.connect('row-selected', pick)
     def fill(nets):
         for r in lb.get_children(): lb.remove(r)
-        cur = net_state()[1]
+        cur = net_state()[1]; kn = state['known']
+        # the saved networks not around are listed too, after the others: they can be forgotten from anywhere
+        seen = {n['ssid'] for n in nets}
+        nets = nets + [{'dbm': -100, 'sec': 'psk', 'ssid': s, 'away': True} for s in kn if s not in seen]
         for n in nets:
             row = Gtk.ListBoxRow(); row.net = n; box = Gtk.Box(spacing=dp(12)); box.get_style_context().add_class('wifirow')
-            box.pack_start(net_icon('wifi', bars(n['dbm']), 20, (0.15, 0.39, 0.92)), False, False, 0)
+            box.pack_start(net_icon('wifi', 0 if n.get('away') else bars(n['dbm']), 20, (0.15, 0.39, 0.92)), False, False, 0)
             col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
             nm = Gtk.Label(label=n['ssid'], xalign=0); nm.get_style_context().add_class('wifiname'); col.pack_start(nm, False, False, 0)
-            meta = t('sec_' + n['sec']) + ('  ·  ' + t('current') if n['ssid'] == cur else '')
+            k = kn.get(n['ssid'])
+            meta = (t('away') if n.get('away') else t('sec_' + n['sec'])) + ('  ·  ' + t('known_' + k) if k else '') + ('  ·  ' + t('current') if n['ssid'] == cur else '')
             mt = Gtk.Label(label=meta, xalign=0); mt.get_style_context().add_class('wifimeta'); col.pack_start(mt, False, False, 0)
             box.pack_start(col, True, True, 0); row.add(box); lb.add(row)
             if n['ssid'] == cur: lb.select_row(row)
         lb.show_all()
         if not nets: say(t('nonefound'), 'result-err')
+        elif state.get('msg'): say(*state.pop('msg'))     # what was just done stays on the page after the new search
         elif res.get_text() == t('scanning'): say('', 'text')
         busy(False)
         if state['net'] is None or state['net']['sec'] != 'psk': bcn.set_sensitive(False)
@@ -670,9 +687,37 @@ if MODE == 'wifi':
                 for l in p.stdout.splitlines():
                     f = l.split('\t', 2)
                     if len(f) == 3: nets.append({'dbm': int(f[0]), 'sec': f[1], 'ssid': f[2]})
+                state['nets'] = nets
+                # the networks the device knows: main (settings), extra (settings), personal (added here)
+                kn = {}
+                q = subprocess.run(WIFI + ['known'], capture_output=True, text=True, timeout=20)
+                for l in q.stdout.splitlines():
+                    k, _, s = l.partition('\t')
+                    if s and s not in kn: kn[s] = k
+                state['known'] = kn
             except Exception:
                 pass
             GLib.idle_add(lambda: fill(nets) and False)
+        threading.Thread(target=run, daemon=True).start()
+    def forget():
+        n = state['net']
+        if not n or state['known'].get(n['ssid']) != 'personal': return
+        busy(True)
+        def run():
+            out = 'result busy'
+            try:
+                p = subprocess.run(WIFI + ['forget'], input=n['ssid'] + '\n', capture_output=True, text=True, timeout=60)
+                out = ([l for l in p.stdout.splitlines() if l.startswith('result ')] or [out])[-1]
+            except Exception:
+                pass
+            def after():
+                global code
+                if out.split()[1:2] == ['forgotten']:
+                    state['msg'] = (t('forgotten', n['ssid']), 'result-ok'); code = 0; bfg.hide(); state['net'] = None; sel.set_text(t('choose')); scan()
+                else:
+                    say(t('busy'), 'result-err'); busy(False)
+                return False
+            GLib.idle_add(after)
         threading.Thread(target=run, daemon=True).start()
     def connect():
         n = state['net']
@@ -699,6 +744,10 @@ if MODE == 'wifi':
         f = out.split()[1:] or ['timeout']; r = f[0]
         if r == 'ok':
             say(t('ok', state['net']['ssid'], f[1] if len(f) > 1 else '-') + ('\n' + t('central') if 'central' in f else ''), 'result-ok'); code = 0
+        elif r == 'added':
+            # the list drawn again with the network now saved (and Forget for it), without a new search
+            s = state['net']['ssid']; state['known'][s] = 'personal'
+            state['msg'] = (t('added', s, f[1] if len(f) > 1 else '-'), 'result-ok'); code = 0; fill(state.get('nets', []))
         elif r == 'noip':
             say(t('noip', state['net']['ssid']) + ('\n' + t('central') if 'central' in f else ''), 'result-err'); code = 0
         elif r == 'saveerror':
