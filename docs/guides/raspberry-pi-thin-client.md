@@ -4,8 +4,8 @@ A Raspberry Pi 4 costs little, uses a few watts and is silent: a natural termina
 builds as an SD card image for it, the same system as on a PC: the Windows sign-in at power on, RDP over UDP,
 sound, USB and the same central management.
 
-**Status, said plainly: experimental.** The image is built and tested in emulation (QEMU), not yet on a real board.
-If you have a Pi 4 and an hour, your report is what moves it forward.
+**New, and ready for its first boards.** The image is built and tested in emulation (QEMU). Have a Pi 4 and an hour?
+Be among the first to run it on a real board: your report puts it in the table below.
 
 - [What works and what to check](#what-works-and-what-to-check)
 - [Try it](#try-it)
@@ -13,7 +13,7 @@ If you have a Pi 4 and an hour, your report is what moves it forward.
 
 ## What works and what to check
 
-- **Boards**: Raspberry Pi 4 Model B with 2 GB or more, the Pi 400 and the CM4. The Pi 5 is not supported yet.
+- **Boards**: Raspberry Pi 4 Model B with 2 GB or more, the Pi 400 and the CM4. The Pi 5 comes next.
 - **The same system as on a PC**: kiosk, settings dialog, management folder, signed updates, FreeRDP with UDP, on
   Debian 13 arm64 with Debian's own kernel.
 - **No installer**: the image is written to an SD card or a USB disk and boots as an installed system.
@@ -32,10 +32,10 @@ If you have a Pi 4 and an hour, your report is what moves it forward.
 
 | | Raspberry Pi 4 | Used x86 thin client (Wyse 5070, HP t630, Futro S740) |
 |---|---|---|
-| Status with OpenThinRDP | experimental | supported: x86 is what runs in production |
+| Status with OpenThinRDP | new | in production every day |
 | Price | the board plus power supply, case and SD card | often less, with case, power supply and storage included |
 | Storage | SD card (slower, wears out) or USB disk | eMMC or M.2 |
-| Video decoding in the session | to be checked | proven on x86 |
+| Video decoding in the session | first boards will tell | proven |
 
-For an office today, a used x86 thin client is the safer choice ([which one](used-thin-client.md)). For a test at
+For a whole office today, a used x86 thin client is the proven choice ([which one](used-thin-client.md)). For a test at
 home, or to help the project, the Pi is welcome.

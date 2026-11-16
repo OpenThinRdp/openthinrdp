@@ -1,7 +1,7 @@
 <p align="center"><img src="docs/logo.png" alt="OpenThinRDP" width="480"></p>
 
-<p align="center"><b>Il thin client per Desktop remoto gratuito e open source: un PC Windows a casa, o un ufficio intero in dominio.<br>
-RDP su UDP, e un gestore Windows gratuito che controlla l'infrastruttura (Hyper-V, Desktop remoto, SQL, iDRAC...) e gestisce anche la flotta.</b></p>
+<p align="center"><b>Il primo thin client open source con RDP su UDP.<br>
+Leggero, gratuito, fatto per Desktop remoto Windows: il desktop resta fluido anche quando la rete non lo è.</b></p>
 
 <p align="center">
 <a href="https://github.com/OpenThinRdp/openthinrdp/releases/latest"><b>Scarica l'ultima versione</b></a>
@@ -15,17 +15,20 @@ portano lì.
 
 ## OpenThinRDP: il thin client
 
-OpenThinRDP trasforma piccoli PC e vecchi thin client in postazioni che si accendono direttamente sul modulo di accesso
-e si collegano a Windows: al desktop o alla VM dell'utente tramite un RD Connection Broker, a un host di sessione o a
-qualsiasi PC con Desktop remoto, in sede o nel cloud.
+OpenThinRDP è un sistema leggero che fa una cosa sola e la fa bene: si accende in pochi secondi sul modulo di accesso
+e apre il tuo Windows a tutto schermo, il desktop o la VM dell'utente tramite un RD Connection Broker, un host di
+sessione o qualsiasi PC con Desktop remoto, in sede o nel cloud.
 
-- **RDP su UDP**: FreeRDP con il trasporto UDP, che regge le linee che perdono pacchetti dove il solo TCP rallenta.
-  [I numeri misurati](docs/udp.md).
-- **Debian 13**, si installa sulla postazione o gira live da una chiavetta USB. Hyper-V, Proxmox, VMware o cloud: va
+- **RDP su UDP acceso dal primo avvio**: con metà dei pacchetti persi il desktop va ancora a 19-21 fotogrammi al
+  secondo, dove il TCP è fermo. Le correzioni nate dai nostri test sono entrate in FreeRDP
+  ([#13608](https://github.com/FreeRDP/FreeRDP/pull/13608)). [I numeri misurati](docs/udp.md).
+- **Webcam fino a 1080p a 30 fps** in Teams e Zoom, con l'accelerazione hardware dove la postazione la offre; cuffie,
+  chiavette di firma e strumenti USB come se fossero collegati a Windows.
+- **Debian 13**, da 2 GB di RAM su qualsiasi PC o thin client a 64 bit, installato o live da una chiavetta USB. Hyper-V, Proxmox, VMware o cloud: va
   bene qualsiasi infrastruttura con Desktop remoto Windows.
 - **Gestione da una cartella condivisa**: configurazione centrale, aggiornamenti firmati, logo, lo schermo di ogni
   postazione nel browser. Nessun agente, nessun server di gestione, nessuna licenza per postazione.
-- **Configurazione automatica dal dominio** (zero-touch), webcam, USB, VPN, 802.1X, RD Gateway.
+- **Configurazione automatica dal dominio** (zero-touch), VPN, 802.1X, RD Gateway.
 - Licenza GPLv3. Alternativa gratuita a IGEL OS e Dell ThinOS: [il confronto](docs/alternatives.md).
 
 Per iniziare: [Getting started](docs/guides/getting-started.md) · [Hardware provato](docs/hardware.md) ·

@@ -33,9 +33,10 @@ environment (Dell OptiPlex 3000 Thin Client, Windows 11 VDI on Hyper-V), loss em
 [the method and the scripts](../tests/udp-bench/README.md) to get your own numbers, and every step in
 [docs/udp.md](udp.md#on-a-lossy-line).
 
-The UDP transport comes from our work in FreeRDP: we found and fixed what made it fail on lossy lines, and it was
-merged upstream as [#13608](https://github.com/FreeRDP/FreeRDP/pull/13608). Upstream ships it switched off;
-OpenThinRDP has it on, with `TRANSPORT=tcp` one setting away.
+**The first open source thin client with RDP over UDP.** We ran FreeRDP's new UDP transport on our production fleet,
+found what made it fail on lossy lines and helped fix it until it was merged into FreeRDP
+([#13608](https://github.com/FreeRDP/FreeRDP/pull/13608)). Stock FreeRDP builds it switched off; OpenThinRDP has it
+on from the first start, with `TRANSPORT=tcp` one setting away.
 
 ## Every feature
 
@@ -53,9 +54,10 @@ OpenThinRDP has it on, with `TRANSPORT=tcp` one setting away.
   disconnect, VM shut down by an administrator), and warns before taking over a session open on another device.
   A session taken over by another device shows "Session opened elsewhere" with *Resume here*.
 - **USB done right for VDI.** Signature keys, tachograph keys and other special devices go to Windows as whole
-  USB devices, also when plugged in during the session. **Webcams and headsets work in meetings**: the camera goes
-  through the RDP camera channel and the microphone through the RDP audio channel, so Teams, Zoom and the browser
-  in the session see both (a microphone passed as a USB device stays outside the remote session). Keyboards, mice,
+  USB devices, also when plugged in during the session. **Webcams that keep up in meetings**: up to 1080p at 30 fps
+  through the RDP camera channel, encoded on the video engine of the processor where there is one, and a late frame
+  is dropped so the picture never falls behind; the microphone goes through the RDP audio channel, so Teams, Zoom and
+  the browser in the session see both ([camera settings](configuration.md)). Keyboards, mice,
   touch screens, hubs and network adapters stay local; smart card readers go through the smart card channel.
   Touch screens work as touch in Windows. With `USB_MODE=disks` USB sticks stay on the thin client and appear in
   Windows as drives; with `USB_MODE=auto` the thin client decides device by device: a stick as a drive, a device
@@ -112,8 +114,8 @@ Settings: [docs/configuration.md](configuration.md#web-button-and-kiosk-page).
 
 ## Why it is built this way
 
-**Why FreeRDP is not updated automatically.** Debian security updates install by themselves, but FreeRDP is
-excluded. First, the image ships its own FreeRDP build with UDP, which Debian's packages would replace with a
+**Why FreeRDP comes with OpenThinRDP releases.** Debian security updates install by themselves; FreeRDP comes with
+OpenThinRDP. First, the image ships its own FreeRDP build with UDP, which Debian's packages would replace with a
 version without it. Second, the remote desktop client is the part users depend on: a new FreeRDP version can
 change how sessions, USB devices, smart cards or the graphics behave, and on a fleet a regression stops everyone
 at the same moment. So FreeRDP comes with OpenThinRDP releases, after testing on real devices, and you can still
@@ -121,7 +123,7 @@ keep it as it is on one device (`/etc/openthinrdp/freerdp-pinned`).
 
 **Why UDP on by default.** Over TCP, a busy server or a lossy line makes the screen fall behind; over UDP, Windows
 lowers quality instead. The transport is now part of FreeRDP ([#13608](https://github.com/FreeRDP/FreeRDP/pull/13608),
-merged after weeks of tests on our fleet), switched off there by default; OpenThinRDP switches it on, and
+merged after weeks of tests on our fleet), built switched off there; OpenThinRDP switches it on, and
 `TRANSPORT=tcp` is one setting away.
 
 **Why a shared folder instead of a management server.** Every Windows network already has a file share and

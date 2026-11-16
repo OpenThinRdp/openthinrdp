@@ -75,7 +75,7 @@ before). At 70% the first thing to give up is the TCP connection that RDP keeps 
 On UDP no frame was dropped by the server for network reasons up to 70%. A session opened when the line is
 already bad is set up over UDP too.
 
-**Limits of these numbers:** one environment (Dell OptiPlex 3000 Thin Client, Windows 11 VDI on Hyper-V behind an
+**Measure it on your network:** these numbers come from one environment (Dell OptiPlex 3000 Thin Client, Windows 11 VDI on Hyper-V behind an
 RD Connection Broker), one kind of load, loss emulated with netem on the client. The method and the scripts are
 in [tests/udp-bench](../tests/udp-bench/README.md): numbers from other networks and servers are very welcome.
 

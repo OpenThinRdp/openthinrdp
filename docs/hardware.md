@@ -20,7 +20,7 @@ diagnostics (ℹ on the sign-in screen) show the network card, the address and w
 
 | | |
 |---|---|
-| CPU | 64-bit x86 (x86-64): Intel, AMD, VIA. 32-bit only CPUs cannot run Debian 13 |
+| CPU | 64-bit x86 (x86-64): Intel, AMD, VIA |
 | Firmware | UEFI, with or without Secure Boot, or a legacy BIOS |
 | Memory | 2 GB |
 | Storage | 8 GB to install; none to run it live from a USB stick |
@@ -29,34 +29,46 @@ diagnostics (ℹ on the sign-in screen) show the network card, the address and w
 
 | Device | Firmware | Notes |
 |---|---|---|
-| Dell OptiPlex 3000 Thin Client (Intel Pentium Silver/Celeron, eMMC, Realtek NIC, Intel Wi-Fi) | UEFI, Secure Boot | the production fleet: 14 devices, boot to sign-in form in about 6 s after the firmware |
+| Dell OptiPlex 3000 Thin Client (Intel Pentium Silver/Celeron, eMMC, Realtek NIC, Intel Wi-Fi) | UEFI, Secure Boot | the production fleet: 15 devices, boot to sign-in form in about 6 s after the firmware |
 | QEMU/KVM virtual machine (OVMF) | UEFI, Secure Boot | every release: live system, automatic and confirmed installation, first update |
 | QEMU/KVM virtual machine (SeaBIOS) | legacy BIOS | live system and installation |
 
-## Should work: models that meet the requirements
+## Already running it
 
-These are common used thin clients with a 64-bit CPU, 2 GB of RAM or more and 8 GB of storage or more. We have not
-tested them: if you try one, a line in the [discussions](https://github.com/OpenThinRdp/openthinrdp/discussions/3)
-(model, what works and what does not) moves it to the table above.
+Outside our fleet OpenThinRDP already runs on 39 different models, among them:
+
+| Family | Models |
+|---|---|
+| HP | t520, t530, t620, t655 |
+| Dell Wyse | 5070 |
+| Centerm | thin clients |
+| PCs | mini PCs and laptops |
+| Virtual machines | Hyper-V, VMware, Proxmox, VirtualBox |
+
+## Ready for it: models that meet the requirements
+
+These common used thin clients have a 64-bit CPU, 2 GB of RAM or more and 8 GB of storage or more: everything
+OpenThinRDP needs. Running one? A line in the [discussions](https://github.com/OpenThinRdp/openthinrdp/discussions/3)
+(model, how it went) moves it to the tables above.
 
 | Family | Examples |
 |---|---|
-| Dell Wyse | 3040, 5060, 5070, 5470 |
-| HP | t520, t620, t630, t640, t540 |
+| Dell Wyse | 3040, 5060, 5470 |
+| HP | t630, t640, t540 |
 | Fujitsu Futro | S740, S940, S920 |
 | Lenovo, IGEL and others | ThinCentre M625q, IGEL UD3 (x86-64 models), any office mini PC |
 
 Some of them ship with less storage than 8 GB in their smallest version: run them live from a USB stick or put in a
 bigger module.
 
-## Not supported
+## Raspberry Pi and other processors
 
-- **ARM** other than the Raspberry Pi 4 (the Raspberry Pi 5, ARM thin clients): not supported yet.
-- **32-bit only** CPUs (older Atom and VIA models): Debian 13 no longer runs on them.
+**Raspberry Pi 4** (arm64), new: an SD card image built by `image/build-rpi.sh`
+([pre-release](https://github.com/OpenThinRdp/openthinrdp/releases/tag/rpi-test-1)), tested in QEMU arm64 emulation
+and ready for its first real boards. What is different from a PC and what to check on the first board: [arm.md](arm.md).
 
-**Raspberry Pi 4** (arm64), experimental: an SD card image built by `image/build-rpi.sh`
-([pre-release](https://github.com/OpenThinRdp/openthinrdp/releases/tag/rpi-test-1)), tested only in QEMU arm64
-emulation, not yet on a real board. What is different from a PC and what to check on the first board: [arm.md](arm.md).
+The Raspberry Pi 5 and ARM thin clients come after the Pi 4. Debian 13 runs on 64-bit processors, so the oldest
+32-bit only Atom and VIA models stay out.
 
 ## Firmware settings (Dell)
 

@@ -76,5 +76,4 @@ Within five minutes the device finds its folder in the domain, takes the broker 
 - **Power and commands**: power on with Wake-on-LAN, restart, switch off or run a command on a device.
 - **Moving the folder later**: *Settings > Manager > Move the folder...* moves the whole fleet in one step.
 
-What is in production, what is only tested and what does not exist yet: [status.md](../status.md); production
-readiness area by area: [maturity.md](../maturity.md).
+What runs in production today and what comes next, area by area: [production readiness](../maturity.md).

@@ -1,7 +1,7 @@
 <p align="center"><img src="docs/logo.png" alt="OpenThinRDP" width="480"></p>
 
-<p align="center"><b>The free thin client OS for Windows Remote Desktop: one PC at home, or a whole office on a domain.<br>
-Reuse the PCs and thin clients you have. No licence, no server, no account.</b></p>
+<p align="center"><b>The first open source thin client with RDP over UDP.<br>
+Light, made for Windows Remote Desktop, and your desktop keeps moving when the network doesn't. Free: no licence, no server, no account.</b></p>
 
 <p align="center">
 <a href="https://github.com/OpenThinRdp/openthinrdp/releases/latest"><b>⬇ Download the ISO</b></a>
@@ -17,9 +17,11 @@ Reuse the PCs and thin clients you have. No licence, no server, no account.</b><
 <img src="docs/screenshots/settings.png" alt="Settings of the device" width="32%">
 </p>
 
-**OpenThinRDP turns a PC, an old laptop or a used thin client into a Remote Desktop terminal in five minutes.** It
-starts straight into a sign-in form and opens your Windows desktop in full screen; programs and data stay on the
-Windows side. The first start asks one question:
+**Remote Desktop that keeps moving, on any network.** OpenThinRDP is the first open source thin client with RDP
+over UDP: with half the packets lost the desktop still runs at 19-21 frames per second, where TCP
+has frozen. Webcams up to 1080p at 30 fps in Teams and Zoom, headsets, signature keys and USB devices, as if they were
+plugged into Windows. It boots in seconds into a sign-in form and opens your Windows desktop in full screen, on a thin
+client, a mini PC or any PC from 2 GB of RAM. The first start asks one question:
 
 - **At home, or one computer** (*Workgroup*): your Windows PC or virtual machine, found on the network, signed in by
   itself at power on and woken up if it is off; from anywhere with Tailscale. Try it from a USB stick that keeps your
@@ -31,20 +33,21 @@ Windows side. The first start asks one question:
 
 | | |
 |---|---|
-| **Reuse what you have** | any 64-bit PC or thin client from 2 GB of RAM: old office PCs, laptops that cannot run Windows 11, a used Dell Wyse 5070, HP t630 or Fujitsu Futro ([which ones](docs/guides/used-thin-client.md)). Complete Debian 13 drivers |
-| **Smooth on bad lines** | RDP over UDP built in: on a line losing half of its packets the desktop still runs at 19-21 frames per second, where TCP has frozen ([the numbers](docs/features.md#rdp-over-udp-that-keeps-going-on-a-bad-line)) |
+| **Keeps moving on bad lines** | RDP over UDP on from the first start, with the fixes from our tests merged in FreeRDP itself ([#13608](https://github.com/FreeRDP/FreeRDP/pull/13608)): on a line losing half of its packets the desktop still runs at 19-21 frames per second, where TCP has frozen ([the numbers](docs/udp.md)) |
+| **Meetings that work** | webcams up to 1080p at 30 fps through the RDP camera channel, encoded in hardware where the device can; headsets on the RDP audio channel, in Teams, Zoom and the browser |
 | **Secure and locked down** | no desktop, no terminal, signed updates, secrets in the TPM, Kerberos, 802.1X, RD Gateway and VPN ([security](docs/security.md)) |
 | **Managed from one place** | settings, signed updates with pilot devices and a way back, remote screen, zero-touch from the domain: from a shared folder, no management server ([the manager](docs/manager.md)) |
-| **Everything Windows needs** | USB keys and special devices, webcams and headsets in Teams and Zoom, smart cards, several monitors, touch screens |
+| **Everything Windows needs** | signature keys, tachographs and instruments passed whole, also mid-session; smart cards, several monitors, touch screens |
 | **Any hypervisor, any cloud** | Hyper-V, Proxmox VE, VMware vSphere, Nutanix AHV, XCP-ng, KVM, Azure, AWS, a physical PC; Linux desktops through xrdp ([Proxmox and VMware](docs/guides/proxmox-vmware-thin-client.md)) |
+| **Light, on what you have** | boots in seconds from 2 GB of RAM on any 64-bit PC or thin client: a used Dell Wyse 5070, HP t630 or Fujitsu Futro, a mini PC, a laptop that cannot run Windows 11 ([which ones](docs/guides/used-thin-client.md)) |
 | **Free** | no cost per device, no subscription, no account: the client is open source (GPLv3), the [Windows manager](https://github.com/OpenThinRdp/openthinrdp-manager) free for any use |
 
 > **In production every day.** OpenThinRDP runs the whole thin client fleet of the company it was built for:
-> 14 Dell OptiPlex 3000 Thin Clients at desks, tills, a laboratory, weighing stations and a wall screen on Wi-Fi,
+> 15 Dell OptiPlex 3000 Thin Clients at desks, tills, a laboratory, weighing stations and a wall screen on Wi-Fi,
 > on a Windows 11 VDI on Hyper-V behind two RD Connection Brokers. Every release reaches them and installs while
 > people work. FreeRDP security releases reach OpenThinRDP [within 7 days](SECURITY.md#freerdp-security-fixes); the
 > system tests run on every commit ([CI](https://github.com/OpenThinRdp/openthinrdp/actions/workflows/tests.yml)).
-> What is in production, what is only tested and what does not exist yet: **[docs/status.md](docs/status.md)**.
+> What runs in production today and what comes next: **[production readiness](docs/maturity.md)**.
 
 ## Try it in five minutes
 
@@ -59,7 +62,7 @@ Windows side. The first start asks one question:
 | You need | |
 |---|---|
 | The device | any 64-bit x86 PC or thin client, UEFI (Secure Boot or not) or legacy BIOS, 2 GB of RAM, 8 GB of storage (none to run it live). TPM 2.0 optional ([hardware](docs/hardware.md)) |
-| The Windows side | an RD Connection Broker (RDS session hosts or VDI), or any Windows PC, server or VM with Remote Desktop on (Pro, Enterprise, Education, Server: not Home) |
+| The Windows side | an RD Connection Broker (RDS session hosts or VDI), or any Windows PC, server or VM with Remote Desktop on (Pro, Enterprise, Education or Server) |
 
 ## The manager: the servers and the fleet, from one window
 
@@ -69,7 +72,7 @@ useful also without any OpenThinRDP device: Hyper-V hosts and clusters, Storage 
 VMs, domain controllers, DNS, SQL Server Always On, backups, Dell iDRAC, Proxmox, vSphere, Veeam, Citrix and
 certificates, with a plain sentence and a repair you confirm for each problem. Its second part **manages the
 devices**: state of each one, central settings, signed updates on pilot devices first and a way back, Wake-on-LAN,
-remote screen. No server, no agent, no database. A single computer at home does not need it.
+remote screen. No server, no agent, no database. At home, one computer runs fine without it.
 
 <p align="center">
 <img src="docs/screenshots/manager-health.png" alt="Health Center: hosts, cluster, VMs, domain controllers, SQL and backups in one tree" width="49%">
@@ -84,13 +87,13 @@ Page by page: [docs/manager.md](docs/manager.md). Its releases: [openthinrdp-man
 |---|---|---|---|---|---|
 | Cost | free | comes with Dell thin clients | subscription per device | licence per device | free |
 | Source | client open (GPLv3), manager free but closed | closed | closed | closed | open |
-| Runs on | x86-64 PCs and thin clients, UEFI or BIOS; Raspberry Pi 4 (experimental) | Dell thin clients | many x86-64 devices | x86-64 PCs, Raspberry Pi | x86 PCs |
-| Protocols | RDP to Windows on any hypervisor or cloud, and xrdp; SPICE and VNC next | Citrix, Omnissa/VMware, Microsoft and more | Citrix, Omnissa/VMware, Microsoft and more | many | many (you build the image) |
+| Runs on | x86-64 PCs and thin clients, UEFI or BIOS; Raspberry Pi 4 (new) | Dell thin clients | many x86-64 devices | x86-64 PCs, Raspberry Pi | x86 PCs |
+| Protocols | RDP with UDP on by default, to Windows on any hypervisor or cloud, and xrdp; SPICE and VNC next | Citrix, Omnissa/VMware, Microsoft and more | Citrix, Omnissa/VMware, Microsoft and more | many | many (you build the image) |
 | Management | shared folder + Windows tool, no server | Wyse Management Suite | UMS server | NoTouch Center | configuration files on a network server |
 | Home use | yes: workgroup, Wake-on-LAN, Tailscale | business only | business only | business only | possible, by hand |
 
-Need Citrix or Horizon today, vendor support or certified hardware? The commercial systems do that;
-[tell us](https://github.com/OpenThinRdp/openthinrdp/issues) what would make you switch. The comparison reflects
+Need Citrix or Horizon? [Tell us](https://github.com/OpenThinRdp/openthinrdp/issues): what users ask for comes
+first. The comparison reflects
 public information and our understanding; product names are trademarks of their owners. In detail, with Linux Mint
 or Ubuntu with Remmina: [the alternatives](docs/alternatives.md).
 
@@ -103,7 +106,7 @@ or Ubuntu with Remmina: [the alternatives](docs/alternatives.md).
 - [OpenThinRDP at home](docs/guides/home.md): an old laptop as a terminal for your Windows PC
 - [Windows 10 end of support](docs/guides/windows-10-end-of-support.md): old PCs as terminals for an up-to-date Windows
 - [Remote Desktop from Linux](docs/guides/linux-rdp-client.md): FreeRDP, Remmina or a thin client OS; slow RDP; Windows Home
-- [Raspberry Pi as a thin client](docs/guides/raspberry-pi-thin-client.md) (experimental)
+- [Raspberry Pi as a thin client](docs/guides/raspberry-pi-thin-client.md) (new)
 
 **In the office**
 - [OpenThinRDP for companies](docs/guides/business.md): RDS and VDI, zero-touch, updates you control, security, costs
@@ -125,7 +128,7 @@ or Ubuntu with Remmina: [the alternatives](docs/alternatives.md).
 ## What comes next
 
 Network installation (PXE) for many devices at once, native Proxmox sessions over SPICE and VNC, more tested hardware
-and more languages. Running Citrix or Omnissa Horizon, or a model we have not tested?
+and more languages. Running Citrix or Omnissa Horizon, or a model we should add?
 [Tell us](https://github.com/OpenThinRdp/openthinrdp/issues): what users ask for comes first.
 
 ## Contributing

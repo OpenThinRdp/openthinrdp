@@ -4,10 +4,11 @@
 
 ### What is OpenThinRDP?
 
-An open source operating system that turns a PC, an old laptop or a thin client into a Remote Desktop terminal, for
+The first open source thin client with RDP over UDP: a light operating system that turns a thin client, a mini PC or
+any PC into a Remote Desktop terminal, for
 one Windows PC at home or a whole office on a domain: any Windows PC or VM with Remote Desktop on, RDS session hosts,
 VDI collections behind an RD Connection Broker, on Hyper-V, Proxmox, VMware, Nutanix or any cloud. It is Debian 13
-with a locked-down kiosk on FreeRDP and the RDP UDP transport built in.
+with a locked-down kiosk on FreeRDP and the RDP UDP transport on from the first start.
 
 ### Can I use it at home, with one PC?
 
@@ -19,7 +20,7 @@ server, no manager needed: [OpenThinRDP at home](guides/home.md).
 
 Yes: OpenThinRDP is free for any number of devices, with no licence, subscription or account, and open source. For
 Windows Remote Desktop it does what they do (a locked-down sign-in, USB and smart cards, central management, updates
-with pilot devices and a way back) and adds RDP over UDP. It does not speak Citrix or Horizon yet. Side by side:
+with pilot devices and a way back) and adds RDP over UDP, on from the first start. Side by side:
 [the alternatives](alternatives.md).
 
 ### Thin client, zero client or mini PC: what is the difference?
@@ -56,7 +57,7 @@ laboratory and weighing stations, and every release reaches that fleet. On top o
 - every release is installed in QEMU/KVM with Secure Boot;
 - UDP was tested for hours with packet loss, cut networks and killed clients.
 
-What is in production, what is only tested and what is missing: [status.md](status.md).
+What runs in production today and what comes next: [production readiness](maturity.md).
 
 ### Who maintains it?
 
@@ -93,21 +94,23 @@ runs no desktop.
 
 ### Can I use a Raspberry Pi as an RDP thin client?
 
-Experimentally. There is an SD card image for the Raspberry Pi 4, tested in emulation but not yet on a real board
-([Raspberry Pi as a thin client](guides/raspberry-pi-thin-client.md), [what to check](arm.md)). The Pi 5 is not
-supported yet. For an office today, a used x86 thin client is the safer choice.
+Yes, the Raspberry Pi 4: a new SD card image, ready to write
+([Raspberry Pi as a thin client](guides/raspberry-pi-thin-client.md), [what to check](arm.md)). Be among the first to
+run it on a real board and tell us how it goes; the Pi 5 comes next. For a whole office today, a used x86 thin client
+is the proven choice.
 
 ### Does it run on old 32-bit thin clients?
 
-No: Debian 13 no longer supports 32-bit only CPUs.
+It needs a 64-bit CPU, like Debian 13: the Dell Wyse 5070, HP t620, t630 and t640 and the Fujitsu Futro S740 all
+have one ([which ones](guides/used-thin-client.md)).
 
 ## Remote Desktop
 
 ### Does it really use RDP over UDP?
 
-Yes. FreeRDP merged its UDP transport on 20 October 2026 ([#13608](https://github.com/FreeRDP/FreeRDP/pull/13608),
-which we tested and reported on), but no release has it yet and it is built switched off unless asked for:
-OpenThinRDP ships FreeRDP built with it on. With `TRANSPORT=auto` the
+Yes, from the first start. FreeRDP merged its UDP transport on 20 October 2026
+([#13608](https://github.com/FreeRDP/FreeRDP/pull/13608), with fixes that came from our tests); FreeRDP 3.33 has it,
+built switched off and marked experimental. OpenThinRDP ships FreeRDP built with it on. With `TRANSPORT=auto` the
 session uses UDP, and TCP when UDP is blocked. On a line losing 50% of its packets it kept 19-21 frames per second,
 where TCP was down to 0.6 at 20% ([udp.md](udp.md)).
 
@@ -126,8 +129,8 @@ RD Gateway, and its own WireGuard or OpenVPN for devices outside the office.
 
 ### Can I Remote Desktop into Windows Home?
 
-No, from any client: Windows Home cannot be connected to with Remote Desktop. Windows Pro, Enterprise, Education
-and Windows Server can, and so can most Windows virtual machines. Home can be upgraded to Pro from *Settings >
+Windows Home has no Remote Desktop host, whatever the client. Windows Pro, Enterprise, Education and Windows Server
+do, and so do most Windows virtual machines. Home can be upgraded to Pro from *Settings >
 System > Activation*.
 
 ### Remmina or FreeRDP: which one?
@@ -157,8 +160,9 @@ Windows directly; a USB printer is passed whole to Windows, like the other USB d
 
 ### Does it work with Azure Virtual Desktop or Windows 365?
 
-Not yet: they need a Microsoft Entra ID sign-in and Microsoft's own gateway, which the kiosk does not do. An RDS
-deployment or Windows virtual machines in Azure work, through an RD Gateway or a VPN
+Windows virtual machines and RDS deployments in Azure work today, through an RD Gateway or a VPN. Azure Virtual
+Desktop and Windows 365 sign in with Microsoft Entra ID through Microsoft's own gateway, which is on the list
+of what comes next
 ([desktops in the cloud](configuration.md#desktops-in-the-cloud)).
 
 ### Does it work with Proxmox, VMware vSphere or Nutanix?
@@ -171,8 +175,8 @@ RDP over UDP, USB, webcams and the whole fleet managed centrally. Linux desktops
 
 ### Citrix or VMware/Omnissa Horizon?
 
-Not yet: today OpenThinRDP speaks RDP, and native Proxmox sessions over SPICE and VNC come next. If Citrix or
-Horizon is what keeps you from trying it, [tell us](https://github.com/OpenThinRdp/openthinrdp/issues): what users
+OpenThinRDP is built for RDP, and native Proxmox sessions over SPICE and VNC come next. If Citrix or Horizon is
+what keeps you from trying it, [tell us](https://github.com/OpenThinRdp/openthinrdp/issues): what users
 ask for comes first. Meanwhile, [the alternatives](alternatives.md).
 
 ### Do webcams, headsets, USB keys and smart cards work?
@@ -219,8 +223,8 @@ users, servers, log text or anything typed. It can be changed any time (`ANON_ST
 
 ### Does it boot over the network (PXE)?
 
-Not yet. OpenThinRDP runs live from a USB stick or is installed, with an automatic installation for rollouts.
-Network boot is considered for a later version.
+OpenThinRDP runs live from a USB stick or installs in about three minutes, with an unattended installation for
+rollouts. Network boot (PXE) is on the list of what comes next.
 
 ### Does it support 802.1X?
 

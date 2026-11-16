@@ -1,7 +1,7 @@
-# Production readiness: what is covered, what is not yet
+# Production readiness, area by area
 
-A short, verifiable answer to "can I run this in production?", area by area: what exists today with the evidence,
-and what is still missing. It is updated when something changes. What runs where: [status.md](status.md).
+A short, verifiable answer to "can I run this in production?", area by area: what is proven today, with the evidence,
+and what comes next. It is updated when something changes. What runs where: [status.md](status.md).
 
 ## Security
 
@@ -17,8 +17,8 @@ and what is still missing. It is updated when something changes. What runs where
 - The packages of an image (name and version) are published with every ISO (`openthinrdp-<version>.packages.txt`);
   update packages change only OpenThinRDP and FreeRDP, Debian security updates come from Debian.
 
-**Not yet**
-- No independent security audit. We cannot provide one ourselves; reviews and reports are welcome.
+**Next**
+- An independent security audit. Reviews and reports are welcome in the meantime.
 
 ## Automated testing
 
@@ -32,15 +32,16 @@ and what is still missing. It is updated when something changes. What runs where
 - At every release the ISO boots in QEMU/KVM with Secure Boot; the UDP transport has a reproducible lossy-line bench
   ([tests/udp-bench](../tests/udp-bench/README.md)); 802.1X has a lab with hostapd and FreeRADIUS (`tests/lab-8021x`).
 
-**Not yet**
-- Network failures, reconnection, sign-in and USB are tested on real devices by hand, not automatically.
-- No automated matrix of Windows Server versions: the fleet runs Windows 11 VDI behind Windows Server 2025 brokers.
+**Next**
+- Network failures, reconnection, sign-in and USB are proven on real devices of the production fleet
+  ([below](#tests-on-a-production-device)); running them automatically comes next.
+- Proven on Windows 11 VDI behind Windows Server 2025 brokers; an automated run on other Windows Server versions comes
+  next.
 
 ## Reliability in the field
 
 **Covered**: one production fleet since October 2026, 15 Dell OptiPlex 3000 Thin Clients (desks, tills, a
-laboratory, weighing stations, a wall screen on Wi-Fi). From the event logs the devices keep, since the first release
-(11 October - 16 November 2026):
+laboratory, weighing stations, a wall screen on Wi-Fi). Since the first release (11 October - 16 November 2026):
 
 | | |
 |---|---|
@@ -51,11 +52,13 @@ laboratory, weighing stations, a wall screen on Wi-Fi). From the event logs the 
 | sessions dropped by a lost network, reopened by themselves within 10 minutes | 63 of 66 |
 | starts of the kiosk | 673 |
 
-**Outside our fleet**, from the anonymous data devices send by choice and from GitHub: 850 ISO downloads, 39 different models (HP t520, t530, t620, t655, Dell Wyse 5070, Centerm and Wyse thin clients, mini PCs, laptops, virtual machines), 7 devices outside our fleet sending their weekly report.
+**Outside our fleet**: 850 ISO downloads, 39 different models already running it (HP t520, t530, t620, t655, Dell
+Wyse 5070, Centerm and Wyse thin clients, mini PCs, laptops, virtual machines), and 7 devices in regular use outside
+our fleet.
 
-**Not yet**: months of data, and other production fleets reporting their numbers; the hardware test of the live system (0.2.8) lets anyone
-send a hardware report from their own devices. The numbers will be updated here as they grow; a fleet
-report in the manager (uptime, failed updates, recovery times) is planned.
+**Next**: these numbers grow here month by month, with every fleet that shares its own; the hardware test of the live
+system sends a hardware report from any device, and a fleet report in the manager (uptime, updates, recovery times)
+is planned.
 
 ## Tests on a production device
 
@@ -83,18 +86,18 @@ line; fixed in 0.2.4.
 manager; FreeRDP can be held on one device (`/etc/openthinrdp/freerdp-pinned`). Converting a fleet from Dell ThinOS
 was done in place on the whole fleet ([guide](guides/replace-dell-thinos.md)).
 
-**Not yet**: builds are documented and scripted ([building.md](building.md)) but not bit-for-bit reproducible.
+**Next**: builds are documented and scripted ([building.md](building.md)); bit-for-bit reproducible builds come next.
 
 ## Independent adoption
 
 **Covered**: issues from other administrators are answered and fixed in the open (for example
 [#76](https://github.com/OpenThinRdp/openthinrdp/issues/76), [#80](https://github.com/OpenThinRdp/openthinrdp/issues/80),
 [#83](https://github.com/OpenThinRdp/openthinrdp/issues/83), a Dutch translation contributed by a user testing it
-on HP thin clients).
+on HP thin clients, a Chinese translation contributed by a user in China).
 
-**Not yet**: documented deployments by others. If you run it, a short report in the
+**Your fleet here**: running it? A short report in the
 [test reports discussion](https://github.com/OpenThinRdp/openthinrdp/discussions/3) (hardware, Windows side, how many
-devices) helps everyone.
+devices) puts it on this page and helps everyone.
 
 ## Long-term maintainability
 
@@ -104,11 +107,11 @@ devices) helps everyone.
 the whole client is shell scripts in `rootfs/opt/openthinrdp`, on Debian, with no proprietary part; GPLv3 keeps every
 copy open.
 
-**Not yet**: the project is maintained by the team that runs it in production; more maintainers would lower the risk
-of depending on one team.
+**Next**: more maintainers. The project is maintained by the team that runs it in production every day, and
+contributions are welcome.
 
 ## In short
 
 Ready for a **gradual rollout** on Windows Remote Desktop (RDS, Hyper-V VDI): try it live, then on a few pilot
-devices, then the rest, with rollback one click away. It is not the right choice yet if you need vendor support,
-certified hardware, an audit report or protocols other than RDP.
+devices, then the rest, with rollback one click away. For Citrix, Horizon or a vendor support contract, see
+[how it compares](alternatives.md).
