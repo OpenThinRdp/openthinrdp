@@ -5,8 +5,8 @@ Leggero, gratuito, fatto per Desktop remoto Windows: il desktop resta fluido anc
 
 <p align="center">
 <a href="https://github.com/OpenThinRdp/openthinrdp/releases/latest"><b>Scarica l'ultima versione</b></a>
-&nbsp;·&nbsp; <a href="https://openthinrdp.github.io/">Sito</a>
-&nbsp;·&nbsp; <a href="https://openthinrdp.github.io/manager.html">Il gestore</a>
+&nbsp;·&nbsp; <a href="https://openthinrdp.github.io/?from=readme-it">Sito</a>
+&nbsp;·&nbsp; <a href="https://openthinrdp.github.io/manager.html?from=readme-it">Il gestore</a>
 &nbsp;·&nbsp; <a href="README.md">English</a>
 </p>
 
@@ -46,7 +46,7 @@ l'interfaccia in italiano e in inglese, che non si installa. Fa due cose in una 
 - **Gestione della flotta OpenThinRDP**: stato di ogni postazione, impostazioni centrali, gruppi, aggiornamenti,
   sessioni e desktop, schermo remoto.
 
-Si aggiorna da solo dalle release firmate. Pagina del gestore: [openthinrdp.github.io/manager.html](https://openthinrdp.github.io/manager.html) ·
+Si aggiorna da solo dalle release firmate. Pagina del gestore: [openthinrdp.github.io/manager.html](https://openthinrdp.github.io/manager.html?from=readme-it) ·
 progetto: [OpenThinRdp/openthinrdp-manager](https://github.com/OpenThinRdp/openthinrdp-manager) ·
 guida: [docs/manager.md](docs/manager.md) ·
 [controllo di salute per Hyper-V e Desktop remoto](docs/guides/hyper-v-rds-health-check.md).

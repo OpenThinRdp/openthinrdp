@@ -8,7 +8,7 @@ Light, made for Windows Remote Desktop, and your desktop keeps moving when the n
 &nbsp;·&nbsp; <a href="#try-it-in-five-minutes">Try it live, nothing installed</a>
 &nbsp;·&nbsp; <a href="#the-free-manager-know-what-is-broken-before-your-users-call">The free manager</a>
 &nbsp;·&nbsp; <a href="docs/guides.md">Guides</a>
-&nbsp;·&nbsp; <a href="https://openthinrdp.github.io/">Website</a>
+&nbsp;·&nbsp; <a href="https://openthinrdp.github.io/?from=readme">Website</a>
 &nbsp;·&nbsp; <a href="docs/faq.md">FAQ</a>
 &nbsp;·&nbsp; <a href="README.it.md">Italiano</a>
 </p>
@@ -53,7 +53,7 @@ client, a mini PC or any PC from 2 GB of RAM. The first start asks one question:
 
 ## The free manager: know what is broken before your users call
 
-The [OpenThinRDP Manager](https://openthinrdp.github.io/manager.html) is a free Windows application that checks
+The [OpenThinRDP Manager](https://openthinrdp.github.io/manager.html?from=readme) is a free Windows application that checks
 **your whole infrastructure in 30 seconds**: Hyper-V hosts and failover clusters, Storage Spaces Direct, Proxmox,
 vSphere, Remote Desktop brokers and session hosts, Citrix, domain controllers and DNS, SQL Server Always On, Veeam
 and VM backups, Dell iDRAC and every certificate. Each problem in a plain sentence, the worst first, with a repair
@@ -76,7 +76,7 @@ updates itself.
 </p>
 
 **[⬇ Download the free manager](https://github.com/OpenThinRdp/openthinrdp-manager/releases/latest)** ·
-[its page](https://openthinrdp.github.io/manager.html) · [page by page](docs/manager.md)
+[its page](https://openthinrdp.github.io/manager.html?from=readme) · [page by page](docs/manager.md)
 
 ## Try it in five minutes
 
@@ -114,7 +114,8 @@ or Ubuntu with Remmina: [the alternatives](docs/alternatives.md).
 
 ## Guides
 
-Every guide by what you want to do, step by step: **[the guides](docs/guides.md)**.
+Every guide by what you want to do, step by step: **[the guides](docs/guides.md)**, also on the website with a menu:
+**[openthinrdp.github.io/guides](https://openthinrdp.github.io/guides.html?from=readme)**.
 
 **At home and for one PC**
 - [OpenThinRDP at home](docs/guides/home.md): an old laptop as a terminal for your Windows PC
