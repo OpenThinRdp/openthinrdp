@@ -113,6 +113,15 @@ each sign-in took (with the user name) and the latency and bandwidth of each ses
 reads that folder; in some countries measuring the work of employees has rules of its own (in Italy art. 4 of the
 Statuto dei lavoratori): tell the users, as for the other logs of the fleet.
 
+## This website
+
+The pages of [openthinrdp.github.io](https://openthinrdp.github.io/) count their visits in the same PostHog project,
+with a small script of our own instead of the PostHog library. It sets no cookie and stores nothing in your browser;
+each page view carries a random identifier made for it alone, and the project keeps no IP address and no place from
+it. What is counted: the page, the site you came from (such as Google or GitHub) and the link that brought you, the
+language of the browser, the width of the screen and the clicks on the download buttons. Until November 2026 the
+website counted its visits on GoatCounter, in the same way.
+
 ## Choosing or switching it off
 
 - **One device**: *Anonymous data for the project*, the last setting of the device: *Full*, *Errors only* or *Off*.
