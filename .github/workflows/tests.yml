@@ -2,9 +2,17 @@ name: tests
 
 # The system tests (settings layers, validation, central configuration, status file, updates) at every push and
 # pull request, in a throw-away Debian 13 container as on a device. No hardware and no network beyond Debian.
+# not for changes to the texts alone (README, CHANGELOG, docs): they change no file the tests run, and the website is
+# rebuilt from them by its own workflow (24/11/2026)
 on:
   push:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
   pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
 
 jobs:
   system-tests:
