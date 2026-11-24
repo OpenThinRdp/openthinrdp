@@ -794,7 +794,11 @@ printf '%s\n' '10.9.9.1 broker1.example.test broker1' '10.9.9.2 broker2.example.
 ok "Kerberos: shared alias becomes one broker's own name" '[[ $(krb_host rdbroker.example.test) =~ ^broker[12]\.example\.test$ ]]'
 ok "Kerberos: both brokers get picked" 'for i in $(seq 1 40); do krb_host rdbroker.example.test; done | sort -u | [ $(wc -l) = 2 ]'
 ok "Kerberos: an address becomes its server's name" '[ "$(krb_host 10.9.9.2)" = broker2.example.test ]'
+# names from /etc/hosts only: the DNS of the CI runners (Azure) sometimes gives a name to any private address, and the
+# test failed now and then (24/11/2026)
+cp /etc/nsswitch.conf /tmp/nsswitch.keep; sed -i 's/^hosts:.*/hosts: files/' /etc/nsswitch.conf
 ok "Kerberos: an address with no name stays" '[ "$(krb_host 10.9.9.9)" = 10.9.9.9 ]'
+cp /tmp/nsswitch.keep /etc/nsswitch.conf
 ok "Kerberos: an unknown name stays" '[ "$(krb_host nowhere.example.test)" = nowhere.example.test ]'
 
 ok "the secrets unit never pulls tpm2.target (on Debian it waits 90 s for a TPM a device may not have)" '! grep -q "^Wants=.*tpm2.target" /src/rootfs/etc/systemd/system/openthinrdp-secrets.service && grep -q "acpi/tables/TPM2" $OTR/secrets.sh'
