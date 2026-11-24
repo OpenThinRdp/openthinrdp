@@ -27,7 +27,8 @@ client, a mini PC or any PC from 2 GB of RAM. The first start asks one question:
 
 - **At home, or one computer** (*Workgroup*): your Windows PC or virtual machine, found on the network, signed in by
   itself at power on and woken up if it is off; from anywhere with Tailscale. Try it from a USB stick that keeps your
-  settings, or install it next to Windows. **[OpenThinRDP at home](docs/guides/home.md)**
+  settings, or install it next to Windows; [Prepare the PC](docs/guides/pc-setup.md) turns on Remote Desktop in one
+  click. **[OpenThinRDP at home](docs/guides/home.md)**
 - **In the office, on a domain**: RD Connection Brokers, session collections and VDI, devices that set themselves up
   from the domain, a whole fleet managed from a shared folder. **[For companies](docs/guides/business.md)** · **[Getting started](docs/guides/getting-started.md)**
 
@@ -41,7 +42,7 @@ client, a mini PC or any PC from 2 GB of RAM. The first start asks one question:
 | **Managed from one place** | settings, signed updates with pilot devices and a way back, remote screen, zero-touch from the domain: from a shared folder, no management server ([the manager](docs/manager.md)) |
 | **Everything Windows needs** | signature keys, tachographs and instruments passed whole, also mid-session; smart cards, several monitors, touch screens |
 | **Any hypervisor, any cloud** | Hyper-V, Proxmox VE, VMware vSphere, Nutanix AHV, XCP-ng, KVM, Azure, AWS, a physical PC; Linux desktops through xrdp ([Proxmox and VMware](docs/guides/proxmox-vmware-thin-client.md)) |
-| **Light, on what you have** | boots in seconds from 2 GB of RAM on any 64-bit PC or thin client: a used Dell Wyse 5070, HP t630 or Fujitsu Futro, a mini PC, a laptop that cannot run Windows 11 ([which ones](docs/guides/used-thin-client.md)) |
+| **Light, on what you have** | boots in seconds from 2 GB of RAM on any 64-bit PC or thin client: a used Dell Wyse 5070, HP t630 or Fujitsu Futro ([which ones](docs/guides/used-thin-client.md)), a mini PC, a laptop that cannot run Windows 11 ([after Windows 10](docs/guides/windows-10-end-of-support.md)) |
 | **Free** | no cost per device, no subscription, no account: the client is open source (GPLv3), the [Windows manager](https://github.com/OpenThinRdp/openthinrdp-manager) free for any use |
 
 > **In production every day.** OpenThinRDP runs the whole thin client fleet of the company it was built for:
@@ -84,14 +85,15 @@ updates itself.
    in DD mode, balenaEtcher, `dd`).
 2. Start the PC from the stick. The **live system** runs from the stick and **never writes to the disk**; with a
    network it offers the newest version, so the ISO does not need downloading again for every release.
-3. Choose *Workgroup* or *Domain*, set your Windows PC or your broker, and sign in.
+3. Choose *Workgroup* or *Domain*, set your Windows PC or your broker, and sign in. Not connecting? The device tells
+   you why, and [Can't connect?](docs/guides/cant-connect.md) goes through every case.
 4. Like it? Restart and choose **Install** (it shows the disk it will erase and asks first), or *Install alongside
    Windows* on a laptop that keeps Windows. For rollouts, *Unattended install* skips the question.
 
 | You need | |
 |---|---|
 | The device | any 64-bit x86 PC or thin client, UEFI (Secure Boot or not) or legacy BIOS, 2 GB of RAM, 8 GB of storage (none to run it live). TPM 2.0 optional ([hardware](docs/hardware.md)) |
-| The Windows side | an RD Connection Broker (RDS session hosts or VDI), or any Windows PC, server or VM with Remote Desktop on (Pro, Enterprise, Education or Server) |
+| The Windows side | an RD Connection Broker (RDS session hosts or VDI), or any Windows PC, server or VM with Remote Desktop on (Pro, Enterprise, Education or Server): [Prepare the PC](docs/guides/pc-setup.md) checks and turns it on |
 
 ## How it compares
 
@@ -99,15 +101,15 @@ updates itself.
 |---|---|---|---|---|---|
 | Cost | free | comes with Dell thin clients | subscription per device | licence per device | free |
 | Source | client open (GPLv3), manager free but closed | closed | closed | closed | open |
-| Runs on | x86-64 PCs and thin clients, UEFI or BIOS; Raspberry Pi 4 (new) | Dell thin clients | many x86-64 devices | x86-64 PCs, Raspberry Pi | x86 PCs |
+| Runs on | x86-64 PCs and thin clients, UEFI or BIOS; [Raspberry Pi 4](docs/guides/raspberry-pi-thin-client.md) (new) | Dell thin clients | many x86-64 devices | x86-64 PCs, Raspberry Pi | x86 PCs |
 | Protocols | RDP with UDP on by default, to Windows on any hypervisor or cloud, and xrdp; SPICE and VNC next | Citrix, Omnissa/VMware, Microsoft and more | Citrix, Omnissa/VMware, Microsoft and more | many | many (you build the image) |
 | Management | shared folder + Windows tool, no server | Wyse Management Suite | UMS server | NoTouch Center | configuration files on a network server |
-| Home use | yes: workgroup, Wake-on-LAN, Tailscale | business only | business only | business only | possible, by hand |
+| Home use | [yes](docs/guides/home.md): workgroup, Wake-on-LAN, Tailscale | business only | business only | business only | possible, by hand |
 
 Need Citrix or Horizon? [Tell us](https://github.com/OpenThinRdp/openthinrdp/issues): what users ask for comes
 first. The comparison reflects
 public information and our understanding; product names are trademarks of their owners. In detail, with Linux Mint
-or Ubuntu with Remmina: [the alternatives](docs/alternatives.md).
+or Ubuntu with Remmina: [the alternatives](docs/alternatives.md) and [Remote Desktop from Linux](docs/guides/linux-rdp-client.md).
 
 > **Not openthinclient.** OpenThinRDP is a new, independent project, not affiliated with openthinclient: the names
 > sound alike, nothing else is shared.
@@ -122,6 +124,8 @@ Every guide by what you want to do, step by step: **[the guides](docs/guides.md)
 - [Windows 10 end of support](docs/guides/windows-10-end-of-support.md): old PCs as terminals for an up-to-date Windows
 - [Remote Desktop from Linux](docs/guides/linux-rdp-client.md): FreeRDP, Remmina or a thin client OS; slow RDP; Windows Home
 - [Raspberry Pi as a thin client](docs/guides/raspberry-pi-thin-client.md) (new)
+- [Can't connect?](docs/guides/cant-connect.md): every case, step by step, and what the device says
+- [Prepare the PC](docs/guides/pc-setup.md): Remote Desktop on your Windows PC in one click
 
 **In the office**
 - [OpenThinRDP for companies](docs/guides/business.md): RDS and VDI, zero-touch, updates you control, security, costs
