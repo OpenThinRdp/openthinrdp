@@ -988,6 +988,45 @@ echo "$n watchdog: FreeRDP received nothing over UDP for 75 s while it sent 40 d
 echo "$n power off with a session still open (FreeRDP 123): its threads in session-hang.log, its log in last-session.log" >> $OTR_EVENTS
 SP=$($OTR/stats.sh --print | grep "^otr_errors")
 ok "anonymous data: a UDP stall and a power off in a session are kinds of their own" 'printf "%s\n" "$SP" | grep -qx "otr_errors e_udp_stalled=1" && printf "%s\n" "$SP" | grep -qx "otr_errors e_switched_off_in_session=1" && ! printf "%s\n" "$SP" | grep -q session_frozen'
+# the help to connect (0.3.7, #222): why a computer could not be reached, the check after saving, a sign-in refused and
+# a connection that worked after the help, by kind; never the computer or the user
+{ echo "$n connection check of 192.0.2.5: rdp-off"
+  echo "$n connection help shown (connect): rdp-off"
+  echo "$n connection check after saving: name"
+  echo "$n sign-in refused for mario.rossi (code 134)"
+  echo "$n connected after the connection help (rdp-off)"; } > $OTR_EVENTS
+SP=$($OTR/stats.sh --print | grep "^otr_errors")
+ok "anonymous data: cannot-connect, setup-check, sign-in-refused and connected-after-help by kind; no computer, no user" 'has_all "$SP" otr_errors e_cannot_connect=1 "detail=cannot-connect rdp-off" e_setup_check=1 "detail=setup-check name" e_sign_in_refused=1 "detail=sign-in-refused 134" e_connected_after_help=1 "detail=connected-after-help rdp-off" && ! printf "%s\n" "$SP" | grep -qi "192.0.2\|mario"'
+# the first desktop of the device: once, with the minutes from its first start, the attempts that failed and the help
+# seen; a device that had a desktop before its version (an update) sends nothing; --print changes nothing
+FS=/var/lib/openthinrdp/stats-first-connection; rm -f $FS
+t0=$(date -d "$n 7 minutes ago" '+%Y-%m-%d %H:%M:%S')
+{ echo "$t0 sign-in screen ready 30 s after power on"
+  echo "$n attempt 1 for mario.rossi on pc-casa failed after 21s (code 147, broker): x"
+  echo "$n attempt 1 for mario.rossi on pc-casa failed after 3s (code 141, broker): x"
+  echo "$n connection help shown (connect): rdp-off"
+  echo "$n session of mario.rossi opened (broker pc-casa)"
+  echo "$n attempt 1 for mario.rossi on pc-casa failed after 3s (code 141, broker): later"; } > $OTR_EVENTS
+SPF=$($OTR/stats.sh --print | grep "^otr_first")
+ok "anonymous data: the first desktop, its minutes, failed attempts before it and the help seen; nothing of the messages" 'has_all "$SPF" otr_first minutes=7 failed_attempts=2 help=rdp-off "version=$(cat $OTR/VERSION)" && ! printf "%s\n" "$SPF" | grep -qi "mario\|pc-casa" && OTR_STATS_ANON=errors $OTR/stats.sh --print | grep -q "^otr_first minutes=7" && ! OTR_STATS_ANON=off $OTR/stats.sh --print | grep -q . && [ ! -f $FS ]'
+sed -i "s/^$n session of/2000-01-01 00:00:00 session of/" $OTR_EVENTS
+ok "anonymous data: a device whose first desktop came before its version sends no first desktop" '! $OTR/stats.sh --print | grep -q "^otr_first" && [ ! -f $FS ]'
+# why a computer cannot be reached (kiosk.sh connect_diag), with the name, the port, ARP and ping simulated
+eval "$(sed -n "/^connect_diag(){/,/^  echo off; }/p" $OTR/kiosk.sh)"
+diag(){ ( getent(){ [ "$RES" = 1 ] && echo "10.0.0.7 STREAM pc"; }
+  timeout(){ shift; case "$1" in bash) case "$TCP" in ok) return 0 ;; refused) echo "bash: connect: Connection refused" >&2; return 1 ;; *) return 124 ;; esac ;; *) "$@" ;; esac; }
+  ip(){ case "$1 $2" in "route get") if [ "$VIA" = 1 ]; then echo "$3 via 10.0.0.1 dev eth0"; else echo "$3 dev eth0 src 10.0.0.2"; fi ;; "neigh show") [ -n "$NEIGH" ] && echo "$3 dev eth0 $NEIGH" ;; esac; }
+  ping(){ [ "$PING" = 1 ]; }; sleep(){ :; }
+  connect_diag "$1" ); }
+ok "connect_diag: a name that does not resolve" '[ "$(RES=0 diag pc-casa)" = name ]'
+ok "connect_diag: a name that resolves, with its port, and the port answers" '[ "$(RES=1 TCP=ok diag pc-casa:3390)" = rdp-answers ] && [ "$(TCP=ok diag 10.0.0.5)" = rdp-answers ]'
+ok "connect_diag: the port refused at once: a device is there, Remote Desktop is not" '[ "$(TCP=refused diag 10.0.0.5)" = rdp-off ]'
+ok "connect_diag: same network, no answer on the port, ARP answered: Remote Desktop off" '[ "$(TCP=drop NEIGH="lladdr 52:54:00:12:34:56 REACHABLE" diag 10.0.0.5)" = rdp-off ]'
+ok "connect_diag: same network, nobody answers ARP: off or a wrong address" '[ "$(TCP=drop NEIGH=FAILED diag 10.0.0.5)" = off ] && [ "$(TCP=drop NEIGH= diag 10.0.0.5)" = off ] && [ "$(TCP=drop NEIGH="lladdr 52:54:00:12:34:56 STALE" diag 10.0.0.5)" = off ]'
+ok "connect_diag: another network: far, or Remote Desktop off when it answers ping" '[ "$(TCP=drop VIA=1 PING=0 diag 10.9.0.5)" = far ] && [ "$(TCP=drop VIA=1 PING=1 diag 10.9.0.5)" = rdp-off ]'
+# a session is open when its desktop appeared, not after SESSION_THRESHOLD seconds (#222)
+ok "kiosk: open = the desktop appeared (no threshold), the mark cleared at every attempt, the help to connect offered" 'grep -q "if \[ -f /tmp/kiosk.desktop \] && ! {" $OTR/kiosk.sh && ! grep -q "\"\$d\" -ge \"\$thr\"" $OTR/kiosk.sh && grep -q "rm -f /tmp/kiosk.vm /tmp/kiosk.quality /tmp/kiosk.desktop" $OTR/kiosk.sh && grep -q "help_screen \"\$DIAG\"" $OTR/kiosk.sh'
+ok "the QR codes of the help: one per case, each a picture" '( for k in name off rdp-off far rdp-answers password; do [ "$(head -c 4 $OTR/help/qr-$k.png | tail -c 3)" = PNG ] || exit 1; done )'
 : > $OTR_EVENTS
 # a local server in place of PostHog records what really arrives (one JSON request per send)
 SB=$(mktemp -d); rm -f /var/lib/openthinrdp/stats-sent; GU=http://127.0.0.1:18099/batch/
@@ -1287,6 +1326,10 @@ rm -f $L/stats-version; OTR_STATS_URL=$GU $OTR/stats.sh
 ok "anonymous data: a device updated from 0.3.2 or earlier (stamp of GoatCounter, no version) sends its week at once" '[ "$(sent)" = 5 ]'
 printf 'ANON_STATS=errors\n' > $OTR_CONF; sleep 1; touch -d "-11 min" $L/stats-errors-sent; drop; OTR_STATS_URL=$GU $OTR/stats.sh
 ok "anonymous data, errors only: the error at once too" '[ "$(sent)" = 6 ] && [ "$(evs)" = otr_errors ]'
-kill $GS 2>/dev/null; wait $GS 2>/dev/null; rm -rf "$SB" $L/stats-sent $L/stats-version $L/stats-errors-sent $L/stats-errors-checked; : > $OTR_CONF; mv /tmp/events.keep $OTR_EVENTS
+rm -f $L/stats-first-connection; sleep 1; touch -d "-11 min" $L/stats-errors-sent; echo "$(date '+%F %T') session of u opened (broker x)" >> $OTR_EVENTS; OTR_STATS_URL=$GU $OTR/stats.sh
+ok "anonymous data: the first desktop sent at once, then marked" '[ "$(sent)" = 7 ] && evs | grep -qw otr_first && [ -f $L/stats-first-connection ]'
+sleep 1; touch -d "-11 min" $L/stats-errors-sent; drop; OTR_STATS_URL=$GU $OTR/stats.sh
+ok "anonymous data: the first desktop never again" '[ "$(sent)" = 8 ] && ! evs | grep -qw otr_first'
+kill $GS 2>/dev/null; wait $GS 2>/dev/null; rm -rf "$SB" $L/stats-sent $L/stats-version $L/stats-errors-sent $L/stats-errors-checked $L/stats-first-connection; : > $OTR_CONF; mv /tmp/events.keep $OTR_EVENTS
 echo "passed $PASS, failed $FAIL"
 [ $FAIL = 0 ]

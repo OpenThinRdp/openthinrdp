@@ -53,8 +53,12 @@ model, processor, memory, FreeRDP, live or installed and language as above, and
 | What | Example |
 |---|---|
 | A session that froze and was ended by the watchdog | `session-frozen` |
-| A session that dropped, with the exit code of FreeRDP | `session-dropped`, code `147` |
+| A session that dropped after its desktop appeared, with the exit code of FreeRDP | `session-dropped`, code `147` |
 | A connection that failed or got no desktop in time, with the code | `connect-failed`, code `131` |
+| Why a computer could not be reached, as the device checked it: name not found, nothing answers, Remote Desktop not answering, another network, Remote Desktop answers | `cannot-connect`, `rdp-off` |
+| The same check right after the address of the computer was saved in the settings | `setup-check`, `rdp-answers` |
+| A sign-in refused, with the code | `sign-in-refused`, code `134` |
+| A connection that worked after the help to connect, with the case of the help | `connected-after-help`, `name` |
 | A UDP transport that stalled; a power off with a session open | `udp-stalled`, `switched-off-in-session` |
 | A software update that failed; the settings screen that failed | `update-failed`, `screen-failed` |
 | A program that crashed, by its name | `crash`, `xfreerdp3` |
@@ -67,6 +71,25 @@ model, processor, memory, FreeRDP, live or installed and language as above, and
 Each kind with how many times it happened since the last send. Only the kind, the number of a code, the name of a
 program, the name of a check of the hardware test and the name of a firmware file leave the device, never the text of
 a message: those hold user and server names.
+
+**The first desktop** (`otr_first`, *Full* and *Errors only*, once in the life of a device): the version, model and the
+rest as above, and how it got to its first desktop. With the new devices of the week it tells how many get that far.
+
+| What | Example |
+|---|---|
+| Minutes from the first start to the first desktop | `14` |
+| Connection attempts that failed before it | `3` |
+| The help to connect seen last before it, if any | `none`, `rdp-off`, `password` |
+| Domain or workgroup | `workgroup` |
+
+## What Prepare the PC sends
+
+[Prepare the PC](guides/pc-setup.md), the program for the Windows PC, sends once when its window closes, only with its
+box ticked (it is, on the window; untick it to send nothing): `pc_setup` with its version, the class of the Windows
+edition (`home`, `pro`...), the Windows build number, the language, the kind of account (`microsoft`, `local`,
+`domain`), how many things it fixed, whether the PC was ready before and after, whether Tailscale is there and the
+address comes from the router, and the state of each check before and after (`ok`, `warn`, `bad`, `info`). Never the
+name of the PC, an address, a user or an account.
 
 ## What the manager sends
 

@@ -129,6 +129,10 @@ problems(){
     -e 's/.*attempt [0-9]+ for .* failed after .*\(code ([0-9]+), .*/connect-failed \1/p' \
     -e 's/.*session of .* DROPPED after .*, code ([0-9]+)\): .*/session-dropped \1/p' \
     -e 's/.*session of .* dropped after .* before the desktop was ready \(code ([0-9]+)\).*/dropped-before-desktop \1/p' \
+    -e 's/.*connection check of .*: (name|off|rdp-off|far|rdp-answers)$/cannot-connect \1/p' \
+    -e 's/.*connection check after saving: (name|off|rdp-off|far|rdp-answers)$/setup-check \1/p' \
+    -e 's/.*connected after the connection help \(([a-z-]+)\).*/connected-after-help \1/p' \
+    -e 's/.*sign-in refused for .* \(code ([0-9]+)\).*/sign-in-refused \1/p' \
     -e 's/.*software update .* FAILED.*/update-failed/p' \
     -e 's/.*the settings screen failed.*/screen-failed/p' \
     -e 's/.*hardware test: .*, [1-9][0-9]* problems$/hardware-test-problems/p'
@@ -172,8 +176,31 @@ errors(){
 ESTAMP=$OTR_LIB/stats-errors-sent    # what went wrong is sent up to here
 VSTAMP=$OTR_LIB/stats-version        # the version of the last week sent
 CHECKED=$OTR_LIB/stats-errors-checked
+FSTAMP=$OTR_LIB/stats-first-connection
 NOW=$(date +%s); VER=$(cat "$OTR/VERSION" 2>/dev/null)
 mt(){ stat -c %Y "$1" 2>/dev/null || echo 0; }
+
+# The first desktop of this device ("otr_first", 0.3.7, full and errors): once, with how it got there: the minutes from
+# the start of its event log (its first start) to that desktop, the attempts that failed before it, the help to connect
+# it saw last (none, name, off, rdp-off, far, rdp-answers, password). With the new devices of the week (first=yes) it
+# gives the share of devices that get to a desktop. A device that had a desktop before this version (its VERSION file
+# is newer than that session) is only marked, nothing is sent. The live system without saved settings starts anew at
+# every start, both counts with it.
+first_connection(){ local r a t0 t1 n h
+  [ -f "$FSTAMP" ] && return 0
+  r=$(awk -v inst="$(date -d "@$(mt "$OTR/VERSION")" '+%Y-%m-%d %H:%M:%S')" '
+    NR == 1 { t0 = substr($0, 1, 19) }
+    / attempt [0-9]+ for .* failed after / { n++ }
+    / connection help shown \([a-z]+\): [a-z-]+$/ { h = $NF }
+    / session of .* opened \(/ { t1 = substr($0, 1, 19); exit }
+    END { if (t1 != "") print (t1 < inst ? "old" : "new") "|" t0 "|" t1 "|" n + 0 "|" (h == "" ? "none" : h) }' "$OTR_EVENTS" 2>/dev/null)
+  [ -n "$r" ] || return 0
+  IFS='|' read -r a t0 t1 n h <<< "$r"
+  [ "$a" = old ] && { [ -n "$PRINTING" ] || touch "$FSTAMP"; return 0; }
+  p otr_first minutes "$(( ( $(date -d "$t1" +%s) - $(date -d "$t0" +%s) ) / 60 ))"
+  p otr_first failed_attempts "$n"; p otr_first help "$h"
+  p otr_first setup "$(setup_kind)"
+}
 # since the week sent last; the first time, the week before
 week_since(){ if [ -f "$STAMP" ]; then mt "$STAMP"; else echo $(( NOW - 604800 )); fi; }
 week_due(){ [ ! -f "$STAMP" ] || [ $(( NOW - $(mt "$STAMP") )) -ge 604800 ] || [ "$(cat "$VSTAMP" 2>/dev/null)" != "$VER" ]; }
@@ -181,8 +208,10 @@ week_due(){ [ ! -f "$STAMP" ] || [ $(( NOW - $(mt "$STAMP") )) -ge 604800 ] || [
 # everything due at level $1: the week (full, when $2 is 1), and what went wrong since $3 (full and errors, only when
 # something did). The count of problems of the week covers the whole week, the errors only what was not sent yet.
 all(){
-  local e w ws
+  local e w ws f
   e=$(errors "$3")
+  f=$(first_connection)
+  if [ -n "$f" ] && [ "$1" != off ]; then base otr_first; printf '%s\n' "$f"; fi
   if [ "$1" = full ] && [ "$2" = 1 ]; then
     ws=$(week_since); if [ "$ws" = "$3" ]; then w=$e; else w=$(errors "$ws"); fi
     base otr_week; environment; usage "$(week_since)"; p otr_week problems "$(printf '%s\n' "$w" | grep -c "$(printf '\te_')")"
@@ -191,7 +220,7 @@ all(){
 }
 
 LEVEL=$(anon_level "${OTR_STATS_ANON:-}")
-if [ "${1:-}" = --print ]; then all "$LEVEL" 1 "$(week_since)" | awk -F'\t' '{print $1 " " $2 "=" $3}'; exit 0; fi
+if [ "${1:-}" = --print ]; then PRINTING=1; all "$LEVEL" 1 "$(week_since)" | awk -F'\t' '{print $1 " " $2 "=" $3}'; exit 0; fi
 [ "$LEVEL" = off ] && exit 0
 # a new device that has not chosen yet: the first start asks (kiosk.sh), nothing leaves before the answer
 [ -z "$(cfg BROKER)" ] && ! anon_decided && exit 0
@@ -211,6 +240,7 @@ D=$(all "$LEVEL" "$WEEK" "$ES")
 # nothing to send (errors only, or nothing went wrong): the week is checked
 if [ -z "$D" ]; then [ -n "$WEEK" ] && { touch -d "@$NOW" "$STAMP"; echo "$VER" > "$VSTAMP"; }; exit 0; fi
 SENT_E=""; printf '%s\n' "$D" | grep -q "^otr_errors" && SENT_E=1
+SENT_F=""; printf '%s\n' "$D" | grep -q "^otr_first" && SENT_F=1
 # python3 is in the image, curl is not. One request with every event: sent when PostHog answers 200, else tried again
 # at the next report
 if printf '%s\n' "$D" | python3 -c '
@@ -240,6 +270,7 @@ except Exception:
     sys.exit(1)' "$URL" "$KEY" 2>/dev/null; then
   [ -n "$WEEK" ] && { touch -d "@$NOW" "$STAMP"; echo "$VER" > "$VSTAMP"; }
   [ -n "$SENT_E" ] && touch -d "@$NOW" "$ESTAMP"
+  [ -n "$SENT_F" ] && touch "$FSTAMP"
 else
   rm -f "$CHECKED"     # not sent (no internet): tried again at the next report
 fi

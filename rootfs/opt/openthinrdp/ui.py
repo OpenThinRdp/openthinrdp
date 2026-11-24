@@ -11,6 +11,8 @@
 #                        closes it with pkill -f -- '--class=OtrLogin'.
 #   ui.py message ...    a message: icon, heading, text, buttons (--button LABEL:CODE, in this order; --primary CODE
 #                        is drawn as the main one, --default CODE has the focus, so Enter presses it).
+#                        --image PATH: a picture beside the text (the QR code of the help to connect), --note its
+#                        caption; the text is then a list of steps, left aligned.
 #                        --timeout N: closes after N seconds with code 70 (a bar shows the time left).
 #                        --progress: reads the yad progress protocol on stdin (a number = percent, "# text" = text)
 #                        and ends with code 0 at the end of the input.
@@ -39,7 +41,7 @@ ap = argparse.ArgumentParser()
 for a in ('class', 'title', 'heading', 'text', 'small', 'info', 'note', 'user', 'logo', 'splash', 'top', 'bottom',
           'web', 'icon', 'timeout', 'primary', 'default', 'lang',
           't-user', 't-password', 't-signin', 't-shutdown', 't-restart', 't-settings', 't-diag', 't-power',
-          't-save', 't-close', 't-terminal', 't-net', 'hosts', 'host',
+          't-save', 't-close', 't-terminal', 't-net', 'hosts', 'host', 'image',
           'open-power'):     # open-power: tests only, the power menu open (for a screenshot)
     ap.add_argument('--' + a, default='')
 ap.add_argument('--button', action='append', default=[])
@@ -393,11 +395,26 @@ ov.add_overlay(mid)
 win.connect('delete-event', lambda *_: True)        # only the buttons close it
 
 if MODE == 'message':
-    card.set_size_request(dp(min(460, SW - 40)), dp(-1))
+    # a picture beside the text (the help to connect): wider, the steps left aligned and the picture on the right; on a
+    # narrow screen the picture goes below them
+    qr = picture(A.image, 164, 164) if A.image else None
+    wide = qr is not None and SW >= 760
+    card.set_size_request(dp(min(700 if qr else 460, SW - 40)), dp(-1))
     if A.icon:
         ic = icon(A.icon, 46, COLORS.get(A.icon, COLORS['info']), 1.0); ic.set_margin_bottom(dp(2)); card.pack_start(ic, False, False, 0)
-    if A.heading: card.pack_start(label(A.heading, 'heading'), False, False, 2)
-    tx = label(A.text.replace('\\n', '\n'), 'text'); card.pack_start(tx, False, False, 0)
+    if A.heading: card.pack_start(label(A.heading, 'heading', chars=60 if qr else 52), False, False, 2)
+    if qr:
+        tx = Gtk.Label(label=A.text.replace('\\n', '\n'), xalign=0); tx.get_style_context().add_class('text')
+        tx.set_line_wrap(True); tx.set_max_width_chars(58 if wide else 52); tx.set_justify(Gtk.Justification.LEFT)
+        body = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL if wide else Gtk.Orientation.VERTICAL, spacing=dp(22))
+        body.pack_start(tx, True, True, 0)
+        side = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=dp(6), valign=Gtk.Align.START, halign=Gtk.Align.CENTER)
+        side.pack_start(qr, False, False, 0)
+        if A.note: side.pack_start(label(A.note.replace('\\n', '\n'), 'small', chars=22), False, False, 0)
+        body.pack_start(side, False, False, 0)
+        card.pack_start(body, False, False, 4)
+    else:
+        tx = label(A.text.replace('\\n', '\n'), 'text'); card.pack_start(tx, False, False, 0)
     bar = None
     if A.progress or A.update or A.timeout:
         bar = Gtk.ProgressBar(); bar.set_margin_top(dp(6)); card.pack_start(bar, False, False, 0)

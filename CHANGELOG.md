@@ -5,6 +5,27 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.3.7 (2026-11-24)
+
+- **Can't connect? The device tells you why, and what to do** ([#222](https://github.com/OpenThinRdp/openthinrdp/issues/222)).
+  After a connection that fails it checks, in a few seconds, what is wrong: the name of the PC is not found, nothing
+  answers at that address, the PC answers but Remote Desktop does not (off, Windows Home, a firewall), the PC is on
+  another network. With one PC, at home or live from the USB stick, a help screen gives the steps for that case, a QR
+  code to the same help on the site ([Can't connect?](docs/guides/cant-connect.md)), and *Try again* or *Change the
+  address*. With a domain the message says the same, for your IT. The address of the PC is checked as soon as it is
+  saved in the settings, and a refused password at home names the Windows 11 option that allows only Windows Hello.
+- **Prepare the PC**: a small free program for the Windows PC ([download](docs/guides/pc-setup.md)). It checks Remote
+  Desktop, the firewall, the account, sleep and the address, fixes what it can with one button and shows in large
+  type what to type on the device. The help screens of the device point to it first.
+- **A slow failed connection is no longer taken for a dropped session.** A PC with Remote Desktop off does not
+  answer at all, and FreeRDP waits for its timeout: past `SESSION_THRESHOLD` (10 s) that attempt counted as a session
+  that dropped, and the device "reconnected" silently up to 20 times, then went back to the sign-in screen without a
+  word. Now a session is open when its desktop appeared on the screen, whatever the time; `SESSION_THRESHOLD` is no
+  longer used.
+- Anonymous counts ([privacy](docs/privacy.md)): a dropped session only after its desktop appeared; why connections
+  fail, the check after saving, a refused sign-in, a connection that worked after the help; and once in the life of a
+  device its first desktop, with the minutes and the failed attempts it took.
+
 ## 0.3.6 (2026-11-16)
 
 - **The new logo** ([#206](https://github.com/OpenThinRdp/openthinrdp/issues/206)), everywhere: boot, sign-in screen,
