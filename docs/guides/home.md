@@ -22,6 +22,8 @@ No domain, no server, no subscription. At the first start choose **Workgroup** a
    is not accepted by Remote Desktop).
 
 Remote Desktop must be on in Windows: *Settings > System > Remote Desktop* (Windows Pro, Enterprise or Education).
+The easiest way: **[Prepare the PC](pc-setup.md)**, a small program for your Windows PC, checks and fixes it in one
+click and shows what to type on the device. Not connecting? [Can't connect?](cant-connect.md) goes through every case.
 
 ## It feels like a computer of your own
 

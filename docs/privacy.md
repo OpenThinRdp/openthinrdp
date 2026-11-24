@@ -82,6 +82,15 @@ rest as above, and how it got to its first desktop. With the new devices of the 
 | The help to connect seen last before it, if any | `none`, `rdp-off`, `password` |
 | Domain or workgroup | `workgroup` |
 
+## What Prepare the PC sends
+
+[Prepare the PC](guides/pc-setup.md), the program for the Windows PC, sends once when its window closes, only with its
+box ticked (it is, on the window; untick it to send nothing): `pc_setup` with its version, the class of the Windows
+edition (`home`, `pro`...), the Windows build number, the language, the kind of account (`microsoft`, `local`,
+`domain`), how many things it fixed, whether the PC was ready before and after, whether Tailscale is there and the
+address comes from the router, and the state of each check before and after (`ok`, `warn`, `bad`, `info`). Never the
+name of the PC, an address, a user or an account.
+
 ## What the manager sends
 
 Its first start shows, once, what the manager and the devices send and where each is set. Half a minute after it
