@@ -41,20 +41,21 @@ and what comes next. It is updated when something changes. What runs where: [sta
 ## Reliability in the field
 
 **Covered**: one production fleet since October 2026, 15 Dell OptiPlex 3000 Thin Clients (desks, tills, a
-laboratory, weighing stations, a wall screen on Wi-Fi). Since the first release (11 October - 16 November 2026):
+laboratory, weighing stations, a wall screen on Wi-Fi). Since the first release (11 October - 24 November 2026):
 
 | | |
 |---|---|
-| software updates installed | 389 |
+| software updates installed | 399 |
 | software updates failed | 0 |
-| sessions opened | 460 |
-| hours in session | 2,760 |
-| sessions dropped by a lost network, reopened by themselves within 10 minutes | 63 of 66 |
-| starts of the kiosk | 673 |
+| sessions opened | 537 |
+| hours in session | 3,657 |
+| sessions dropped by a lost network, reopened by themselves within 10 minutes (to 16 November) | 63 of 66 |
+| starts of the kiosk | 767 |
 
-**Outside our fleet**: 850 ISO downloads, 39 different models already running it (HP t520, t530, t620, t655, Dell
-Wyse 5070, Centerm and Wyse thin clients, mini PCs, laptops, virtual machines), and 7 devices in regular use outside
-our fleet.
+**Outside our fleet**: 967 ISO downloads, more than 40 different models already running it (HP t520, t530, t620,
+t655, IGEL M340C, Dell Wyse 5070, Centerm and Wyse thin clients, mini PCs, laptops, virtual machines), and 7 devices in
+regular use outside our fleet. From 0.3.7 the devices also count, once, their first desktop: how many new devices get
+to a working session, and how long it takes.
 
 **Next**: these numbers grow here month by month, with every fleet that shares its own; the hardware test of the live
 system sends a hardware report from any device, and a fleet report in the manager (uptime, updates, recovery times)
