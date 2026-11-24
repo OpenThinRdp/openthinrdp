@@ -37,8 +37,9 @@ With Tailscale on the PC it also shows the address to use away from home.
 ## "Windows protected your PC"
 
 The program is signed by the project, not by a company Windows already knows, so the first time Windows may show a
-blue window *Windows protected your PC*: press **More info**, then **Run anyway**. The program and its source are on
-[GitHub](https://github.com/OpenThinRdp/openthinrdp-manager).
+blue window *Windows protected your PC*: press **More info**, then **Run anyway**. It is published with the free
+manager, in [its releases on GitHub](https://github.com/OpenThinRdp/openthinrdp-manager/releases). It changes only what
+the window lists, and only when you press **Fix everything**.
 
 ## Anonymous data
 
