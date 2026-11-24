@@ -464,7 +464,6 @@ settings_spec(){
     fld DOMAIN text "$L_F_DOMAIN" "$dom" "" "$L_H_DOMAIN"
     fld LOAD_BALANCE_INFO text "$L_F_COLLECTION" "$lbi" "" "$L_H_COLLECTION"
     fld TRANSPORT choice "$L_F_TRANSPORT" "$tr" "$(chs TRV TRL)" "$L_H_TRANSPORT"
-    fld SESSION_THRESHOLD text "$L_F_THRESHOLD" "$thr" "" "$L_H_THRESHOLD"
   fi
   fld SHUTDOWN_SECS text "$L_F_SHUTDOWN" "$off" "" "$L_H_SHUTDOWN"
   fld SESSION_BAR choice "$L_F_SESSIONBAR" "$sbar" "$(chs ONV ONL)" "$L_H_SESSIONBAR"
@@ -618,7 +617,7 @@ settings_dialog(){
   local -a LNV=(en it nl zh) LNL=(English Italiano Nederlands 简体中文)
   local -a WSECV=(psk peap tls) WSECL=("$L_WSEC_PSK" "$L_WSEC_PEAP" "$L_WSEC_TLS") D1XV=(off peap tls) D1XL=("$L_OFF" "$L_D1X_PEAP" "$L_D1X_TLS")
   local h u br brf dom lbi nm ip mask gw d1 d2 ntp off thr share mu mp um ur su an tz tr wb wu ku kr pon poff pdays wf ws wp ln
-  local wsec d1x d1xs eid ean epw eca esn kind kind0 rem wmac conns vpn tss found="" bro
+  local wsec d1x d1xs eid ean epw eca esn kind kind0 rem wmac conns vpn tss found="" bro br0 chk
   local -a BROV=(chromium firefox brave chrome edge) BROL=(Chromium "Firefox ESR" Brave "Google Chrome" "Microsoft Edge")
   [ "$(otr_arch)" = amd64 ] || { BROV=(chromium firefox brave); BROL=(Chromium "Firefox ESR" Brave); }
   bro=$(cfg BROWSER)
@@ -631,7 +630,7 @@ settings_dialog(){
   [ "$kind" = workgroup ] && [ $GREETER = 1 ] && found=$(rdp_scan)
   wsec=$(cfg WIFI_SECURITY); d1x=$(cfg DOT1X); eid=$(cfg EAP_IDENTITY); ean=$(cfg EAP_ANONYMOUS); eca=$(cfg EAP_CA); esn=$(cfg EAP_SERVER_NAME)
   d1xs=$("$OTR/dot1x.sh" status 2>/dev/null)
-  h=$(hostname); u=$(cfg DEFAULT_USER); br=$(cfg BROKER); brf=$(cfg BROKER_FALLBACK); dom=$(cfg DOMAIN); mu=$(cfg MGMT_USER)
+  h=$(hostname); u=$(cfg DEFAULT_USER); br=$(cfg BROKER); br0=$br; brf=$(cfg BROKER_FALLBACK); dom=$(cfg DOMAIN); mu=$(cfg MGMT_USER)
   lbi=$(cfg LOAD_BALANCE_INFO); nm=$(cfg NETMODE)
   if [ "$nm" = static ]; then ip=$(cfg IPADDR); mask=$(cfg NETMASK); gw=$(cfg GATEWAY)
   else ip=$IPC; mask=$([ -n "$IPC" ] && pfx2mask "$PFX" || cfg NETMASK); gw=${GWC:-$(cfg GATEWAY)}; fi
@@ -739,6 +738,21 @@ settings_dialog(){
       [ "$kind" != "$kind0" ] && [ $GREETER = 1 ] && { ev "kind of setup: $kind0 -> $kind"; settings_dialog; return; }
       # the password remembered no more: forgotten now
       [ "$rem" = off ] && sudo -n "$OTR/remember.sh" forget >/dev/null 2>&1
+      # one PC (0.3.7, #222): a new address is checked at once, so a wrong one or Remote Desktop off is said now and not
+      # at the first sign-in. Check again (10) after fixing the PC; back to the settings (11) to change it
+      if [ $GREETER = 1 ] && [ "$kind" = workgroup ] && [ -n "$br" ] && [ "$br" != "$br0" ]; then
+        while true; do
+          DIAG=$(diag_screen "$br"); ev "connection check after saving: $DIAG"
+          if [ "$DIAG" = rdp-answers ]; then
+            ui message --icon=ok --heading="$(plain "$L_HX_OK_T")" --text="$(plain "$(printf "$L_HX_OK" "$br")")" \
+               --timeout=5 --button="$L_OK:0" --primary=0 --default=0 >/dev/null; chk=0; break
+          fi
+          help_screen "$DIAG" "$br" setup >/dev/null; chk=$?
+          [ $chk -eq 10 ] || break
+        done
+        DIAG=""
+        [ $chk -eq 11 ] && continue
+      fi
       break
     fi
     ev "settings rejected: $(echo "$msg" | tr '\n' ' ')"
@@ -880,11 +894,86 @@ err_class(){
   case "$1" in 139|140) echo dns; return ;; esac
   if grep -qiE 'credssp|nla|license|ntlm|messageChannel|activation|redirect' /tmp/kiosk.log 2>/dev/null; then echo vm; return; fi
   case "$1" in 131|133|141|142|143|147|150) echo broker ;; *) echo other ;; esac; }
+# Why a computer cannot be reached (0.3.7, #222), in a few seconds, from what this device sees itself. One word:
+#   name         its name is not found (at home the names of Windows PCs often are not, their IP address is)
+#   off          nothing answers at that address on this network: switched off, asleep, or a wrong address
+#   rdp-off      something answers at that address, not on its Remote Desktop port: Remote Desktop off, Windows Home,
+#                a firewall
+#   far          on another network (through a router) and its port does not answer: off, or not reachable from here
+#   rdp-answers  its Remote Desktop port answers: the cause is further on (security, the account, the VM)
+# On this network the answer to ARP tells whether a device is there: Windows answers it whatever its firewall does,
+# not ping. A connection refused at once (RST) comes from a device that is there too.
+connect_diag(){ local h p a e i st
+  read -r h p <<< "$(host_port "$1")"
+  if [[ $h =~ ^[0-9]+(\.[0-9]+){3}$ ]]; then a=$h
+  else a=$(timeout 5 getent ahostsv4 "$h" 2>/dev/null | awk '{print $1; exit}'); [ -n "$a" ] || { echo name; return; }; fi
+  e=$(timeout 3 bash -c "exec 3<>/dev/tcp/$a/$p" 2>&1) && { echo rdp-answers; return; }
+  case "$e" in *[Rr]efused*) echo rdp-off; return ;; esac
+  if ip route get "$a" 2>/dev/null | grep -q ' via '; then
+    command -v ping >/dev/null && ping -c1 -W2 "$a" >/dev/null 2>&1 && { echo rdp-off; return; }
+    echo far; return
+  fi
+  # the connection above asked ARP for the address: its answer, within ~8 s (an entry left from earlier is probed
+  # again first). REACHABLE = it answered now; FAILED or no entry = nobody answered
+  for i in $(seq 1 16); do
+    st=$(ip neigh show "$a" 2>/dev/null | awk 'NF {print $NF; exit}')
+    case "$st" in
+      REACHABLE|PERMANENT) echo rdp-off; return ;;
+      FAILED|"") [ "$i" -ge 3 ] && { echo off; return; } ;;
+    esac
+    timeout 1 bash -c "exec 3<>/dev/tcp/$a/$p" 2>/dev/null
+    sleep 0.5
+  done
+  echo off; }
+# the check on a screen that says what is being checked (connect_diag takes up to ~15 s): prints its word
+diag_screen(){ local f=/tmp/kiosk.diag
+  rm -f $f
+  if [ $GREETER = 1 ]; then
+    { trap '' PIPE; echo 15; connect_diag "$1" > $f; echo 100; } 2>/dev/null | ui message --progress --icon=busy \
+       --heading="$(plain "$L_HX_CHECK_T")" --text="$(plain "$(printf "$L_HX_CHECKING" "$1")")" >/dev/null
+  else connect_diag "$1" > $f; fi
+  head -1 $f 2>/dev/null | grep -E '^[a-z-]+$' || echo rdp-answers; }
+# The help to connect (0.3.7, #222), with one PC (no domain; the live USB stick too): what the check found, the steps
+# for that case, and a QR code to the same help on the site, to read on a phone. help_screen WORD HOST MODE
+#   connect   after a failed connection: 10 = try again, 11 = change the address, anything else = back
+#   setup     right after the address was saved: 10 = check again, 11 = back to the settings, anything else = go on
+#   password  the sign-in refused: OK only
+help_screen(){ local d=$1 h=$2 m=$3 p t s; local -a b
+  read -r _ p <<< "$(host_port "$h")"
+  case "$d" in
+    name)     t=$(printf "$L_HX_NAME_T" "$h"); s=$L_HX_NAME ;;
+    off)      t=$(printf "$L_HX_OFF_T" "$h"); s=$L_HX_OFF ;;
+    rdp-off)  t=$(printf "$L_HX_RDPOFF_T" "$h"); s=$(printf "$L_HX_RDPOFF" "$p") ;;
+    far)      t=$(printf "$L_HX_FAR_T" "$h"); s=$(printf "$L_HX_FAR" "$p") ;;
+    password) t=$L_C_INVALID; s=$L_HX_PASSWORD ;;
+    *)        d=rdp-answers; t=$(printf "$L_HX_OTHER_T" "$h"); s=$(printf "$L_HX_OTHER" "${LAST_EC:-?}") ;;
+  esac
+  # the easiest way first: the program for the PC (Prepare the PC) checks and fixes it, and says what to type here
+  s="$L_HX_TOOL\n\n$s"
+  case "$m" in
+    setup)    b=(--button="$L_HX_CONTINUE:0" --button="$L_HX_RECHECK:10" --button="$L_HX_CHANGE:11" --primary=11 --default=11) ;;
+    password) b=(--button="$L_OK:0" --primary=0 --default=0) ;;
+    *)        b=(--button="$L_BACK_LOGIN:0" --button="$L_HX_CHANGE:11" --button="$L_HX_RETRY:10" --primary=10 --default=10) ;;
+  esac
+  # a connection that works after this help is counted as such (the event at the next desktop)
+  [ "$m" = setup ] || echo "$d" > /tmp/kiosk.helped
+  ev "connection help shown ($m): $d"
+  ui message --icon=error --heading="$(plain "$t")" --text="$(plain "$s")" --image="$OTR/help/qr-$d.png" \
+     --note="$(plain "$L_HX_QR")" --small="$(hostname)  ·  IP $(ipv4)" "${b[@]}"; }
 err_title(){ case "$1" in net|noaddr) echo "$L_E_NET" ;; dns) echo "$L_E_DNS" ;; broker) echo "$L_E_BROKER" ;; vm) echo "$L_E_VM" ;; udp) echo "$L_E_UDP" ;; *) echo "$L_E_OTHER" ;; esac; }
 # final message after the last attempt: what happened and what to do. Stays 60 s (or until OK).
-show_err(){ local cl=$1 u=$2 before=$3 t sup
-  sup=$(cfg SUPPORT_TEXT); [ -z "$sup" ] && sup=$L_CALL_SUPPORT
-  case "$cl" in
+show_err(){ local cl=$1 u=$2 before=$3 t sup h p
+  # with one PC nobody else is there to call: the help on the site instead (0.3.7)
+  sup=$(cfg SUPPORT_TEXT); [ -z "$sup" ] && { [ "$(setup_kind)" = domain ] && sup=$L_CALL_SUPPORT || sup=$L_HX_SITE; }
+  h=${CONN:-$(cfg BROKER)}; read -r _ p <<< "$(host_port "$h")"
+  # what the check found (connect_diag), said precisely; with a domain: for its IT support
+  case "$DIAG" in
+    name)    cl=dns ;;
+    off)     t=$(printf "$L_DX_OFF" "$h")"\n$sup" ;;
+    rdp-off) t=$(printf "$L_DX_RDPOFF" "$h" "$p")"\n$sup" ;;
+    far)     t=$(printf "$L_DX_FAR" "$h" "$p")"\n$sup" ;;
+  esac
+  [ -z "$t" ] && case "$cl" in
     net)    t="$L_T_NET" ;;
     noaddr) t="$L_T_NOADDR\n$sup" ;;
     # the computer of this connection: the one chosen on the sign-in screen (CONN), else the broker or remote computer
@@ -968,12 +1057,11 @@ WOL
 # 2 = desktop not available after the attempts, 3 = session DROPPED (the caller reconnects without asking),
 # 4 = session taken over from another device (warn, never reconnect: the two devices would fight)
 session(){
-  local U="$1" P="$2" att=0 max=8 txt="$L_P_CONNECTING" B BRHA st d ec thr xp wp udponly=0 noudp=0 vmfails=0 vmwait=0 vmlog=0 ctmo=150 ns nw netw0=0 netok=0 msg
+  local U="$1" P="$2" att=0 max=8 txt="$L_P_CONNECTING" B BRHA st d ec xp udponly=0 noudp=0 vmfails=0 vmwait=0 vmlog=0 ctmo=150 ns nw netw0=0 netok=0 msg
   BRHA=${CONN:-$(cfg BROKER)}
   rm -f /tmp/kiosk.cancel /tmp/kiosk.stopped /tmp/kiosk.timeout /tmp/kiosk.disconnect /tmp/kiosk.userclose
   [ "$3" = reconnect ] && { max=40; txt="$L_P_RECONNECTING"; }
-  LAST_ERR=""; LAST_EC=""
-  thr=$(cfg_num SESSION_THRESHOLD 10)
+  LAST_ERR=""; LAST_EC=""; DIAG=""
   if [ "$(cfg TRANSPORT)" = udp ]; then
     if [ -n "$(cfg RDP_GATEWAY)" ]; then ev "TRANSPORT=udp with an RD Gateway: TCP used (FreeRDP carries no UDP through a gateway)"
     elif [ $HASUDP = 1 ]; then udponly=1; else ev "TRANSPORT=udp but this FreeRDP has no UDP transport: TCP used"; fi
@@ -1008,16 +1096,12 @@ session(){
     fi
     [ $netw0 -gt 0 ] && [ $netok = 0 ] && { netok=1; ev "network ready after $(( $(date +%s) - netw0 )) s of waiting"; }
     # the log of the previous attempt or session stays as kiosk.log.prev: after a drop the next attempt starts at once
-    [ -s /tmp/kiosk.log ] && mv -f /tmp/kiosk.log /tmp/kiosk.log.prev; : > /tmp/kiosk.log; rm -f /tmp/kiosk.vm /tmp/kiosk.quality
+    [ -s /tmp/kiosk.log ] && mv -f /tmp/kiosk.log /tmp/kiosk.log.prev; : > /tmp/kiosk.log; rm -f /tmp/kiosk.vm /tmp/kiosk.quality /tmp/kiosk.desktop
     [ $att -eq 1 ] && [ "$3" != reconnect ] && { wake_pc || return 5; }
     st=$(date +%s)
     B=$(pick_broker $att "$BRHA")
     ( connect "$U" "$P" "$B"; echo $? > /tmp/kiosk.rc ) &
     xp=$!
-    # still up after the threshold = open: the event makes report.sh send the status at once, so the other
-    # thin clients soon know the user is connected here ("already active" warning)
-    ( sleep "$thr"; kill -0 $xp 2>/dev/null && ev "session of $U opened (broker $B)" ) &
-    wp=$!
     {
       echo "8"; echo "# $txt  ($(printf "$L_P_ATTEMPT" "$att")$([ "$B" != "$BRHA" ] && echo ", $B"))"
       # Progress from what really happens (FreeRDP logs almost nothing at its usual level): connected to the broker,
@@ -1044,6 +1128,12 @@ session(){
           if [ $s1 -eq 1 ] && [ $s2 -eq 0 ] && [ -z "$s1w" ] && [ $((n - s1n)) -ge 12 ]; then echo "45"; echo "# $L_P_VMSTART"; s1w=1; fi
           if [ $s2 -eq 0 ] && [ -n "$first" ] && echo "$ips" | grep -qvx "$first"; then echo "65"; echo "# $L_P_STARTING"; s2=1; t2=$(date +%s%1N); fi
           if xdotool search --onlyvisible --pid "$fp" >/dev/null 2>&1; then pointer_show; echo "# $L_P_READY"; echo "100"; s3=1
+            # the desktop on the screen: from now on this is an open session, whatever happens next (0.3.7: before,
+            # anything still running after SESSION_THRESHOLD seconds was, and an attempt slow to fail was taken for a
+            # session that dropped). The event makes report.sh send the status at once, so the other thin clients soon
+            # know the user is connected here ("already active" warning)
+            : > /tmp/kiosk.desktop; ev "session of $U opened (broker $B)"
+            [ -f /tmp/kiosk.helped ] && { ev "connected after the connection help ($(cat /tmp/kiosk.helped))"; rm -f /tmp/kiosk.helped; }
             t3=$(date +%s%1N); t1=${t1:-$t3}; t2=${t2:-$t1}
             ev "sign-in of $U: $(tenths $((t3 - t0))) s (broker $(tenths $((t1 - t0))) s, VM $(tenths $((t2 - t1))) s, Windows $(tenths $((t3 - t2))) s)$([ "$3" = reconnect ] && echo ', reconnection')"
             ( sleep 15; sudo -n "$OTR/usb-hold.sh" release >/dev/null 2>&1 ) & echo $! > /tmp/kiosk.usbrel
@@ -1128,7 +1218,6 @@ session(){
         # Cancel while it connects: this attempt ends now, back to the sign-in screen (no retry, no error)
         if [ $? -eq 30 ]; then touch /tmp/kiosk.cancel; kill -9 $(pgrep -P $xp -x xfreerdp3) 2>/dev/null; fi; }
     wait $xp 2>/dev/null
-    kill $wp 2>/dev/null
     # ended before the USB devices came back: back now (a pending release must not hit the next connection)
     kill "$(cat /tmp/kiosk.usbrel 2>/dev/null)" 2>/dev/null; rm -f /tmp/kiosk.usbrel
     [ -s /run/openthinrdp-usb-held ] && sudo -n "$OTR/usb-hold.sh" release >/dev/null 2>&1
@@ -1175,10 +1264,13 @@ session(){
     # 5 = ERRINFO_DISCONNECTED_BY_OTHER_CONNECTION: same user signed in from another device. Never retry,
     # also during a reconnection: taking the session back would drop the other device, which would do the same
     if [ "$ec" = 5 ]; then ev "session of $U taken over by another device after $(duration $d) (code 5): no reconnection"; return 4; fi
-    # a session that lasted at least SESSION_THRESHOLD was open: only the exit code counts.
+    # a session whose desktop appeared was open: only the exit code counts. Without a desktop it is an attempt that
+    # failed, however long FreeRDP took (0.3.7, #222: a PC with Remote Desktop off drops the packets, FreeRDP waited
+    # for its timeout past SESSION_THRESHOLD, and the attempt was taken for a session that dropped: up to 20 silent
+    # reconnections, then the sign-in screen without a word).
     # Exception: code 1 below 20 s stays an attempt (seen once while re-entering a session: with the shutdown
     # page the countdown would have switched the device off)
-    if [ "$d" -ge "$thr" ] && ! { [ "$ec" = 1 ] && [ "$d" -lt 20 ]; }; then
+    if [ -f /tmp/kiosk.desktop ] && ! { [ "$ec" = 1 ] && [ "$d" -lt 20 ]; }; then
       # A VM that is still booting or finishing an update accepts the session and drops it after ~22 s with the
       # desktop never activated (ERRCONNECT_ACTIVATION_TIMEOUT; VM-MARIA 13/10/2026 after a feature update, 7 times
       # in a row). The first one is retried at once, from the second on it is the wait for Windows; during the wait
@@ -1217,10 +1309,17 @@ session(){
       break
     fi
     ev "attempt $att for $U on $B failed after ${d}s (code $ec, $LAST_ERR): $(grep -m1 -E '\[ERROR\]' /tmp/kiosk.log | sed 's/.*\] - //' | cut -c1-150)"
+    # why, checked once at the first failure (0.3.7, #222). With one PC (no domain) a clear cause ends the attempts at
+    # once and the help says what to do; with a domain the brokers may come back: the attempts go on, the cause is
+    # said at the end. Never while reconnecting a session that dropped (the network is coming back)
+    if [ -z "$DIAG" ] && [ "$3" != reconnect ] && case "$LAST_ERR" in dns|broker|other) true ;; *) false ;; esac; then
+      DIAG=$(diag_screen "$B"); ev "connection check of $B: $DIAG"
+      [ "$(setup_kind)" != domain ] && [ "$DIAG" != rdp-answers ] && break
+    fi
     txt="$(err_title $LAST_ERR), $L_P_RETRY"
     sleep 5
   done
-  ev "desktop not available for $U after $att attempts: $LAST_ERR"
+  ev "desktop not available for $U after $att attempts: $LAST_ERR${DIAG:+ ($DIAG)}"
   return 2
 }
 
@@ -1537,10 +1636,19 @@ while true; do
       { [ $rc -eq 5 ] || [ $rc -eq 70 ]; } && power_off "after the session ended"
       break
     elif [ $res -eq 1 ]; then
-      # without a domain: the Microsoft account and the PIN of Windows Hello are the usual cause, said with it
+      # without a domain: the Microsoft account and the PIN of Windows Hello are the usual cause, said with its steps
+      # and the help on the site (0.3.7); a locked, expired or disabled account as before
+      if [ "$(setup_kind)" != domain ] && [ "${CRED_MSG:-$L_C_INVALID}" = "$L_C_INVALID" ]; then help_screen password "" password; break; fi
       HINT=""; [ "$(setup_kind)" = workgroup ] && HINT="\n\n$L_C_MSACCOUNT"
       ui message --icon=error --text="$(plain "${CRED_MSG:-$L_C_INVALID}$HINT")" --timeout=20 --button="$L_OK:0" --primary=0 --default=0; break
     else
+      # one PC and a cause found: the help with its steps, Try again, Change the address (0.3.7, #222)
+      if [ -n "$DIAG" ] && [ "$(setup_kind)" != domain ]; then
+        help_screen "$DIAG" "${CONN:-$(cfg BROKER)}" connect; rc=$?
+        [ $rc -eq 10 ] && { ev "connection help: trying again"; continue; }
+        [ $rc -eq 11 ] && { ev "connection help: changing the address"; settings_dialog; }
+        break
+      fi
       show_err "$LAST_ERR" "$U"; break
     fi
   done
