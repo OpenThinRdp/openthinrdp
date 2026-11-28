@@ -5,6 +5,15 @@ the start of an entry, and in the file MAJOR of the repository) changes how a se
 with a management folder installs it only once the manager released it, one without asks on its screen.
 Downloads and signed update packages: [releases](https://github.com/OpenThinRdp/openthinrdp/releases).
 
+## 0.3.8 (2026-11-28)
+
+- **Barcode scanners no longer lose one of two equal digits** ([#233](https://github.com/OpenThinRdp/openthinrdp/issues/233)).
+  A scanner that types like a keyboard sometimes sent `2000000023700` as `200000023700`: the check digit no longer
+  matched and the article was not found. FreeRDP took two presses of the same key within one millisecond for a key
+  held down and dropped the release between them. Now held keys are recognized the way the X server reports them,
+  and every keystroke reaches Windows. Nothing to do: the device installs the new FreeRDP with this update. A key
+  held down still repeats as before.
+
 ## 0.3.7 (2026-11-24)
 
 - **Can't connect? The device tells you why, and what to do** ([#222](https://github.com/OpenThinRdp/openthinrdp/issues/222)).
